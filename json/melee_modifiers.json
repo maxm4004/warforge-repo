@@ -1,0 +1,34 @@
+{
+  "melee": {
+    "hit_threshold": 5,
+    "first_turn_modifiers": [
+      { "condition": "KN con Lancia in carica vs chiunque, tranne FP-FM con Lancia/Picca o EL",                    "modifier": 1 },
+      { "condition": "CP con Lancia in carica vs chiunque, tranne KN in carica o FP-FM con Lancia/Picca o EL",    "modifier": 1 },
+      { "condition": "FP-FM con Lancia o Picca vs chiunque",                                                       "modifier": 1 },
+      { "condition": "FP o FM con Asce vs chiunque, tranne KN-CP",                                                 "modifier": 1 },
+      { "condition": "FL vs chiunque, tranne FL o EL",                                                             "modifier": -1 },
+      { "condition": "Generale aggregato",                                                                          "modifier": 1 },
+      { "condition": "Nemico senza scudo",                                                                          "modifier": 1 },
+      { "condition": "Unita in posizione piu alta del nemico",                                                      "modifier": 1 }
+    ],
+    "subsequent_turn_modifiers": [
+      { "condition": "Chiunque con capacita SPADA",        "modifier": 1 },
+      { "condition": "FP vs chiunque",                     "modifier": 1 },
+      { "condition": "FL vs chiunque, tranne FL o EL",     "modifier": -1 },
+      { "condition": "FM con Asce vs chiunque",            "modifier": 1 },
+      { "condition": "Generale aggregato",                 "modifier": 1 },
+      { "condition": "Nemico senza scudo",                 "modifier": 1 }
+    ],
+    "dice_rules": {
+      "default":                  "1D6 per base primo e secondo rango",
+      "FL_vs_non_FL_EL":          "1D6 ogni 2 basi",
+      "FL_vs_FL_o_EL":            "1D6 per base",
+      "CL_vs_non_CL_FL":          "1D6 ogni 2 basi",
+      "CL_vs_CL_o_FL":            "1D6 per base",
+      "ART_vs_chiunque":          "1D6 per base",
+      "EL_primo_rango":           "2D6 per base",
+      "picca_terzo_quarto_rango": "+1D6 per base aggiuntivo",
+      "disordinata":              "meta dadi arrotondato per difetto"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "maneuvers": {
+    "avanti": {
+      "FP": true,  "FM": true,  "KN": true,  "CP": true,
+      "FL": true,  "CL": true,  "ART": false, "EL": true
+    },
+    "perno_max3_fermi": {
+      "FP": true,  "FM": true,  "KN": true,  "CP": true,
+      "FL": true,  "CL": true,  "ART": true,  "EL": true
+    },
+    "perno_max3_e_muovi": {
+      "FP": false, "FM": true,  "KN": true,  "CP": true,
+      "FL": true,  "CL": true,  "ART": false, "EL": true
+    },
+    "cambio_fronte_90_fermi": {
+      "FP": true,  "FM": true,  "KN": true,  "CP": true,
+      "FL": true,  "CL": true,  "ART": false, "EL": false
+    },
+    "cambio_fronte_90_e_muovi": {
+      "FP": false, "FM": false, "KN": false, "CP": true,
+      "FL": true,  "CL": true,  "ART": false, "EL": false
+    },
+    "cambio_fronte_180_fermi": {
+      "FP": false, "FM": true,  "KN": false, "CP": true,
+      "FL": true,  "CL": true,  "ART": false, "EL": false
+    },
+    "cambio_fronte_180_e_muovi": {
+      "FP": false, "FM": false, "KN": false, "CP": false,
+      "FL": true,  "CL": true,  "ART": false, "EL": false
+    },
+    "espandi_contrai_1_2_basi_fermi": {
+      "FP": true,  "FM": true,  "KN": true,  "CP": true,
+      "FL": true,  "CL": true,  "ART": false, "EL": true
+    },
+    "espandi_contrai_1_2_basi_e_muovi": {
+      "FP": false, "FM": true,  "KN": false, "CP": true,
+      "FL": true,  "CL": true,  "ART": false, "EL": false
+    }
+  }
+}

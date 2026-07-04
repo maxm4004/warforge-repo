@@ -1,0 +1,51 @@
+{
+  "name": "Battaglia del Lago Peipus 1242",
+  "date": "5 aprile 1242 d.C.",
+  "scenario_rules": "TODO: verificare — il PDF descrive gli ordini di battaglia ma non specifica regole di scenario aggiuntive oltre alla composizione degli eserciti.",
+  "armies": {
+    "teutonici": {
+      "name": "Ordine Teutonico",
+      "commander": "Andreas Von Felben",
+      "commander_type": "KN",
+      "breakpoint": 14,
+      "subordinate_generals": ["Vescovo Ermanno di Tartu", "Rudolf von Felben"],
+      "units": [
+        { "name": "Fratelli (Teutonici)", "type": "KN", "morale": "ELITE", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Confratelli (Teutonici)", "type": "KN", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Vassalli Tedeschi", "type": "KN", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO"], "bases": 4 },
+        { "name": "Vassalli Tedeschi", "type": "KN", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO"], "bases": 4 },
+        { "name": "Vassalli Livoni", "type": "KN", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO"], "bases": 4 },
+        { "name": "Vassalli Livoni", "type": "KN", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO"], "bases": 4 },
+        { "name": "Uomini del Re (Crociati Danesi)", "type": "KN", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Uomini del Re (Crociati Danesi)", "type": "KN", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Milizia Estone", "type": "FM", "morale": "LEVE", "weapons": ["GIAVELLOTTO", "SCUDO"], "capabilities": [], "bases": 6 },
+        { "name": "Milizia Estone", "type": "FM", "morale": "LEVE", "weapons": ["GIAVELLOTTO", "SCUDO"], "capabilities": [], "bases": 6 },
+        { "name": "Milizia Estone", "type": "FM", "morale": "LEVE", "weapons": ["GIAVELLOTTO", "SCUDO"], "capabilities": [], "bases": 6 },
+        { "name": "Milizia Estone (Arcieri)", "type": "FL", "morale": "GUERRIERI", "weapons": ["ARCO"], "capabilities": [], "bases": 6 },
+        { "name": "Milizia Estone (Arcieri)", "type": "FL", "morale": "GUERRIERI", "weapons": ["ARCO"], "capabilities": [], "bases": 6 },
+        { "name": "Milizia Estone (Arcieri)", "type": "FL", "morale": "GUERRIERI", "weapons": ["ARCO"], "capabilities": [], "bases": 6 }
+      ]
+    },
+    "russi": {
+      "name": "Russi di Novgorod",
+      "commander": "Alessandro Nevsky",
+      "commander_type": "CP",
+      "breakpoint": 12,
+      "subordinate_generals": ["Andreij Yaroslavich", "Damash Tverdislavich"],
+      "units": [
+        { "name": "Druzhina di Alessandro", "type": "CP", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Druzhina di Alessandro", "type": "CP", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Druzhina di Alessandro", "type": "CP", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Druzhina di Andreij", "type": "CP", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Druzhina di Andreij", "type": "CP", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Druzhina di Andreij", "type": "CP", "morale": "VETERANI", "weapons": ["LANCIA", "SCUDO"], "capabilities": ["IMPETO", "SPADA"], "bases": 4 },
+        { "name": "Milizia di Novgorod", "type": "FP", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO", "ARCO"], "capabilities": ["MURO_DI_SCUDI"], "bases": 8, "notes": "1 rango: Lancia/Scudo, 2 rango: Arco" },
+        { "name": "Milizia di Novgorod", "type": "FP", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO", "ARCO"], "capabilities": ["MURO_DI_SCUDI"], "bases": 8, "notes": "1 rango: Lancia/Scudo, 2 rango: Arco" },
+        { "name": "Milizia di Novgorod", "type": "FP", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO", "ARCO"], "capabilities": ["MURO_DI_SCUDI"], "bases": 8, "notes": "1 rango: Lancia/Scudo, 2 rango: Arco" },
+        { "name": "Milizia di Novgorod", "type": "FP", "morale": "GUERRIERI", "weapons": ["LANCIA", "SCUDO", "ARCO"], "capabilities": ["MURO_DI_SCUDI"], "bases": 8, "notes": "1 rango: Lancia/Scudo, 2 rango: Arco" },
+        { "name": "Arcieri Turco-mongoli", "type": "CL", "morale": "GUERRIERI", "weapons": ["ARCO", "SCUDO"], "capabilities": [], "bases": 4 },
+        { "name": "Arcieri Turco-mongoli", "type": "CL", "morale": "GUERRIERI", "weapons": ["ARCO", "SCUDO"], "capabilities": [], "bases": 4 }
+      ]
+    }
+  }
+}

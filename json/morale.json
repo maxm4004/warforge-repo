@@ -1,0 +1,35 @@
+{
+  "morale_levels": {
+    "ELITE":     { "threshold": 3 },
+    "VETERANI":  { "threshold": 4 },
+    "GUERRIERI": { "threshold": 6 },
+    "LEVE":      { "threshold": 8 }
+  },
+  "morale_modifiers": {
+    "generale_con_unita":        2,
+    "ogni_base_persa":           -1,
+    "fianco_retro_caricabile":   -2,
+    "unita_disordinata":         -1,
+    "unita_in_rotta":            -3
+  },
+  "morale_triggers": [
+    "Una base persa da tiro o da mischia",
+    "FM caricata in terreno aperto da KN o CP",
+    "CL che vogliono caricare KN-CP-FM-FP sul fronte",
+    "FP-FM dotati solo di armi da tiro (escluso GIAVELLOTTO) che vogliono caricare chiunque tranne FL",
+    "Unita amiche che vanno in rotta (tranne FL e unita che stanno gia scappando) o proprio Generale ucciso entro 6 pollici",
+    "Recuperare un'unita disordinata o in rotta"
+  ],
+  "morale_effects": {
+    "SUPERATO": {
+      "per_riordinare":   "L'unita recupera un livello di coesione",
+      "per_caricare":     "L'unita carica e chiude il contatto con il nemico",
+      "altre_situazioni": "L'unita non perde livelli di coesione"
+    },
+    "FALLITO": {
+      "per_riordinare":   "L'unita non recupera il livello di coesione",
+      "per_caricare":     "L'unita non carica; se ha subito perdite da tiro scende di 1 livello di coesione",
+      "altre_situazioni": "L'unita perde 1 livello di coesione"
+    }
+  }
+}
