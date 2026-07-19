@@ -1,0 +1,22 @@
+-- 8_melee/phase.ttslua
+function melee_phase()
+    return {
+        MELEE = {
+            title = "FASE 5: RISOLUZIONE DELLE MISCHIE",
+            desc  = "Risoluzione di tutte le mischie derivanti dalle cariche",
+            before = "before_melee",
+            after  = "after_melee",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
+            render = "2BtnClick",
+            enforceOwnership = true,
+            inputMode = "INITIATIVE",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Mischie Completate", textColor="White", color="Red",   callback="melee_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Mischie Completate", textColor="White", color="Green", callback="melee_btn_army2" },
+            },
+            transitions = {
+                { to="RECOVERY", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+            }
+        }
+    }
+end

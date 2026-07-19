@@ -1,0 +1,618 @@
+-- ============================================================
+-- FUNZIONE: lionheart_melee(player)
+-- Entry point dal pulsante buttonbar
+-- ============================================================
+function melee_attack(player, value, id, buttonConfig)
+
+    local phase = ENGINE.phases[ENGINE.phase]
+    if not phase then print("No phase") return false end
+
+    local selected = main_getSelectedObjects(player)
+    if not selected or #selected < 1 then
+        printToColor("[MISCHIA] Seleziona una o più basi", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    local attackerSlot = nil
+    if selected[1].hasTag("Army1") then attackerSlot = 1 end
+    if selected[1].hasTag("Army2") then attackerSlot = 2 end
+    if attackerSlot == nil then return false end
+
+    local playerSlot = main_getArmyByColor(player)
+    if playerSlot ~= attackerSlot then
+        printToColor("[MISCHIA] Non è la tua unità", player.color, {r=1,g=0.3,b=0.3})
+        return false
+    end
+
+    -- Trova unità attaccante
+    local baseInfo    = deployment_parseNickname(selected[1].getName())
+    local attackerUnit = baseInfo and main_findUnit(attackerSlot, baseInfo.unitType, baseInfo.unitNumber)
+    if not attackerUnit then
+        printToColor("[MISCHIA] Unità non trovata", player.color, {r=1,g=0.3,b=0.3})
+        return false
+    end
+
+    -- Raccoglie basi selezionate dell'attaccante
+    local basiAttaccanti = {}
+    for _, obj in ipairs(selected) do
+        if obj.hasTag and obj.hasTag(attackerSlot == 1 and "Army1" or "Army2") then
+            table.insert(basiAttaccanti, obj)
+        end
+    end
+
+    -- Trova basi nemiche in contatto
+    local defenderSlot = attackerSlot == 1 and 2 or 1
+    local enemyTag     = defenderSlot == 1 and "Army1" or "Army2"
+    local defenderBases = {}
+    local defenderUnit  = nil
+
+    for _, atkBase in ipairs(basiAttaccanti) do
+        local posA    = atkBase.getPosition()
+        local boundsA = atkBase.getBounds()
+
+        for _, obj in ipairs(getAllObjects()) do
+            if obj.hasTag and obj.hasTag(enemyTag) then
+                local posB    = obj.getPosition()
+                local boundsB = obj.getBounds()
+                local dist    = (Vector(posB.x, 0, posB.z) - Vector(posA.x, 0, posA.z)):magnitude()
+                local minDist = (boundsA.size.x + boundsB.size.x) / 2
+
+                if dist <= minDist + 0.1 then
+                    -- Evita duplicati
+                    local found = false
+                    for _, db in ipairs(defenderBases) do
+                        if db == obj then found = true end
+                    end
+                    if not found then
+                        table.insert(defenderBases, obj)
+                        -- Trova unità difensore
+                        if not defenderUnit then
+                            local defInfo = deployment_parseNickname(obj.getName())
+                            if defInfo then
+                                defenderUnit = main_findUnit(defenderSlot, defInfo.unitType, defInfo.unitNumber)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if #defenderBases == 0 then
+        printToColor("[MISCHIA] Nessuna unità nemica in contatto", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    -- Verifica fianco
+    local isFlanked = melee_checkFlank(basiAttaccanti[1], defenderBases[1])
+
+    -- Verifica primo turno AC/UC
+    local unitKey    = attackerSlot .. "_" .. attackerUnit.tipo .. "_" .. attackerUnit.unita_num
+    local isFirstTurn = not IEF_MELEE_ENGAGED[unitKey]
+
+    -- Salva state
+    IEF_MELEE_STATE.attacker      = selected[1]
+    IEF_MELEE_STATE.attackerUnit  = attackerUnit
+    IEF_MELEE_STATE.attackerSlot  = attackerSlot
+    IEF_MELEE_STATE.defenderUnit  = defenderUnit
+    IEF_MELEE_STATE.defenderSlot  = defenderSlot
+    IEF_MELEE_STATE.defenderBases = defenderBases
+    IEF_MELEE_STATE.isFlanked     = isFlanked
+    IEF_MELEE_STATE.isFirstTurn   = isFirstTurn
+    IEF_MELEE_STATE.basiAttaccanti = basiAttaccanti
+
+    -- Evidenzia basi in contatto
+    for _, db in ipairs(defenderBases) do
+        --db.highlightOn({1, 0.3, 0}, 10)
+    end
+
+    local flankMsg = isFlanked and " [FIANCO]" or ""
+    local firstMsg = isFirstTurn and " [PRIMO TURNO]" or ""
+    local msg = string.format("[MISCHIA] %s vs %s%s%s — Attack / Cancel",
+        attackerUnit.tipo .. "_" .. attackerUnit.unita_num,
+        defenderUnit and (defenderUnit.tipo .. "_" .. defenderUnit.unita_num) or "???",
+        flankMsg, firstMsg)
+        printToColor(msg, player.color, {r=1,g=0.5,b=0})
+
+        UI.setAttribute("confirm_panel_attack", "active", "true") 
+        UI.setAttribute("confirm_panel_attack", "visibility", player.color)
+
+
+        if phase.title == PHASE.ATTACK or DEBUG_SHOW_CONFIRM_ATTACK then
+                UI.setAttribute("btnActionAttack", "active", "true") 
+        else
+                UI.setAttribute("btnActionAttack", "active", "false")      
+        end
+
+        return true
+end
+-- ============================================================
+-- FUNZIONE: lionheart_meleeConfirm(player)
+-- Risolve la mischia
+-- ============================================================
+function melee_confirm(player, value, id)
+
+    local state = IEF_MELEE_STATE
+    if not state.attackerUnit or not state.defenderUnit then
+        printToColor("[MISCHIA] Nessuna mischia in attesa", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    UI.setAttribute("confirm_panel_shoot", "active", "false")
+    UI.setAttribute("confirm_panel_attack", "active", "false")
+
+    local atkUnit  = state.attackerUnit
+    local defUnit  = state.defenderUnit
+    local atkSlot  = state.attackerSlot
+    local defSlot  = state.defenderSlot
+
+    local atkDadi  = melee_dices(atkUnit, state.basiAttaccanti, state.isFirstTurn)
+    local defDadi  = melee_dices(defUnit, state.defenderBases, false)
+    local atkSoglia = melee_thresold(state.atkUnit.tipo, state.defUnit.tipo, state.atkUnit.valore, state.isFlanked)
+    local defSoglia = melee_thresold(state.defUnit.tipo, state.atkUnit.tipo, state.defUnit.valore, false)
+
+    printToAll(string.format("[MISCHIA] %s: %dD6 (soglia %d+) vs %s: %dD6 (soglia %d+)",
+        state.atkUnit.tipo .. "_" .. state.atkUnit.unita_num, atkDadi, atkSoglia,
+        state.defUnit.tipo .. "_" .. state.defUnit.unita_num, defDadi, defSoglia),
+        {r=1, g=0.5, b=0})
+
+    -- Tiro simultaneo
+    local atkHits = 0
+    local defHits = 0
+
+    engine_rollDice(atkDadi, atkSoglia, function(hits)
+        atkHits = hits
+        engine_rollDice(defDadi, defSoglia, function(hits2)
+            defHits = hits2
+
+            printToAll(string.format("[MISCHIA] %s → %d HIT | %s → %d HIT",
+                state.atkUnit.tipo .. "_" .. state.atkUnit.unita_num, atkHits,
+                state.defUnit.tipo .. "_" .. state.defUnit.unita_num, defHits),
+                {r=1, g=0.5, b=0})
+
+            -- Applica ferite
+            if atkHits > 0 then
+                shoot_applyHits(defUnit, defSlot, atkHits, player, state.defenderBases[1])
+            end
+            if defHits > 0 then
+                shoot_applyHits(atkUnit, atkSlot, defHits, player, state.attacker)
+            end
+
+            -- Registra turno mischia
+            local unitKey = state.atkSlot .. "_" .. state.atkUnit.tipo .. "_" .. state.atkUnit.unita_num    
+            IEF_MELEE_ENGAGED[unitKey] = true
+
+            melee_reset()
+        end)
+    end)
+end
+-- ============================================================
+-- FUNZIONE: lionheart_calcolaDadiMischia(unita, figure, isFirstTurn)
+-- ============================================================
+function melee_dices(unita, basiObjs, isFirstTurn)
+    -- IEF: 1D6 per base partecipante (primo e secondo rango)
+    -- Non conta le figure — conta le basi fisiche
+    local fwd   = basiObjs[1].getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+
+    local proiezioni = {}
+    local minProj = nil
+    for _, baseObj in ipairs(basiObjs) do
+        local p = baseObj.getPosition()
+        local proj = p.x * fwdXZ.x + p.z * fwdXZ.z
+        proiezioni[baseObj] = proj
+        if minProj == nil or proj < minProj then minProj = proj end
+    end
+
+    local sampleBounds = basiObjs[1].getBounds()
+    local rankStep     = sampleBounds.size.z
+    local rankTolerance = rankStep * 0.6
+
+    -- IEF: primo e secondo rango partecipano sempre
+    local maxRanghi = 2
+
+    local dadi = 0
+    for _, baseObj in ipairs(basiObjs) do
+        local offset     = proiezioni[baseObj] - minProj
+        local rangoIndex = math.floor((offset + rankTolerance) / rankStep)
+        if rangoIndex < maxRanghi then
+            dadi = dadi + 1
+        end
+    end
+
+    return dadi
+end
+-- ============================================================
+-- FUNZIONE: lionheart_sogliaMischia(tipoAtk, tipoDef, valore, isFlanked)
+-- ============================================================
+function melee_thresold(tipoAtk, tipoDef, valore, isFlanked)
+    -- IEF: soglia base 5+ per tutti
+    -- I modificatori sono applicati come +/- al numero di dadi, non alla soglia
+    -- Questa funzione ritorna sempre 5 (il valore di base IEF)
+    -- I modificatori specifici sono calcolati da melee_calcolaModificatori
+    return 5
+end
+-- ============================================================
+-- FUNZIONE: lionheart_checkFlank(atkBase, defBase)
+-- Controlla se l'attaccante colpisce sul fianco
+-- ============================================================
+function melee_checkFlank(atkBase, defBase)
+    if not atkBase or not defBase then return false end
+
+    local posAtk = atkBase.getPosition()
+    local posDef = defBase.getPosition()
+    local fwdDef = defBase.getTransformForward()
+    local fwdXZ  = Vector(fwdDef.x, 0, fwdDef.z):normalized()
+
+    local toAtk  = Vector(posAtk.x - posDef.x, 0, posAtk.z - posDef.z):normalized()
+    local dot    = fwdXZ:dot(toAtk)
+    local angle  = math.deg(math.acos(math.max(-1, math.min(1, dot))))
+
+    -- Fianco se angolo > 45° rispetto al fronte
+    return angle > 90
+end
+
+-- ============================================================
+-- FUNZIONE: lionheart_meleeCancel(player)
+-- ============================================================
+function melee_cancel(player, value, id)
+    for _, db in ipairs(IEF_MELEE_STATE.defenderBases or {}) do
+        if db then db.highlightOff() end
+    end
+    UI.setAttribute("confirm_panel_attack", "active", "false")
+    melee_reset()
+    printToColor("[MISCHIA] Annullata", player.color, {r=0.7,g=0.7,b=0.7})
+end
+
+-- ============================================================
+-- FUNZIONE: lionheart_meleeReset()
+-- ============================================================
+function melee_reset()
+    IEF_MELEE_STATE = {
+        attacker      = nil,
+        attackerUnit  = nil,
+        attackerSlot  = nil,
+        defenderUnit  = nil,
+        defenderSlot  = nil,
+        defenderBases = {},
+        isFlanked     = false,
+        isFirstTurn   = false,
+    }
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_crea()
+-- ============================================================
+function melee_crea(unitaAtk, slotAtk, unitaDif, slotDif)
+    if not IEF_MELEE_STATE or not IEF_MELEE_STATE.mischie then
+        IEF_MELEE_STATE = { mischie = {}, nextId = 1 }
+    end
+    local id = string.format("M%03d", IEF_MELEE_STATE.nextId)
+    IEF_MELEE_STATE.nextId = IEF_MELEE_STATE.nextId + 1
+    local mischia = {
+        id           = id,
+        turno_inizio = (ENGINE and ENGINE.turn) or 1,
+        unitaAtk     = unitaAtk,
+        slotAtk      = slotAtk,
+        unitaDif     = unitaDif,
+        slotDif      = slotDif,
+    }
+    table.insert(IEF_MELEE_STATE.mischie, mischia)
+    print("[MISCHIA] Creata " .. id ..
+          " — " .. tostring(slotAtk) .. "_" .. tostring(unitaAtk.tipo) .. "_" .. tostring(unitaAtk.unita_num) ..
+          " vs " .. tostring(slotDif) .. "_" .. tostring(unitaDif.tipo) .. "_" .. tostring(unitaDif.unita_num) ..
+          " (turno_inizio=" .. tostring(mischia.turno_inizio) .. ")")
+    return mischia
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_find()
+-- ============================================================
+function melee_find(unitaAtk, slotAtk, unitaDif, slotDif)
+    if not IEF_MELEE_STATE or not IEF_MELEE_STATE.mischie then
+        IEF_MELEE_STATE = { mischie = {}, nextId = 1 }
+        return nil
+    end
+    for _, m in ipairs(IEF_MELEE_STATE.mischie) do
+        local matchDiretta = m.unitaAtk == unitaAtk and m.slotAtk == slotAtk and
+                             m.unitaDif == unitaDif  and m.slotDif == slotDif
+        local matchInversa = m.unitaAtk == unitaDif  and m.slotAtk == slotDif and
+                             m.unitaDif == unitaAtk  and m.slotDif == slotAtk
+        if matchDiretta or matchInversa then return m end
+    end
+    return nil
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_getTurnoRelativo()
+-- ============================================================
+function melee_getTurnoRelativo(mischia)
+    local turnoCorrente = (ENGINE and ENGINE.turn) or 1
+    return turnoCorrente - mischia.turno_inizio
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_basiInContatto(unita, basiNemiche)
+-- ============================================================
+function melee_basiInContatto(unita, basiNemiche)
+    local result = {}
+
+    local defTag = nil
+    for _, n in ipairs(basiNemiche) do
+        if n.hasTag("Army1") then defTag = "Army1"; break end
+        if n.hasTag("Army2") then defTag = "Army2"; break end
+    end
+    if not defTag then return result end
+
+    for _, b in ipairs(unita.basi) do
+        local obj = getObjectFromGUID(b.guid)
+        if obj then
+            local pos    = obj.getPosition()
+            local bounds = obj.getBounds()
+            local fwd    = obj.getTransformForward()
+            local rot    = obj.getRotation()
+
+            local hits = Physics.cast({
+                origin       = pos,
+                direction    = Vector(fwd.x, 0, fwd.z):normalized(),
+                type         = 3,
+                size         = Vector(bounds.size.x * 0.7, bounds.size.y, 0.1),
+                max_distance = 1.23,
+                orientation  = rot
+            })
+
+            for _, hit in ipairs(hits) do
+                if hit.hit_object and hit.hit_object ~= obj then
+                    if hit.hit_object.hasTag(defTag) then
+                        local isTarget = false
+                        for _, n in ipairs(basiNemiche) do
+                            if n == hit.hit_object then isTarget = true; break end
+                        end
+                        if isTarget then
+                            local found = false
+                            for _, r in ipairs(result) do
+                                if r == obj then found = true; break end
+                            end
+                            if not found then table.insert(result, obj) end
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return result
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_ranghiPosteriori(baseContatto, unita)
+-- ============================================================
+function melee_ranghiPosteriori(baseContatto, unita)
+    local posA    = baseContatto.getPosition()
+    local fwd     = baseContatto.getTransformForward()
+    local fwdXZ   = Vector(fwd.x, 0, fwd.z):normalized()
+    local rightXZ = Vector(-fwdXZ.z, 0, fwdXZ.x)
+
+    local projFrontA = posA.x * fwdXZ.x   + posA.z * fwdXZ.z
+    local projRightA = posA.x * rightXZ.x + posA.z * rightXZ.z
+
+    local bounds     = baseContatto.getBounds()
+    local depthStep  = bounds.size.z
+    local lateralTol = bounds.size.x * 0.5
+
+    local migliore    = nil
+    local miglioreProf = nil
+
+    for _, b in ipairs(unita.basi) do
+        local obj = getObjectFromGUID(b.guid)
+        if obj and obj ~= baseContatto then
+            local posB       = obj.getPosition()
+            local projFrontB = posB.x * fwdXZ.x   + posB.z * fwdXZ.z
+            local projRightB = posB.x * rightXZ.x + posB.z * rightXZ.z
+
+            local diffLateral = math.abs(projRightB - projRightA)
+            local diffForward = projFrontA - projFrontB
+
+            if diffLateral <= lateralTol and diffForward > depthStep * 0.3 then
+                if miglioreProf == nil or diffForward < miglioreProf then
+                    miglioreProf = diffForward
+                    migliore = obj
+                end
+            end
+        end
+    end
+
+    return migliore
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_overlap(basiContatto, unita, isFirstTurn)
+-- ============================================================
+function melee_overlap(basiContatto, unita, isFirstTurn)
+    if isFirstTurn then return {} end
+    if not basiContatto or #basiContatto == 0 then return {} end
+
+    local inContatto = {}
+    for _, bc in ipairs(basiContatto) do inContatto[bc] = true end
+
+    local baseRef   = basiContatto[1]
+    local fwd       = baseRef.getTransformForward()
+    local fwdXZ     = Vector(fwd.x, 0, fwd.z):normalized()
+    local rightXZ   = Vector(-fwdXZ.z, 0, fwdXZ.x)
+
+    local bounds    = baseRef.getBounds()
+    local baseWidth = bounds.size.x
+    local frontTol  = bounds.size.z * 0.8
+
+    local minRight = math.huge
+    local maxRight = -math.huge
+    for _, bc in ipairs(basiContatto) do
+        local pos = bc.getPosition()
+        local projR = pos.x * rightXZ.x + pos.z * rightXZ.z
+        if projR < minRight then minRight = projR end
+        if projR > maxRight then maxRight = projR end
+    end
+    minRight = minRight - baseWidth * 0.5
+    maxRight = maxRight + baseWidth * 0.5
+
+    local sumFront = 0
+    for _, bc in ipairs(basiContatto) do
+        local pos = bc.getPosition()
+        sumFront = sumFront + (pos.x * fwdXZ.x + pos.z * fwdXZ.z)
+    end
+    local avgFront = sumFront / #basiContatto
+
+    local overlapSx = nil
+    local overlapDx = nil
+
+    for _, b in ipairs(unita.basi) do
+        local obj = getObjectFromGUID(b.guid)
+        if obj and not inContatto[obj] then
+            local posB       = obj.getPosition()
+            local projFrontB = posB.x * fwdXZ.x   + posB.z * fwdXZ.z
+            local projRightB = posB.x * rightXZ.x + posB.z * rightXZ.z
+
+            if math.abs(projFrontB - avgFront) <= frontTol then
+                if projRightB < minRight and not overlapSx then overlapSx = obj end
+                if projRightB > maxRight and not overlapDx then overlapDx = obj end
+            end
+        end
+    end
+
+    local result = {}
+    if overlapSx then
+        table.insert(result, overlapSx)
+        local post = melee_ranghiPosteriori(overlapSx, unita)
+        if post then table.insert(result, post) end
+    end
+    if overlapDx then
+        table.insert(result, overlapDx)
+        local post = melee_ranghiPosteriori(overlapDx, unita)
+        if post then table.insert(result, post) end
+    end
+
+    return result
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_calcolaModificatori
+-- ============================================================
+function melee_calcolaModificatori(unitaAtk, unitaDif, isFirstTurn)
+    -- IEF: modificatori mischia da regolamento_ief.json
+    -- Struttura: IEF_DATA.melee.first_turn_modifiers / subsequent_turn_modifiers
+    local dettaglio = {}
+    local totale = 0
+
+    local tipoAtk = unitaAtk.tipo
+    local tipoDif = unitaDif.tipo
+
+    -- Leggi armi come array (nuovo formato IEF)
+    local armiAtk = unitaAtk.armi or (unitaAtk.arma and {unitaAtk.arma}) or {}
+    local hasArma = function(arma)
+        for _, a in ipairs(armiAtk) do
+            if a == arma then return true end
+        end
+        return false
+    end
+
+    local mods = IEF_DATA.melee and (
+        isFirstTurn
+        and IEF_DATA.melee.first_turn_modifiers
+        or  IEF_DATA.melee.subsequent_turn_modifiers
+    ) or {}
+
+    for _, mod in ipairs(mods) do
+        -- Valutazione semplificata delle condizioni testuali
+        -- TODO: implementare valutatore completo delle condizioni
+        local applies = false
+
+        if isFirstTurn then
+            if tipoAtk == "KN" and hasArma("LANCIA") then applies = true end
+            if tipoAtk == "CP" and hasArma("LANCIA") then applies = true end
+            if (tipoAtk == "FP" or tipoAtk == "FM") and
+               (hasArma("LANCIA") or hasArma("PICCA")) then applies = true end
+        else
+            if tipoAtk == "FP" then applies = true end
+        end
+
+        if applies and mod.modifier then
+            local label = mod.condition or "modificatore"
+            local val   = tonumber(mod.modifier) or 0
+            if val ~= 0 then
+                table.insert(dettaglio, { label = label, valore = val })
+                totale = totale + val
+            end
+        end
+    end
+
+    return { totale = totale, dettaglio = dettaglio }
+end
+-- ============================================================
+-- FUNZIONE: lionheart_melee_aggiornaPanel
+-- ============================================================
+function melee_aggiornaPanel(mischia, contattoAtk, overlapAtk, postAtk,
+                                                contattoDif, overlapDif, postDif,
+                                                modAtk, modDif)
+    if not mischia then
+        UI.setAttribute("melee_panel", "active", "false")
+        return
+    end
+ 
+    local turnoCorrente = (ENGINE and ENGINE.turn) or 1
+    local turnoRel      = melee_getTurnoRelativo(mischia)
+    local turnoMischia  = turnoRel + 1
+ 
+    local basiPartAtk = #contattoAtk + postAtk + #overlapAtk
+    local basiPartDif = #contattoDif + postDif + #overlapDif
+ 
+    local dadiAtk = basiPartAtk > 0 and (basiPartAtk + (modAtk and modAtk.totale or 0)) or 0
+    local dadiDif = basiPartDif > 0 and (basiPartDif + (modDif and modDif.totale or 0)) or 0
+
+    UI.setAttribute("melee_icon", "image", "melee_icon")
+    UI.setAttribute("melee_panel", "image", "carta_icon")
+    UI.setAttribute("melee_panel_title", "text",
+        "Melee " .. tostring(mischia.id))
+    UI.setAttribute("melee_panel_turno", "text",
+        "Turn: " .. tostring(turnoCorrente) ..
+        "   Turn Melee: " .. tostring(turnoMischia))
+ 
+    -- Attaccante
+    UI.setAttribute("melee_panel_atk_nome", "text",
+        "Attacker: " .. tostring(mischia.unitaAtk.tipo) ..
+        "_" .. tostring(mischia.unitaAtk.unita_num))
+    UI.setAttribute("melee_panel_atk_dadi", "text",
+        "Dice: " .. tostring(dadiAtk))
+ 
+    local detAtk = ""
+    if #contattoAtk > 0 then
+        detAtk = detAtk .. "  +" .. tostring(#contattoAtk + postAtk) .. " contact"
+        if postAtk > 0 then detAtk = detAtk .. " (+" .. postAtk .. " rear)" end
+    end
+    if #overlapAtk > 0 then
+        detAtk = detAtk .. "\n  +" .. tostring(#overlapAtk) .. " overlap"
+    end
+    if modAtk then
+        for _, m in ipairs(modAtk.dettaglio) do
+            detAtk = detAtk .. "\n  " .. (m.valore >= 0 and "+" or "") .. tostring(m.valore) .. " " .. m.label
+        end
+    end
+    UI.setAttribute("melee_panel_atk_det", "text", detAtk)
+ 
+    -- Difensore
+    UI.setAttribute("melee_panel_def_nome", "text",
+        "Defender: " .. tostring(mischia.unitaDif.tipo) ..
+        "_" .. tostring(mischia.unitaDif.unita_num))
+    UI.setAttribute("melee_panel_def_dadi", "text",
+        "Dice: " .. tostring(dadiDif))
+ 
+    local detDif = ""
+    if #contattoDif > 0 then
+        detDif = detDif .. "  +" .. tostring(#contattoDif + postDif) .. " contact"
+        if postDif > 0 then detDif = detDif .. " (+" .. postDif .. " rear)" end
+    end
+    if #overlapDif > 0 then
+        detDif = detDif .. "\n  +" .. tostring(#overlapDif) .. " overlap"
+    end
+    if modDif then
+        for _, m in ipairs(modDif.dettaglio) do
+            detDif = detDif .. "\n  " .. (m.valore >= 0 and "+" or "") .. tostring(m.valore) .. " " .. m.label
+        end
+    end
+    UI.setAttribute("melee_panel_def_det", "text", detDif)
+ 
+    UI.setAttribute("melee_panel", "active", "true")
+end

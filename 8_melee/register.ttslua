@@ -1,0 +1,10 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/register.ttslua
+-- NOTA: le funzioni si chiamano ancora lionheart_melee_* in attesa
+-- del rename massivo. I nomi handler sono già IEF per compatibilità futura.
+-- ============================================================
+
+-- Geometria mischia (Physics.cast)
+registerHandler("ief_melee_basiInContatto",   function(u,bn)    return melee_basiInContatto(u,bn)   end)
+registerHandler("ief_melee_ranghiPosteriori", function(bc,u)    return melee_ranghiPosteriori(bc,u) end)
+registerHandler("ief_melee_overlap",          function(bc,u,ft) return melee_overlap(bc,u,ft)       end)

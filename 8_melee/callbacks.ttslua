@@ -1,0 +1,26 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/callbacks.ttslua
+-- ============================================================
+
+-- ============================================================
+-- FUNZIONE: melee_btn_army1()
+-- ============================================================
+function melee_btn_army1(player, value, id)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: melee_btn_army2()
+-- ============================================================
+function melee_btn_army2(player, value, id)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: melee_btn_single()
+-- ============================================================
+function melee_btn_single(player, value, id)
+    return true
+end

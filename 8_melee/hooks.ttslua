@@ -1,0 +1,19 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/hooks.ttslua
+-- ============================================================
+
+-- ============================================================
+-- FUNZIONE: before_melee()
+-- ============================================================
+function before_melee(phaseName, phase)
+    if TURN.phase ~= phaseName then main_resetTurnForPhase() end
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+
+-- ============================================================
+-- FUNZIONE: after_melee()
+-- ============================================================
+function after_melee(phaseName, phase)
+    IEF_MELEE_ENGAGED = {}
+end
