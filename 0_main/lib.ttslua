@@ -1,0 +1,1146 @@
+-- ============================================================
+-- FUNZIONE: updateCenterPanel()
+-- ============================================================
+function main_updateCenterPanel()
+    
+    if not ENGINE or not ENGINE.phases then return end
+    local phase = ENGINE.phases[ENGINE.phase]
+    if not phase then return end
+
+    -- Renderer PRIMA — attiva i panel corretti
+    local renderer = RENDERERS and RENDERERS[phase.render]
+    if renderer then
+        renderer(phase)
+    else
+        printToAll("[IEF] Renderer non trovato: " .. tostring(phase.render), "Red")
+    end
+
+    -- Fase e descrizione
+    pcall(function()
+        UI.setAttribute("versione", "text", VERSION)
+        UI.setAttribute("textTurno", "text", "Turno: " .. tostring(ENGINE.turn or 1))
+        UI.setAttribute("textFase", "text", (phase.title or ENGINE.phase))
+        UI.setAttribute("textDesc", "text", phase.desc or "")
+    end)
+
+    -- Nomi e colori eserciti 
+    pcall(function() 
+        local n1 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army1.nome or "Army 1")
+        local n2 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army2.nome or "Army 2")
+
+        UI.setAttribute("army1", "text",  n1)
+        UI.setAttribute("army2", "text",  n2)
+        UI.setAttribute("army1", "color", colorArmy1 or COLOR.NOARMY)
+        UI.setAttribute("army2", "color", colorArmy2 or COLOR.NOARMY)
+    end)
+
+    -- Label e colore bottoni DOPO panel già attivo
+    pcall(function()
+        for slot, button in pairs(phase.buttons or {}) do
+            UI.setAttribute(slot, "color",     button.color     or "Grey")
+            UI.setAttribute(slot, "text",      button.label     or slot)
+            UI.setAttribute(slot, "textColor", button.textColor or "White")
+        end
+    end)
+
+    -- Stato bottoni
+    pcall(function()
+        if ENGINE.phase == PHASE.SITTING then
+            if colorArmy1 ~= COLOR.NOARMY then
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY)
+            end
+            if colorArmy2 ~= COLOR.NOARMY then
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY)
+            end
+        elseif phase.inputMode == "INITIATIVE" then
+
+            print("[IEF] updateCenterPanel: INITIATIVE mode fase " .. ENGINE.phase .. " activeArmy=" .. tostring(TURN and TURN.activeArmy))
+            UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
+            UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
+            UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
+            UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
+            UI.setAttribute(BUTTONS.BTN_ARMY1, "color", colorArmy1 or COLOR.NOARMY)
+            UI.setAttribute(BUTTONS.BTN_ARMY2, "color", colorArmy2 or COLOR.NOARMY)
+
+            if TURN and TURN.activeArmy == "Army1" then
+                print("[IEF] updateCenterPanel: Army1 active")
+                
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
+
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "false")
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY)
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "Black")
+            elseif TURN and TURN.activeArmy == "Army2" then
+                print("[IEF] updateCenterPanel: Army2 active")
+
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
+
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "false")
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY)
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "Black")
+            end
+
+else
+            -- reset interactable per OWNER mode
+            UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
+            UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
+            UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
+            UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
+
+            if TURN and TURN.completed then
+                if TURN.completed.Army1 then
+                    UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY)
+                end
+                if TURN.completed.Army2 then
+                    UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY)
+                end
+            end
+        end
+    end)
+end
+-- ============================================================
+-- FUNZIONE: aggiornaLinee()
+-- ============================================================
+function main_aggiornaLinee()
+
+      
+    local linee = {}
+
+    local Y_LINEE    = 1.22
+    local LX         = 66.70
+    local LZ         = 44.35
+    local CM_TO_TTS  = LX / 90.0   -- 66.70 / 90 = 0.741
+    local DEPLOY_TTS = 30.48 * CM_TO_TTS   -- 12 pollici in TTS = 22.59
+    local LAT_TTS    = 15.24 * CM_TO_TTS   -- 6 pollici in TTS = 11.29
+
+    if linea_field then
+        table.insert(linee, { 
+            points={{x=-LX,y=Y_LINEE,z=0},{x=LX,y=Y_LINEE,z=0}}, color={r=0.8,g=0.8,b=0.8}, thickness=0.3})
+    end
+
+    if linee_deploy then
+        local y = Y_LINEE
+        table.insert(linee, { points={{x=-LX,y=y,z=-(LZ-DEPLOY_TTS)},{x=LX,y=y,z=-(LZ-DEPLOY_TTS)}}, color={r=0.9,g=0.2,b=0.2}, thickness=0.3 })
+        table.insert(linee, { points={{x=-LX,y=y,z= (LZ-DEPLOY_TTS)},{x=LX,y=y,z= (LZ-DEPLOY_TTS)}}, color={r=0.2,g=0.8,b=0.2}, thickness=0.3 })
+    end
+
+    if linee_spawn then
+
+        local y   = Y_LINEE
+        local profondita = 22
+        local gap = 5  -- unità TTS di distanza dal bordo tavolo
+
+            -- Rettangolo Army1 (rosso)
+            table.insert(linee, { points={
+                {x=-LX, y=y, z=-(LZ+gap)},
+                {x= LX, y=y, z=-(LZ+gap)},
+                {x= LX, y=y, z=-(LZ+gap+profondita)},
+                {x=-LX, y=y, z=-(LZ+gap+profondita)},
+                {x=-LX, y=y, z=-(LZ+gap)}
+            }, color={r=1,g=0,b=0}, thickness=0.3 })
+
+            -- Rettangolo Army2 (verde)
+            table.insert(linee, { points={
+                {x=-LX, y=y, z= LZ+gap},
+                {x= LX, y=y, z= LZ+gap},
+                {x= LX, y=y, z= LZ+gap+profondita},
+                {x=-LX, y=y, z= LZ+gap+profondita},
+                {x=-LX, y=y, z= LZ+gap}
+            }, color={r=0,g=1,b=0}, thickness=0.3 })
+    end
+
+            -- if linee_settori then
+        --     local cols=6; local rows=5
+        --     local sx=(VERDE_LX*2)/cols; local sz=(VERDE_LZ*2)/rows; local y=3.5
+        --     for c=0,cols do local x=-VERDE_LX+c*sx; table.insert(linee,{points={{x,y,-VERDE_LZ},{x,y,VERDE_LZ}},color={r=0.2,g=0.8,b=0.8},thickness=0.1}) end
+        --     for r=0,rows do local z=-VERDE_LZ+r*sz; table.insert(linee,{points={{-VERDE_LX,y,z},{VERDE_LX,y,z}},color={r=0.2,g=0.8,b=0.8},thickness=0.1}) end
+        -- end
+
+    if ENGINE_MEASURE and ENGINE_MEASURE.activeLine then
+        table.insert(linee, ENGINE_MEASURE.activeLine)
+    end
+
+    if IEF_SHOOTING and IEF_SHOOTING.activeLines then
+        for _, l in ipairs(IEF_SHOOTING.activeLines) do
+            table.insert(linee, l)
+        end
+    end
+
+    Global.setVectorLines(linee)
+end
+-- ============================================================
+-- FUNZIONE: aggiornaSchedeUnita()
+-- ============================================================
+function main_aggiornaSchedeUnita() end
+-- ============================================================
+-- FUNZIONE: restart()
+-- ============================================================
+function main_restart()
+
+    initPhases()
+
+    ENGINE = ENGINE or {}
+    ENGINE.handlers = ENGINE.handlers or {}
+    ENGINE.conditions = ENGINE.conditions or {}
+
+    ENGINE.phase = "SITTING"
+    ENGINE.turn = 1
+ 
+    colorArmy1 = COLOR.NOARMY
+    colorArmy2 = COLOR.NOARMY
+     
+    DICE_CONTEST = {
+        rolledNumberArmy1 = nil,
+        rolledNumberArmy2 = nil,
+        winner = nil,
+        initiative = nil
+    }
+    
+    TURN = {
+        phase = "SITTING",
+        activeArmy = nil,
+        firstArmy = nil,
+        completed = {
+            Army1 = false,
+            Army2 = false
+        }
+    }
+
+    UI.setAttribute("iconWinnerArmy1", "active", "false")
+    UI.setAttribute("iconWinnerArmy2", "active", "false")
+
+    UI.setAttribute("iconMoveArmy1", "active", "false")
+    UI.setAttribute("iconMoveArmy2", "active", "false")
+
+    -- Rimuovi elementi terreno spawnati
+    for _, obj in ipairs(getAllObjects()) do
+        if obj.hasTag and (obj.hasTag("Hill") or obj.hasTag("Field") or obj.hasTag("Wood")) then
+            obj.destruct()
+        end
+    end
+
+    main_initUI()
+    main_resetPlayers()
+    restoreDiceUiState()
+    main_updateCenterPanel()
+    
+    callHandler("deployment_resetRuntimeOnly")
+    callHandler("deployment_clearSpawnedModels")  -- esterni: deploy module
+
+    linea_field = false
+    linee_deploy = false
+    linee_spawn = true
+    main_aggiornaLinee()
+
+    fadeOut("RESTART", nil)
+end
+-- ============================================================
+-- FUNZIONE: getArmySlotByColor()
+-- ============================================================
+function main_ArmySlotByColor(color)
+    if color == COLOR.ARMY1 then return "Army1" end
+    if color == COLOR.ARMY2 then return "Army2" end
+    return nil
+end
+-- ============================================================
+-- FUNZIONE: getColorByArmySlot()
+-- ============================================================
+function main_ColorByArmySlot(armySlot)
+    if armySlot == "Army1" then return COLOR.ARMY1 end
+    if armySlot == "Army2" then return COLOR.ARMY2 end
+    return nil
+end
+-- ============================================================
+-- FUNZIONE: ief_getSelectedObjects(player)
+-- ============================================================
+function main_SelectedObjects(player)
+    if player then
+        local selected = Player[player.color].getSelectedObjects()
+        if selected and #selected > 0 then return selected end
+        return {}
+    end
+
+    for _, p in ipairs(main_SeatedPlayers()) do
+        local selected = Player[p.color].getSelectedObjects()
+        if selected and #selected > 0 then return selected end
+    end
+    return {}
+end
+-- ============================================================
+-- FUNZIONE: getSeatedPlayers()
+-- ============================================================
+function main_SeatedPlayers()
+    local result = {}
+    for _, p in ipairs(Player.getPlayers()) do
+        if p and p.seated and (p.color == COLOR.ARMY1 or p.color == COLOR.ARMY2) then
+            table.insert(result, p)
+        end
+    end
+    return result
+end
+-- ============================================================
+-- FUNZIONE: resetPlayers()
+-- ============================================================
+function main_resetPlayers()
+    for _, p in ipairs(Player.getPlayers()) do
+        if p then p.changeColor(COLOR.NOARMY) end
+    end
+end
+-- ============================================================
+-- FUNZIONE: goToPhase(phaseName)
+-- Transizione manuale a una fase (bypass condizioni)
+-- ============================================================
+function main_goToPhase(phaseName)
+    if not ENGINE or not ENGINE.phases then return end
+    if not ENGINE.phases[phaseName] then
+        print("[GOTO] Phase not found: " .. phaseName)
+        return
+    end
+    local oldPhase = ENGINE.phase
+    engine_exitPhase(oldPhase)
+    ENGINE.phase = phaseName
+    engine_resetState()
+    engine_enterPhase(phaseName, oldPhase)
+    main_updateCenterPanel()
+end
+-- ============================================================
+-- FUNZIONE: resetTurnForPhase()
+-- ============================================================
+function main_resetTurnForPhase()
+    if DEBUG then print("resetTurnForPhase") end
+    if not DICE_CONTEST or not DICE_CONTEST.initiative then return end
+
+    local army = main_ArmySlotByColor(DICE_CONTEST.initiative.color)
+    TURN.phase          = ENGINE.phase
+    TURN.firstArmy      = army
+    TURN.activeArmy     = army
+    TURN.completed.Army1 = false
+    TURN.completed.Army2 = false
+
+    print("[IEF] resetTurnForPhase: phase=" .. tostring(TURN.phase) .. " firstArmy=" .. tostring(TURN.firstArmy) .. " activeArmy=" .. tostring(TURN.activeArmy))
+end
+--=============================================================
+--FUNZIONE: getArmyByButton()
+--=============================================================
+function main_getArmyByButton(id)
+    for k,v in pairs(ARMY) do
+        if v.button == id then
+            return k
+        end
+    end
+    return nil
+end
+--=============================================================
+--FUNZIONE: getArmyByColor()
+--=============================================================
+function main_getArmyByColor(player)
+
+    for k,v in pairs(ARMY) do
+        if v.color == player.color then
+            return k
+        end
+    end
+    return nil
+end
+-- ============================================================
+-- FUNZIONE: dice_check()
+-- ============================================================
+function main_dice_check()
+
+   if not DICE_CONTEST.rolledNumberArmy1 or not DICE_CONTEST.rolledNumberArmy2 then return end
+
+    if DICE_CONTEST.rolledNumberArmy1 == DICE_CONTEST.rolledNumberArmy2 then
+        DICE_CONTEST.rolledNumberArmy1 = nil
+        DICE_CONTEST.rolledNumberArmy2 = nil
+        DICE_CONTEST.winner = nil
+        return
+    end
+
+    if DICE_CONTEST.rolledNumberArmy1 > DICE_CONTEST.rolledNumberArmy2 then
+        DICE_CONTEST.winner = 1
+    else
+        DICE_CONTEST.winner = 2
+    end   
+    
+    print("Winner is Army: " .. tostring(ARMY[DICE_CONTEST.winner].name))
+end
+
+-- ============================================================
+-- FUNZIONE: advanceTurnAfterClick()
+-- ============================================================
+function main_advanceTurnAfterClick(slot)
+
+    print("[ADV] slot=" .. tostring(slot) .. " activeArmy=" .. tostring(TURN and TURN.activeArmy))
+    
+    if slot == BUTTONS.BTN_ARMY1 then
+        TURN.completed.Army1 = true
+    end
+
+    if slot == BUTTONS.BTN_ARMY2 then
+        TURN.completed.Army2 = true
+    end
+
+    if TURN.activeArmy == "Army1" then
+        if TURN.completed.Army2 then
+            TURN.activeArmy = nil
+        else
+            TURN.activeArmy = "Army2"
+        end
+        return
+    end
+
+    if TURN.activeArmy == "Army2" then
+        if TURN.completed.Army1 then
+            TURN.activeArmy = nil
+        else
+            TURN.activeArmy = "Army1"
+        end
+        return
+    end
+end
+-- ============================================================
+-- FUNZIONE: canUseButton()
+-- ============================================================
+function main_canUseButton(slot, player, value, id, button, phase)
+
+    local mode = phase and phase.inputMode or "FREE"
+
+    -- ========================================================
+    -- FREE: tutti possono cliccare
+    -- ========================================================
+    if mode == "FREE" then
+        return true
+    end
+
+    -- ========================================================
+    -- OWNER: solo il player del bottone
+    -- ========================================================
+    if mode == "OWNER" then
+
+        if slot == BUTTONS.BTN_ARMY1 then
+            if not player or player.color ~= COLOR.ARMY1 then
+                fadeOut("Not your button", player)
+                return false
+            end
+        end
+
+        if slot == BUTTONS.BTN_ARMY2 then
+            if not player or player.color ~= COLOR.ARMY2 then
+                fadeOut("Not your button", player)
+                return false
+            end
+        end
+
+        return true
+    end
+
+    -- ========================================================
+    -- INITIATIVE: gestione turno con TURN
+    -- ========================================================
+    if mode == "INITIATIVE" then
+
+        local activeColor = main_ColorByArmySlot(TURN.activeArmy)
+
+        -- se esiste un turno attivo, solo lui può cliccare
+        if activeColor then
+            if not player or player.color ~= activeColor then
+                fadeOut("Wait for your opponent", player)
+                return false
+            end
+        end
+        return true
+    end
+
+    return true
+end
+-- ============================================================
+-- FUNZIONE: prettyPrintTable()
+-- ============================================================
+function main_prettyPrintTable(t, indent)
+    indent = indent or 0
+    if type(t) ~= "table" then
+        print(tostring(t))
+        return
+    end
+    for k, v in pairs(t) do
+        local prefix = string.rep("  ", indent) .. tostring(k) .. ": "
+        if type(v) == "table" then
+            print(prefix)
+            main_prettyPrintTable(v, indent + 1)
+        else
+            print(prefix .. tostring(v))
+        end
+    end
+end
+-- ============================================================
+-- FUNZIONE: initUI()
+-- ============================================================
+function main_initUI()
+    callHandler("buildUI")
+end
+-- rulesetInit() definita in rulesetInit.ttslua — rimossa da lib per evitare sovrascrittura
+-- ============================================================
+-- FUNZIONE: lionheart_findUnit(slot, tipo, unita_num)
+-- Trova un'unità in DEPLOYMENT.scanned
+-- ============================================================
+function main_findUnit(slot, tipo, unita_num)
+    local esercito = DEPLOYMENT.scanned and DEPLOYMENT.scanned[slot]
+    if not esercito then return nil end
+
+    for _, u in ipairs(esercito) do
+        if u.tipo == tipo and u.unita_num == unita_num then
+            return u
+        end
+    end
+    return nil
+end
+-- ============================================================
+-- FUNZIONE: lionheart_infoUnita()
+-- ============================================================
+function main_infoUnita(player, value, id, buttonConfig)
+
+    local selected = main_getSelectedObjects(player)
+    if not selected or #selected < 1 then
+        warningToColor(("Seleziona un'unità"):upper(), player)
+        return false
+    end
+
+    local obj = selected[1]
+
+    -- Verifica che l'unità appartenga all'esercito del player
+    local playerSlot = main_getArmyByColor(player)
+    if playerSlot == nil then return false end
+
+    local armyTag = "Army" .. tostring(playerSlot)
+
+    if not obj.hasTag(armyTag) then
+        printToColor("[INFO] Not your unit", player.color, {r=1,g=0.3,b=0.3})
+        return false
+    end
+
+    main_mostraPopupUnita(obj, player)
+    return true
+end
+-- ============================================================
+-- FUNZIONE: lionheart_getSelectedObjects()
+-- ============================================================
+function main_getSelectedObjects(player)
+
+    if player then
+        local selected = Player[player.color].getSelectedObjects()
+        if selected and #selected > 0 then return selected end
+        return {}
+    end
+
+    -- fallback senza player (comportamento precedente)
+    for _, p in ipairs(main_SeatedPlayers()) do
+        local selected = Player[p.color].getSelectedObjects()
+        if selected and #selected > 0 then return selected end
+    end
+    return {}
+end
+-- ============================================================
+-- FUNZIONE: lionheart_lineLeft()
+-- ============================================================
+function main_lineLeft(player, value, id, buttonConfig) return main_applyFormation("lineLeft", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_lineRight()
+-- ============================================================
+function main_lineRight(player, value, id, buttonConfig) return main_applyFormation("lineRight", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_columnUp()
+-- ============================================================
+function main_columnUp(player, value, id, buttonConfig) return main_applyFormation("columnUp", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_columnDown()
+-- ============================================================
+function main_columnDown(player, value, id, buttonConfig) return main_applyFormation("columnDown", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_skirmish()
+-- ============================================================
+function main_skirmish(player, value, id, buttonConfig) return main_applyFormation("skirmish", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_applyFormation()
+-- ============================================================
+function main_applyFormation(mode, player)
+
+    local selected = main_getSelectedObjects(player)
+    if selected == nil or #selected < 2 then
+        warningToColor(("Seleziona almeno 2 basi"):upper(), {r=1,g=0.6,b=0})
+        return false
+    end
+
+    local leader = selected[1]
+    local right = leader.getTransformRight()
+    local forward = leader.getTransformForward()
+
+    local leaderBounds = leader.getBounds()
+    local horizontalSpacing = leaderBounds.size.x
+    local verticalSpacing   = leaderBounds.size.z
+
+    for i = 2, #selected do
+        local obj = selected[i]
+        local index = i - 1
+        local pos = nil
+
+        if mode == "lineLeft" then
+            pos = leader.getPosition() - right * (horizontalSpacing * index)
+        elseif mode == "lineRight" then
+            pos = leader.getPosition() + right * (horizontalSpacing * index)
+        elseif mode == "columnUp" then
+            pos = leader.getPosition() + forward * (verticalSpacing * index)
+        elseif mode == "columnDown" then
+            pos = leader.getPosition() - forward * (verticalSpacing * index)
+        elseif mode == "skirmish" then
+            pos = leader.getPosition() + right * (horizontalSpacing * 2 * index)
+        end
+
+        if pos ~= nil then
+            obj.setPosition(pos)
+            obj.setRotation(leader.getRotation())
+        end
+    end
+
+    return true
+end
+-- ============================================================
+-- FUNZIONE: aggiornaPopupUnita()
+-- ============================================================
+function main_aggiornaPopupUnita(slot, tipo, unita_num)
+    local esercito = DEPLOYMENT.scanned and DEPLOYMENT.scanned[slot]
+    if not esercito then return end
+
+    -- Se passati tipo e unita_num aggiorna solo quell'unità
+    -- altrimenti aggiorna la prima trovata
+    local unita = nil
+    if tipo and unita_num then
+        unita = main_findUnit(slot, tipo, unita_num)
+    else
+        unita = esercito[1]
+    end
+
+    if not unita then return end
+
+    local p      = "unit_popup_" .. slot
+    local fpb    = (IEF_DATA.unitTypes and IEF_DATA.unitTypes[unita.tipo] or {}).figures_per_base or 1
+    local fig_att  = main_figureTotaliUnita(unita)
+    local fig_max  = (unita.basi_max or #unita.basi) * fpb
+    local basi_p   = main_basiPresentiUnita(unita)
+    local basi_max = unita.basi_max or #unita.basi
+    local perc     = fig_max > 0 and (fig_att / fig_max) or 0
+
+    local salute
+    if perc == 1.0    then salute = "Healthy"
+    elseif perc > 0.5 then salute = "Weakened"
+    elseif perc > 0   then salute = "Critical"
+    else                   salute = "Destroyed" end
+
+    UI.setAttribute(p .. "_basi",   "text", "Bases:  " .. basi_p  .. " / " .. basi_max)
+    UI.setAttribute(p .. "_figure", "text", "Figs:   " .. fig_att .. " / " .. fig_max)
+    UI.setAttribute(p .. "_salute", "text", "Status: " .. salute)
+
+    print("[POPUP] fig_att=" .. tostring(fig_att) .. " fig_max=" .. tostring(fig_max))
+    for _, base in ipairs(unita.basi) do
+        print("[POPUP] base=" .. tostring(base.nickname) .. " wounds=" .. tostring(wounds_data and wounds_data[base.nickname] or 0))
+    end
+end
+-- ============================================================
+-- FUNZIONE: mostraPopupUnita()
+-- ============================================================
+function main_mostraPopupUnita(obj, player)
+
+    if obj == nil then return end
+    local slot = nil
+    if obj.hasTag("Army1") then slot = 1 end
+    if obj.hasTag("Army2") then slot = 2 end
+    if slot == nil then return end
+
+    local nickname = obj.getName()
+    local baseInfo = deployment_parseNickname(nickname)
+    if not baseInfo then return end
+
+    local unita = nil
+    local esercito = DEPLOYMENT.scanned[slot]
+
+    if not esercito or #esercito == 0 then
+        callHandler("deployment_scanTable")
+        esercito = DEPLOYMENT.scanned[slot]
+    end
+
+    if esercito then
+        for _, u in ipairs(esercito) do
+            if u.tipo == baseInfo.unitType and u.unita_num == baseInfo.unitNumber then
+                unita = u
+                break
+            end
+        end
+    end
+    if not unita then return end
+
+    local p      = "unit_popup_" .. slot
+    local tipo   = unita.tipo
+    local arma   = unita.arma
+    local rules  = IEF_DATA.unitTypes and IEF_DATA.unitTypes[tipo]
+
+    local fpb    = (rules or {}).figures_per_base or 1
+    local fig_att  = main_figureTotaliUnita(unita)
+    local fig_max  = (unita.basi_max or #unita.basi) * fpb
+    local basi_p   = main_basiPresentiUnita(unita)
+    local basi_max = unita.basi_max or #unita.basi
+    local perc     = fig_max > 0 and (fig_att / fig_max) or 0
+    
+    local salute
+    if perc == 1.0   then salute = "Healthy"
+    elseif perc > 0.5 then salute = "Weakened"
+    elseif perc > 0   then salute = "Critical"
+    else                   salute = "Destroyed" end
+
+            local n1 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army1.nome or "Army 1")
+            local n2 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army2.nome or "Army 2")
+
+    local army_name = slot == 1 and n1 or n2
+    local val_str   = (unita.valore == "S" or unita.valore == 1)  and "Superior" or
+                      (unita.valore == "I" or unita.valore == -1) and "Inferior"  or "Normal"
+    local unit_name = rules and (rules.name or rules.nome_display) or tipo
+    local army_tag  = "Army" .. tostring(slot)
+
+    -- HEADER
+    UI.setAttribute(p, "image", "carta_icon")
+    UI.setAttribute(p .. "_icon",     "image", army_tag .. "_" .. tipo)
+    UI.setAttribute(p .. "_title",    "text",  unit_name:upper())
+    UI.setAttribute(p .. "_subtitle", "text",  tipo .. "  ·  " .. army_name .. "  ·  " .. val_str)
+    UI.setAttribute(p .. "_basi",     "text",  "Bases:  " .. basi_p  .. " / " .. basi_max)
+    UI.setAttribute(p .. "_figure",   "text",  "Figs:   " .. fig_att .. " / " .. fig_max)
+    UI.setAttribute(p .. "_salute",   "text",  "Status: " .. salute)
+    if not arma then 
+        UI.setAttribute(p .. "_weapon", "active", "false")
+    else 
+        UI.setAttribute(p .. "_weapon", "active", "true")
+    end
+
+
+    -- MOVIMENTO IEF: move_inches (campo singolo in pollici)
+    local mov_val = rules and rules.move_inches and tostring(rules.move_inches) .. "\"" or "—"
+    UI.setAttribute(p .. "_mov_open",  "text", mov_val)
+    for _, id in ipairs({"wood","rough","ford","pivot"}) do
+        UI.setAttribute(p .. "_mov_" .. id, "text", "—")
+    end
+
+    -- MELEE IEF: soglia fissa 5+ per tutti
+    for _, id in ipairs({"ai","ui","sk","ac","uc","skc"}) do
+        UI.setAttribute(p .. "_mel_" .. id, "text", "5+")
+    end
+
+    -- SHOOTING
+    local armi_list = unita.armi or (arma and {arma}) or {}
+    local w_ief = nil
+    for _, a in ipairs(armi_list) do
+        local w = IEF_DATA.weapons and IEF_DATA.weapons[a]
+        if w and w.range_inches then w_ief = w; w_ief._key = a; break end
+    end
+
+   if w_ief then
+        UI.setAttribute(p .. "_shoot_label", "text", "SHOOTING")
+        UI.setAttribute(p .. "_weapon", "text", "Weapon: " .. (w_ief.name or w_ief._key) .. "    Range: " .. tostring(w_ief.range_inches) .. "\"")
+        UI.setAttribute(p .. "_sho_ai",  "text", mth.AI  .. (tonumber(mth.AI)  == 6 and "" or "+"))
+        UI.setAttribute(p .. "_sho_ui",  "text", mth.UI  .. (tonumber(mth.UI)  == 6 and "" or "+"))
+        UI.setAttribute(p .. "_sho_sk",  "text", mth.SK  .. (tonumber(mth.SK)  == 6 and "" or "+"))
+        UI.setAttribute(p .. "_sho_ac",  "text", mth.AC  .. (tonumber(mth.AC)  == 6 and "" or "+"))
+        UI.setAttribute(p .. "_sho_uc",  "text", mth.UC  .. (tonumber(mth.UC)  == 6 and "" or "+"))
+        UI.setAttribute(p .. "_sho_skc", "text", mth.SKC .. (tonumber(mth.SKC) == 6 and "" or "+"))
+    else
+        UI.setAttribute(p .. "_shoot_label", "text", "SHOOTING")
+        for _, id in ipairs({"ai","ui","sk","ac","uc","skc"}) do
+            UI.setAttribute(p .. "_sho_" .. id, "text", "—")
+        end
+    end
+
+    -- SPECIAL RULES
+    if rules and rules.special and #rules.special > 0 then
+        local txt = ""
+        for _, s in ipairs(rules.special) do
+            txt = txt .. s .. "\n"
+        end
+        UI.setAttribute(p .. "_special", "text", txt:gsub("\n$", ""))
+    else
+        UI.setAttribute(p .. "_special", "text", "—")
+    end
+
+    UI.setAttribute(p, "active",     "true")
+    UI.setAttribute(p, "visibility", player.color)
+end
+-- ============================================================
+-- FUNZIONE: lionheart_basiPresentiUnita(unita)
+-- ============================================================
+function main_basiPresentiUnita(unita)
+    local count = 0
+    for _, base in ipairs(unita.basi) do
+        local obj = getObjectFromGUID(base.guid)
+        if obj then count = count + 1 end
+    end
+    return count
+end
+-- ============================================================
+-- FUNZIONE: lionheart_figureTotaliUnita(unita)
+-- ============================================================
+function main_figureTotaliUnita(unita)
+    local fpb    = (IEF_DATA.unitTypes and IEF_DATA.unitTypes[unita.tipo] or {}).figures_per_base or 0
+    local figure = 0
+    for _, base in ipairs(unita.basi) do
+        local wounds = wounds_data and wounds_data[base.nickname] or 0
+        figure = figure + math.max(0, fpb - wounds)
+    end
+    return figure
+end
+-- ============================================================
+-- FUNZIONE: aggiornaSchedeUnita() — compatibilità
+-- ============================================================
+function main_aggiornaSchedeUnita()
+end
+
+-- ============================================================
+-- FUNZIONE: ief_data_load()
+-- Carica i 7 JSON base in parallelo, poi chiama ief_data_onLoaded()
+-- Le armies e i scenari vengono caricati on-demand.
+-- ============================================================
+function main_data_load()
+
+    files = {
+        { key = "unitTypes",    file = "unit_types.json",      wrap = "unit_types"    },
+        { key = "morale",       file = "morale.json",          wrap = nil             },
+        { key = "weapons",      file = "weapons.json",         wrap = nil             },
+        { key = "capabilities", file = "capabilities.json",    wrap = nil             },
+        { key = "terrain",      file = "terrain.json",         wrap = nil             },
+        { key = "movement",     file = "movement.json",        wrap = nil             },
+        { key = "melee",        file = "melee_modifiers.json", wrap = nil             }
+    }
+
+    local loaded = 0
+    local total  = #files
+    local errors = 0
+
+    for _, f in ipairs(files) do
+        local url  = IEF_JSON_BASE_URL .. f.file
+        local fkey = f.key
+        local wrap = f.wrap
+
+        WebRequest.get(url, function(request)
+            if request.is_error then
+                printToAll("[IEF_DATA] Errore: " .. fkey .. " — " .. tostring(request.error), {r=1,g=0.3,b=0.3})
+                errors = errors + 1
+                loaded = loaded + 1
+            else
+                local ok, decoded = pcall(JSON.decode, request.text)
+                if not ok or not decoded then
+                    printToAll("[IEF_DATA] JSON decode fallito: " .. fkey, {r=1,g=0.3,b=0.3})
+                    errors = errors + 1
+                else
+                    -- Alcuni JSON hanno un wrapper root (es. unit_types.json → .unit_types)
+                    if wrap and decoded[wrap] then
+                        IEF_DATA[fkey] = decoded[wrap]
+                    else
+                        IEF_DATA[fkey] = decoded
+                    end
+                end
+                loaded = loaded + 1
+            end
+
+            if loaded == total then
+                main_data_onLoaded(errors)
+            end
+        end)
+    end
+end
+-- ============================================================
+-- FUNZIONE: ief_data_onLoaded(errors)
+-- Chiamata quando tutti i JSON base sono stati processati.
+-- ============================================================
+function main_data_onLoaded(errors)
+    if errors and errors > 0 then
+        printToAll("[IEF_DATA] Caricamento completato con " .. errors .. " errori.", {r=1,g=0.6,b=0})
+    else
+        local nUnit = 0
+        for _ in pairs(IEF_DATA.unitTypes or {}) do nUnit = nUnit + 1 end
+        printToAll("[IEF_DATA] Dati Json caricati - " .. nUnit .. " file", {r=0.4,g=0.9,b=0.4})
+    end
+
+
+    callHandler("ief_data_ready")
+end
+-- ============================================================
+-- FUNZIONE: ief_loadButtonBar()
+-- ============================================================
+function main_loadButtonBar(callback)
+    WebRequest.get(IEF_URL_BUTTONBAR, function(request)
+        if request.is_error then
+            printToAll("[IEF] Errore download buttonbar.json", {r=1,g=0.3,b=0.3})
+            if callback then callback(false) end
+            return
+        end
+        local ok = callHandler("engine_buttonBarLoadJson", request.text)
+        if callback then callback(ok) end
+    end)
+end
+-- ============================================================
+-- FUNZIONE: ief_loadArmy(nome, callback)
+-- Carica on-demand l'esercito richiesto (cache in IEF_DATA.armies).
+-- ============================================================
+function main_loadArmy(nome, callback)
+    if IEF_DATA.armies[nome] then
+        if callback then callback(IEF_DATA.armies[nome]) end
+        return
+    end
+
+    WebRequest.get(IEF_JSON_ARMIES_URL .. nome .. ".json", function(request)
+        if request.is_error then
+            printToAll("[IEF_DATA] Errore caricamento esercito: " .. nome, {r=1,g=0.3,b=0.3})
+            if callback then callback(nil) end
+            return
+        end
+        local ok, decoded = pcall(JSON.decode, request.text)
+        if not ok or not decoded then
+            printToAll("[IEF_DATA] JSON decode fallito: armies/" .. nome, {r=1,g=0.3,b=0.3})
+            if callback then callback(nil) end
+            return
+        end
+        IEF_DATA.armies[nome] = decoded
+        if callback then callback(decoded) end
+    end)
+end
+-- ============================================================
+-- FUNZIONE: ief_loadScenario(nome, callback)
+-- Carica on-demand lo scenario richiesto (cache in IEF_DATA.scenari).
+-- ============================================================
+function main_loadScenario(nome, callback)
+    if IEF_DATA.scenari[nome] then
+        if callback then callback(IEF_DATA.scenari[nome]) end
+        return
+    end
+
+    WebRequest.get(IEF_JSON_SCENARI_URL .. nome .. ".json", function(request)
+        if request.is_error then
+            printToAll("[IEF_DATA] Errore caricamento scenario: " .. nome, {r=1,g=0.3,b=0.3})
+            if callback then callback(nil) end
+            return
+        end
+        local ok, decoded = pcall(JSON.decode, request.text)
+        if not ok or not decoded then
+            printToAll("[IEF_DATA] JSON decode fallito: scenari/" .. nome, {r=1,g=0.3,b=0.3})
+            if callback then callback(nil) end
+            return
+        end
+        IEF_DATA.scenari[nome] = decoded
+        if callback then callback(decoded) end
+    end)
+end
+-- ============================================================
+-- FUNZIONE: ief_data_reset()
+-- ============================================================
+function main_data_reset()
+    IEF_DATA.unitTypes    = {}
+    IEF_DATA.morale       = {}
+    IEF_DATA.weapons      = {}
+    IEF_DATA.capabilities = {}
+    IEF_DATA.terrain      = {}
+    IEF_DATA.movement     = {}
+    IEF_DATA.melee        = {}
+    IEF_DATA.armies       = {}
+    IEF_DATA.scenari      = {}
+end
+-- ============================================================
+-- API PUBBLICA — funzioni di accesso read-only
+-- Tutte fanno guard su nil e stampano un errore chiaro.
+-- ex:ief_getUnitType("KN") → { base_width_cm=4, base_depth_cm=3, ... }
+-- ============================================================
+function main_getUnitType(tipo)
+    if not IEF_DATA.unitTypes then
+        print("[IEF_DATA] unitTypes non caricato"); return nil
+    end
+    local r = IEF_DATA.unitTypes[tipo]
+    if not r then print("[IEF_DATA] Tipo unità non trovato: " .. tostring(tipo)) end
+    return r
+end
+
+-- ============================================================
+-- FUNZIONE: ief_data_reset()
+-- ============================================================
+function main_getMorale(livello)
+    local levels = IEF_DATA.morale and IEF_DATA.morale.morale_levels
+    if not levels then
+        print("[IEF_DATA] morale_levels non caricato"); return nil
+    end
+    local r = levels[livello]
+    if not r then print("[IEF_DATA] Livello morale non trovato: " .. tostring(livello)) end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: ief_data_reset()
+-- ============================================================
+function main_getMoraleModifier(chiave)
+    local mods = IEF_DATA.morale and IEF_DATA.morale.morale_modifiers
+    if not mods then
+        print("[IEF_DATA] morale_modifiers non caricato"); return nil
+    end
+    local r = mods[chiave]
+    if r == nil then print("[IEF_DATA] Modificatore morale non trovato: " .. tostring(chiave)) end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: ief_data_reset()
+-- ============================================================
+function main_getMoraleEffect(esito, situazione)
+    local effects = IEF_DATA.morale and IEF_DATA.morale.morale_effects
+    if not effects then
+        print("[IEF_DATA] morale_effects non caricato"); return nil
+    end
+    local e = effects[esito]
+    if not e then
+        print("[IEF_DATA] Esito morale non trovato: " .. tostring(esito)); return nil
+    end
+    local r = e[situazione]
+    if not r then print("[IEF_DATA] Situazione morale non trovata: " .. tostring(situazione)) end
+    return r
+end
+
+-- ============================================================
+-- FUNZIONE: ief_data_reset()
+-- ============================================================
+function main_getWeapon(arma)
+    local weapons = IEF_DATA.weapons and IEF_DATA.weapons.weapons
+    if not weapons then
+        print("[IEF_DATA] weapons non caricato"); return nil
+    end
+    local r = weapons[arma]
+    if not r then print("[IEF_DATA] Arma non trovata: " .. tostring(arma)) end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: ief_data_reset()
+-- ============================================================
+function main_getWeaponRange(arma)
+    local w = main_getWeapon(arma)
+    return w and w.range_inches or nil
+end
+-- ============================================================
+-- FUNZIONE: main_getCapability(capacita)
+-- ============================================================                                     
+function main_getCapability(capacita)
+    local caps = IEF_DATA.capabilities and IEF_DATA.capabilities.capabilities
+    if not caps then
+        print("[IEF_DATA] capabilities non caricato"); return nil
+    end
+    local r = caps[capacita]
+    if not r then print("[IEF_DATA] Capacità non trovata: " .. tostring(capacita)) end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: main_getTerrainEffect(tipoTerreno, tipoUnita)
+-- ============================================================    
+function main_getTerrainEffect(tipoTerreno, tipoUnita)
+    local terrain = IEF_DATA.terrain and IEF_DATA.terrain.terrain_types
+    if not terrain then
+        print("[IEF_DATA] terrain non caricato"); return nil
+    end
+    local t = terrain[tipoTerreno]
+    if not t then
+        print("[IEF_DATA] Terreno non trovato: " .. tostring(tipoTerreno)); return nil
+    end
+    local r = t.effects and t.effects[tipoUnita]
+    if not r then print("[IEF_DATA] Effetto terreno non trovato per: " .. tostring(tipoUnita)) end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: main_canManeuver(manovra, tipoUnita)
+-- ============================================================   
+function main_canManeuver(manovra, tipoUnita)
+    local maneuvers = IEF_DATA.movement and IEF_DATA.movement.maneuvers
+    if not maneuvers then
+        print("[IEF_DATA] movement non caricato"); return nil
+    end
+    local m = maneuvers[manovra]
+    if not m then
+        print("[IEF_DATA] Manovra non trovata: " .. tostring(manovra)); return nil
+    end
+    return m[tipoUnita] == true
+end
+-- ============================================================
+-- FUNZIONE: main_getMeleeThreshold()
+-- ============================================================   
+function main_getMeleeThreshold()
+    local melee = IEF_DATA.melee and IEF_DATA.melee.melee
+    if not melee then
+        print("[IEF_DATA] melee non caricato"); return nil
+    end
+    return melee.hit_threshold
+end
+-- ============================================================
+-- FUNZIONE: main_getMeleeModifiers(isFirstTurn)
+-- ============================================================   
+function main_getMeleeModifiers(isFirstTurn)
+    local melee = IEF_DATA.melee and IEF_DATA.melee.melee
+    if not melee then
+        print("[IEF_DATA] melee non caricato"); return {}
+    end
+    if isFirstTurn then
+        return melee.first_turn_modifiers or {}
+    else
+        return melee.subsequent_turn_modifiers or {}
+    end
+end
+-- ============================================================
+-- FUNZIONE: main_getMeleeDiceRule(chiave)  
+-- ============================================================   
+function main_getMeleeDiceRule(chiave)
+    local melee = IEF_DATA.melee and IEF_DATA.melee.melee
+    if not melee or not melee.dice_rules then
+        print("[IEF_DATA] melee dice_rules non caricato"); return nil
+    end
+    local r = melee.dice_rules[chiave]
+    if not r then print("[IEF_DATA] Regola dadi mischia non trovata: " .. tostring(chiave)) end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: main_getArmy(nome)
+-- ============================================================   
+function main_getArmy(nome)
+    local r = IEF_DATA.armies[nome]
+    if not r then
+        print("[IEF_DATA] Esercito non in cache: " .. tostring(nome) .. " — usare ief_loadArmy()")
+    end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: main_getArmyUnit(nomeEsercito, nomeUnita)
+-- ============================================================   
+function main_getArmyUnit(nomeEsercito, nomeUnita)
+    local army = main_getArmy(nomeEsercito)
+    if not army or not army.units then return nil end
+    for _, u in ipairs(army.units) do
+        if u.name == nomeUnita then return u end
+    end
+    print("[IEF_DATA] Unità non trovata: " .. tostring(nomeUnita) .. " in " .. tostring(nomeEsercito))
+    return nil
+end
+-- ============================================================
+-- FUNZIONE: main_getScenario(nome)
+-- ============================================================   
+function main_getScenario(nome)
+    local r = IEF_DATA.scenari[nome]
+    if not r then
+        print("[IEF_DATA] Scenario non in cache: " .. tostring(nome) .. " — usare ief_loadScenario()")
+    end
+    return r
+end
+-- ============================================================
+-- FUNZIONE: main_initUI()
+-- ============================================================   
+function main_initUI()
+    if DEBUG then print("initUI") end
+    callHandler("buildUI")
+end
+
+
+
+

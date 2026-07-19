@@ -1,0 +1,47 @@
+-- ============================================================
+-- rulesets/imperifeudi/engine/rulesetInit.ttslua
+-- Bootstrap IEF: carica JSON → initPhases → engine_init
+-- ============================================================
+function main_rulesetInit(save_state)
+
+    -- Salva save_state per usarlo nel callback (WebRequest è asincrono)
+    local _save_state = save_state
+     -- Avvia caricamento JSON base; engine_init parte solo quando
+    -- ief_data_onLoaded() chiama callHandler("ief_data_ready")
+    -- che a sua volta chiama ief_boot() registrato in register.ttslua
+    IEF_PENDING_SAVE_STATE = _save_state
+    main_data_load()
+end
+
+-- ============================================================
+-- FUNZIONE: ief_boot()
+-- Chiamata da callHandler("ief_data_ready") dopo che i JSON
+-- sono stati caricati. Completa il bootstrap.
+-- ============================================================
+function main_boot()
+
+    colorArmy1 = COLOR.NOARMY
+    colorArmy2 = COLOR.NOARMY
+
+    local save_state = IEF_PENDING_SAVE_STATE
+
+    callHandler("initPhases")
+    callHandler("autoRegisterFromPhases")
+    callHandler("registerDefaultConditions")
+
+    main_loadButtonBar(function(ok)
+        if ok then engine_buttonBarRender() end
+
+        if save_state and save_state ~= "" then
+            callHandler("restoreState", save_state)
+        end
+
+        engine_init()
+
+        if save_state and save_state ~= "" then
+            Wait.time(function()
+                callHandler("afterRestoreState", save_state)
+            end, 1)
+        end
+    end)
+end

@@ -1,0 +1,70 @@
+-- ============================================================
+-- 0_main/register.ttslua
+-- Collettore: registra solo gli handler core/engine/lifecycle.
+-- Gli handler specifici di ogni fase sono nei rispettivi
+-- N_fase/register.ttslua (richiamati dai rispettivi loader.ttslua).
+-- ============================================================
+
+-- Engine
+registerHandler("engine_validatePhases",        function()             return engine_validatePhases()             end)
+registerHandler("engine_resetState",            function()             return engine_resetState()                 end)
+registerHandler("engine_buttonBarLoadJson",     function(j)            return engine_buttonBarLoadJson(j)         end)
+
+-- Ruleset lifecycle
+registerHandler("rulesetInit",                  function(ss)           return main_rulesetInit(ss)                     end)
+registerHandler("initPhases",                   function()             return initPhases()                        end)
+registerHandler("autoRegisterFromPhases",       function()             return engine_autoRegisterFromPhases()            end)
+registerHandler("registerDefaultConditions",    function()             return registerDefaultConditions()         end)
+
+-- UI core
+registerHandler("initUI",                       function()             return main_initUI()                            end)
+registerHandler("buildUI",                      function()             return buildUI()                           end)
+registerHandler("getRulesetUiXml",              function()             return getRulesetUiXml()                   end)
+registerHandler("updateCenterPanel",            function()             return main_updateCenterPanel()                 end)
+registerHandler("aggiornaLinee",                function()             return main_aggiornaLinee()                     end)
+registerHandler("aggiornaSchedeUnita",          function()             return main_aggiornaSchedeUnita()               end)
+registerHandler("ief_ui_confirm",               function(p,v,i)        return ief_ui_confirm(p,v,i)               end)
+registerHandler("confirm",                      function(a)            return engine_handleAction(a)              end)
+
+-- Persistence
+registerHandler("onSave",                       function()             return main_onSave()                        end)
+registerHandler("restoreState",                 function(ss)           return main_restoreState(ss)                    end)
+registerHandler("afterRestoreState",            function(ss)
+    callHandler("restorePlayersColors")
+    callHandler("restoreDiceUiState")
+    callHandler("updateCenterPanel")
+end)
+registerHandler("restorePlayersColors",         function()             return main_restorePlayersColors()              end)
+registerHandler("restoreDiceUiState",           function()             return restoreDiceUiState()               end)
+
+-- Player management
+registerHandler("resetPlayers",                 function()             return main_resetPlayers()                      end)
+registerHandler("getArmySlotByColor",           function(c)            return main_ArmySlotByColor(c)               end)
+registerHandler("canUseButton",                 function(s,p,v,i,b,ph) return main_canUseButton(s,p,v,i,b,ph)         end)
+
+-- Game flow
+registerHandler("restart",                      function()             return main_restart()                           end)
+registerHandler("clear",                        function()             return clear()                             end)
+registerHandler("advanceTurnAfterClick",        function(s)            return main_advanceTurnAfterClick(s)            end)
+registerHandler("resetTurnForPhase",            function()             return main_resetTurnForPhase()                 end)
+registerHandler("dice_check",                   function()             return main_dice_check()                        end)
+
+-- Measure
+registerHandler("engine_measure",               function(p,v,i,b)      return engine_measure(p,v,i,b)             end)
+
+-- Data layer
+registerHandler("ief_data_ready",               function()             return main_boot()                          end)
+
+-- ============================================================
+-- Handler ancora non rinominati (lionheart_*) — NON TOCCARE QUI.
+-- Restano centralizzati finché non si fa il rename massivo finale.
+-- Sono funzioni attive ed esistenti, solo con nome legacy LH.
+-- ============================================================
+registerHandler("lionheart_lineLeft",           function(p,v,i,b)      return main_lineLeft(p,v,i,b)         end)
+registerHandler("lionheart_lineRight",          function(p,v,i,b)      return main_lineRight(p,v,i,b)        end)
+registerHandler("lionheart_columnUp",           function(p,v,i,b)      return main_columnUp(p,v,i,b)         end)
+registerHandler("lionheart_columnDown",         function(p,v,i,b)      return main_columnDown(p,v,i,b)       end)
+registerHandler("lionheart_skirmish",           function(p,v,i,b)      return main_skirmish(p,v,i,b)         end)
+registerHandler("lionheart_infoUnita",          function(p,v,i,b)      return main_infoUnita(p,v,i,b)        end)
+registerHandler("lionheart_range_and_target",   function(p,v,i,b)      return shoot_range_and_target(p,v,i,b) end)
+registerHandler("lionheart_melee",              function(p,v,i,b)      return melee_attack(p,v,i,b)            end)

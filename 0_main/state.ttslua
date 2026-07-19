@@ -1,0 +1,48 @@
+-- ============================================================
+-- rulesets/imperifeudi/engine/state.ttslua
+-- Tabelle di stato globale IEF.
+-- ============================================================
+
+-- Spaziatura formazione (da rivedere con dimensioni basi IEF)
+IEF_FORMATION = IEF_FORMATION or {
+    horizontalSpacing = 3.18,
+    verticalSpacing   = 2.42
+}
+
+-- Colori esercito (alias leggibili)
+colorArmy1 = colorArmy1 or COLOR.NOARMY
+colorArmy2 = colorArmy2 or COLOR.NOARMY
+
+-- Metadati eserciti in gioco
+ARMY = ARMY or {
+    [1] = { name = "Army1", color = COLOR.ARMY1, slot = 1 },
+    [2] = { name = "Army2", color = COLOR.ARMY2, slot = 2 },
+}
+
+-- Deployment runtime
+-- DEPLOYMENT = DEPLOYMENT or {
+--     armies     = { [1] = nil,  [2] = nil  },
+--     armyLoaded = { [1] = false,[2] = false },
+--     armyBusy   = { [1] = false,[2] = false },
+--     scanned    = { [1] = {},   [2] = {}   },
+--     errors     = {},
+-- }
+
+-- Stato mischie attive IEF
+-- { [id] = { turno_inizio, unitaAtk, slotAtk, unitaDif, slotDif, ... } }
+IEF_MELEE_STATE = IEF_MELEE_STATE or {
+    mischie      = {},
+    nextId       = 1,
+}
+
+-- Contatore GUID → soglia contatto
+IEF_CONTACT_THRESHOLD = 0.1
+
+-- Traccia turni di mischia per unità { [chiaveUnita] = turnoInizio }
+IEF_MELEE_ENGAGED = IEF_MELEE_ENGAGED or {}
+
+-- Stato tiro (resettato ogni fase SHOOT)
+IEF_FIRED = IEF_FIRED or {}
+
+-- Wounds per base { [nickname] = wounds }
+wounds_data = wounds_data or {}

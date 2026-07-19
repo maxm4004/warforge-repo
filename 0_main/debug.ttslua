@@ -1,0 +1,323 @@
+-- ============================================================
+-- FUNZIONE DI TEST: debug_getChildOffsets()
+-- ============================================================
+function debug_getChildOffsets()
+    
+    local sel = Player.Red.getSelectedObjects()
+    if not sel or #sel < 1 then
+        print("[OFFSET] Seleziona la base")
+        return
+    end
+
+    local base = sel[1]
+    local ok, jsonStr = pcall(function() return base.getJSON() end)
+    if not ok or not jsonStr then
+        print("[OFFSET] Errore getJSON")
+        return
+    end
+
+    local data = JSON.decode(jsonStr)
+    if not data then
+        print("[OFFSET] Errore JSON.decode")
+        return
+    end
+
+    print("[OFFSET] Base: " .. base.getName())
+
+    local states = data.States or {}
+    local attached = data.AttachedObjects or data.ContainedObjects or {}
+
+    if #attached == 0 then
+        -- prova ChildObjects
+        attached = data.ChildObjects or {}
+    end
+
+    print("[OFFSET] Attachment trovati: " .. #attached)
+
+    for i, child in ipairs(attached) do
+        local t = child.Transform or {}
+        local pos = t.posX and t or (child.Position or {})
+        local x = pos.posX or pos.x or 0
+        local y = pos.posY or pos.y or 0
+        local z = pos.posZ or pos.z or 0
+
+        print(string.format(
+            '[%d] \"offsetX\":%.3f, \"offsetZ\":%.3f, \"offsetY\":%.3f',
+            i, x, z, y
+        ))
+    end
+end
+-- ============================================================
+-- FUNZIONE DI TEST: debug_avanzaTurno()
+-- ============================================================
+function debug_avanzaTurno()
+    if not ENGINE then ENGINE = {} end
+    ENGINE.turn = (ENGINE.turn or 1) + 1
+    print("[DEBUG] Turn: " .. ENGINE.turn)
+    callHandler("updateCenterPanel")
+end
+-- ============================================================
+-- FUNZIONE DI TEST: debug_diminuisciTurno()
+-- ============================================================
+function debug_diminuisciTurno()
+
+    ENGINE.turn = (ENGINE.turn or 1) - 1
+    print("[DEBUG] Turno corrente: " .. ENGINE.turn)
+    callHandler("updateCenterPanel")
+
+end
+-- ============================================================
+-- FUNZIONE DI TEST: debug_melee_test()
+-- ============================================================
+function debug_melee_test()
+
+    local selected = {}
+    for _, p in ipairs(Player.getPlayers()) do
+        if p.seated then selected = p.getSelectedObjects(); break end
+    end
+    if not selected or #selected < 1 then
+        print("[MISCHIA] Seleziona almeno 1 base"); return
+    end
+
+    melee_reset()
+
+    local baseAtk = selected[1]
+    local atkSlot = nil
+    if baseAtk.hasTag("Army1") then atkSlot = 1 end
+    if baseAtk.hasTag("Army2") then atkSlot = 2 end
+    if not atkSlot then return end
+
+    local info = deployment_parseNickname(baseAtk.getName())
+    if not info then return end
+
+    local unitaAtk = main_findUnit(atkSlot, info.unitType, info.unitNumber)
+    if not unitaAtk then return end
+
+    -- Trova unità nemica più vicina
+    local defSlot  = atkSlot == 1 and 2 or 1
+    local defTag   = defSlot == 1 and "Army1" or "Army2"
+    local unitaDif = nil
+    local minDist  = math.huge
+
+    for _, obj in ipairs(getAllObjects()) do
+        if obj.hasTag and obj.hasTag(defTag) then
+            local dist = (obj.getPosition() - baseAtk.getPosition()):magnitude()
+            if dist < minDist then
+                local defInfo = deployment_parseNickname(obj.getName())
+                if defInfo then
+                    local u = main_findUnit(defSlot, defInfo.unitType, defInfo.unitNumber)
+                    if u then minDist = dist; unitaDif = u end
+                end
+            end
+        end
+    end
+
+    if not unitaDif then return end
+
+    -- Risolve basi fisiche
+    local basiAtk = {}
+    for _, b in ipairs(unitaAtk.basi) do
+        local obj = getObjectFromGUID(b.guid); if obj then table.insert(basiAtk, obj) end
+    end
+    local basiDif = {}
+    for _, b in ipairs(unitaDif.basi) do
+        local obj = getObjectFromGUID(b.guid); if obj then table.insert(basiDif, obj) end
+    end
+
+    -- Verifica contatto
+    local contattoAtk = melee_basiInContatto(unitaAtk, basiDif)
+    local contattoDif = melee_basiInContatto(unitaDif, basiAtk)
+
+    if #contattoAtk == 0 and #contattoDif == 0 then
+        print("[MISCHIA] Nessun contatto trovato")
+        UI.setAttribute("melee_panel", "active", "false")
+        return
+    end
+
+    -- Recupera mischia esistente o crea nuova
+    local mischia = melee_find(unitaAtk, atkSlot, unitaDif, defSlot)
+    if not mischia then
+        mischia = melee_crea(unitaAtk, atkSlot, unitaDif, defSlot)
+    end
+
+    local turnoRel = melee_getTurnoRelativo(mischia)
+    local isFirst  = (turnoRel == 0)
+
+    -- ── ATTACCANTE ──
+    local overlapAtk = melee_overlap(contattoAtk, unitaAtk, isFirst)
+    local postAtk    = 0
+    for _, bc in ipairs(contattoAtk) do
+        bc.setColorTint(TINT_CONTATTO)
+        local post = melee_ranghiPosteriori(bc, unitaAtk)
+        if post then
+            post.setColorTint(TINT_POSTERIORE)
+            postAtk = postAtk + 1
+        end
+    end
+    for _, ob in ipairs(overlapAtk) do
+        ob.setColorTint(TINT_OVERLAP)
+    end
+
+    -- ── DIFENSORE ──
+    local overlapDif = melee_overlap(contattoDif, unitaDif, isFirst)
+    local postDif    = 0
+    for _, bc in ipairs(contattoDif) do
+        bc.setColorTint(TINT_CONTATTO)
+        local post = melee_ranghiPosteriori(bc, unitaDif)
+        if post then
+            post.setColorTint(TINT_POSTERIORE)
+            postDif = postDif + 1
+        end
+    end
+    for _, ob in ipairs(overlapDif) do
+        ob.setColorTint(TINT_OVERLAP)
+    end
+
+    -- ── MODIFICATORI E PANEL ──
+    local modAtk = melee_calcolaModificatori(unitaAtk, unitaDif, isFirst)
+    local modDif = melee_calcolaModificatori(unitaDif, unitaAtk, isFirst)
+
+    melee_aggiornaPanel(mischia,
+        contattoAtk, overlapAtk, postAtk,
+        contattoDif, overlapDif, postDif,
+        modAtk, modDif)
+end
+-- ============================================================
+-- FUNZIONE DI TEST: debug_overlap()
+-- ============================================================
+function debug_overlap()
+    local selected = {}
+    for _, p in ipairs(Player.getPlayers()) do
+        if p.seated then selected = p.getSelectedObjects(); break end
+    end
+    if not selected or #selected < 1 then
+        print("[OVERLAP] Seleziona 1 base"); return
+    end
+
+    local baseAtk = selected[1]
+    local atkSlot = nil
+    if baseAtk.hasTag("Army1") then atkSlot = 1 end
+    if baseAtk.hasTag("Army2") then atkSlot = 2 end
+    if not atkSlot then print("[OVERLAP] Nessun tag Army"); return end
+
+    local info = deployment_parseNickname(baseAtk.getName())
+    if not info then print("[OVERLAP] Nome non parsabile"); return end
+
+    local unitaAtk = main_findUnit(atkSlot, info.unitType, info.unitNumber)
+    if not unitaAtk then print("[OVERLAP] Unità non trovata"); return end
+
+    -- Trova unità nemica più vicina
+    local defSlot = atkSlot == 1 and 2 or 1
+    local defTag  = defSlot == 1 and "Army1" or "Army2"
+    local unitaDif = nil
+    local minDist  = math.huge
+
+    for _, obj in ipairs(getAllObjects()) do
+        if obj.hasTag and obj.hasTag(defTag) then
+            local dist = (obj.getPosition() - baseAtk.getPosition()):magnitude()
+            if dist < minDist then
+                local defInfo = deployment_parseNickname(obj.getName())
+                if defInfo then
+                    local u = main_findUnit(defSlot, defInfo.unitType, defInfo.unitNumber)
+                    if u then minDist = dist; unitaDif = u end
+                end
+            end
+        end
+    end
+
+    if not unitaDif then print("[OVERLAP] Nessuna unità nemica"); return end
+
+    local basiDif = {}
+    for _, b in ipairs(unitaDif.basi) do
+        local obj = getObjectFromGUID(b.guid); if obj then table.insert(basiDif, obj) end
+    end
+
+    local contattoAtk = melee_basiInContatto(unitaAtk, basiDif)
+    if #contattoAtk == 0 then
+        print("[OVERLAP] Nessuna base in contatto — avvicina le unità"); return
+    end
+
+    print("[OVERLAP] Basi in contatto: " .. #contattoAtk)
+    for _, bc in ipairs(contattoAtk) do
+        print("  " .. bc.getName())
+    end
+
+    -- Calcola parametri overlap
+    local inContatto = {}
+    for _, bc in ipairs(contattoAtk) do inContatto[bc] = true end
+
+    local baseRef  = contattoAtk[1]
+    local fwd      = baseRef.getTransformForward()
+    local fwdXZ    = Vector(fwd.x, 0, fwd.z):normalized()
+    local rightXZ  = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local bounds   = baseRef.getBounds()
+    local baseWidth = bounds.size.x
+    local frontTol  = bounds.size.z * 0.8
+
+    local minRight = math.huge
+    local maxRight = -math.huge
+    for _, bc in ipairs(contattoAtk) do
+        local pos = bc.getPosition()
+        local projR = pos.x * rightXZ.x + pos.z * rightXZ.z
+        if projR < minRight then minRight = projR end
+        if projR > maxRight then maxRight = projR end
+    end
+    minRight = minRight - baseWidth * 0.5
+    maxRight = maxRight + baseWidth * 0.5
+
+    local sumFront = 0
+    for _, bc in ipairs(contattoAtk) do
+        local pos = bc.getPosition()
+        sumFront = sumFront + (pos.x * fwdXZ.x + pos.z * fwdXZ.z)
+    end
+    local avgFront = sumFront / #contattoAtk
+
+    print("[OVERLAP] minRight=" .. string.format("%.2f", minRight) ..
+          " maxRight=" .. string.format("%.2f", maxRight) ..
+          " avgFront=" .. string.format("%.2f", avgFront) ..
+          " frontTol=" .. string.format("%.2f", frontTol))
+
+    -- Valuta ogni base non in contatto
+    local trovatiSx = false
+    local trovatiDx = false
+
+    for _, b in ipairs(unitaAtk.basi) do
+        local obj = getObjectFromGUID(b.guid)
+        if obj and not inContatto[obj] then
+            local posB       = obj.getPosition()
+            local projFrontB = posB.x * fwdXZ.x   + posB.z * fwdXZ.z
+            local projRightB = posB.x * rightXZ.x + posB.z * rightXZ.z
+            local diffFront  = math.abs(projFrontB - avgFront)
+            local isFrontOk  = diffFront <= frontTol
+            local isSx       = projRightB < minRight
+            local isDx       = projRightB > maxRight
+
+            print("[OVERLAP] " .. obj.getName() ..
+                  " projRight=" .. string.format("%.2f", projRightB) ..
+                  " diffFront=" .. string.format("%.2f", diffFront) ..
+                  " frontOk=" .. tostring(isFrontOk) ..
+                  " sx=" .. tostring(isSx) ..
+                  " dx=" .. tostring(isDx))
+
+            if isFrontOk then
+                if isSx and not trovatiSx then
+                    trovatiSx = true
+                    obj.highlightOn({0, 1, 0})  -- verde = overlap sx trovato
+                    print("[OVERLAP] → OVERLAP SX: " .. obj.getName())
+                elseif isDx and not trovatiDx then
+                    trovatiDx = true
+                    obj.highlightOn({0, 0, 1})  -- blu = overlap dx trovato
+                    print("[OVERLAP] → OVERLAP DX: " .. obj.getName())
+                else
+                    obj.highlightOn({1, 1, 0})  -- giallo = visibile ma non overlap
+                end
+            else
+                obj.highlightOn({1, 0, 0})  -- rosso = fuori frontTol
+            end
+        end
+    end
+
+    if not trovatiSx and not trovatiDx then
+        print("[OVERLAP] Nessun overlap trovato — basi fuori range frontale o laterale")
+    end
+end

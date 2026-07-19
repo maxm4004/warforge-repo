@@ -1,0 +1,17 @@
+-- ============================================================
+-- WARFORGE IEF — 0_main/loader.ttslua
+-- Ordine: constants → state → data → conditions → lib → phase
+--         → persistence → ui → register → rulesetInit
+-- ============================================================
+
+require("rulesets.imperifeudi.0_main.constants")
+require("rulesets.imperifeudi.0_main.state")
+require("rulesets.imperifeudi.0_main.data")
+require("rulesets.imperifeudi.0_main.conditions")
+require("rulesets.imperifeudi.0_main.lib")
+require("rulesets.imperifeudi.0_main.debug")
+require("rulesets.imperifeudi.0_main.phase")
+require("rulesets.imperifeudi.0_main.persistence")
+require("rulesets.imperifeudi.0_main.ui")
+require("rulesets.imperifeudi.0_main.register")
+require("rulesets.imperifeudi.0_main.rulesetInit")

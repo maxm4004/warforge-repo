@@ -1,0 +1,133 @@
+-- ============================================================
+-- WARFORGE IEF — 0_main/data.ttslua
+-- Data layer IEF — sola lettura.
+-- Carica tutti i JSON IEF al boot e li espone in IEF_DATA.
+-- ============================================================
+
+IEF_DATA = IEF_DATA or {
+    unitTypes    = {},
+    weapons      = {},
+    morale       = {},
+    melee        = {},
+    movement     = {},
+    capabilities = {},
+    terrain      = {},
+    armyCodes    = {},
+    enemyAliases = {},
+    armies       = {},
+}
+
+IEF_JSON_BASE_URL = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/json/"
+
+-- URL costanti per ogni JSON base dati
+IEF_URL_UNIT_TYPES    = IEF_JSON_BASE_URL .. "unit_types.json"
+IEF_URL_WEAPONS       = IEF_JSON_BASE_URL .. "weapons.json"
+IEF_URL_MORALE        = IEF_JSON_BASE_URL .. "morale.json"
+IEF_URL_MELEE         = IEF_JSON_BASE_URL .. "melee_modifiers.json"
+IEF_URL_MOVEMENT      = IEF_JSON_BASE_URL .. "movement.json"
+IEF_URL_CAPABILITIES  = IEF_JSON_BASE_URL .. "capabilities.json"
+IEF_URL_TERRAIN       = IEF_JSON_BASE_URL .. "terrain.json"
+IEF_URL_ARMY_CODES    = IEF_JSON_BASE_URL .. "army_codes.json"
+IEF_URL_ENEMY_ALIASES = IEF_JSON_BASE_URL .. "enemy_aliases.json"
+IEF_URL_BUTTONBAR     = IEF_JSON_BASE_URL .. "buttonbar.json"
+
+-- ============================================================
+-- FUNZIONE: main_data_load()
+-- Carica tutti i JSON IEF in parallelo via WebRequest.
+-- Chiama callHandler("ief_data_ready") quando tutti sono pronti.
+-- ============================================================
+function main_data_load()
+    local files = {
+        { url = IEF_URL_UNIT_TYPES,    key = "unitTypes",    field = "unit_types"    },
+        { url = IEF_URL_WEAPONS,       key = "weapons",      field = "weapons"       },
+        { url = IEF_URL_MORALE,        key = "morale",       field = nil             },
+        { url = IEF_URL_MELEE,         key = "melee",        field = nil             },
+        { url = IEF_URL_MOVEMENT,      key = "movement",     field = "movement"      },
+        { url = IEF_URL_CAPABILITIES,  key = "capabilities", field = "capabilities"  },
+        { url = IEF_URL_TERRAIN,       key = "terrain",      field = "terrain_types" },
+        { url = IEF_URL_ARMY_CODES,    key = "armyCodes",    field = "army_codes"    },
+        { url = IEF_URL_ENEMY_ALIASES, key = "enemyAliases", field = "enemy_aliases" },
+    }
+
+    local total   = #files
+    local loaded  = 0
+    local failed  = 0
+
+    local function onAllLoaded()
+        if loaded + failed < total then return end
+
+        if failed > 0 then
+            printToAll("[IEF_DATA] Attenzione: " .. failed .. " file non caricati", {r=1,g=0.6,b=0})
+        end
+
+        printToAll("[IEF_DATA] Base dati IEF pronta — " ..
+            main_count(IEF_DATA.unitTypes) .. " tipi unità, " ..
+            main_count(IEF_DATA.weapons)   .. " armi", {r=0.4,g=0.9,b=0.4})
+
+        callHandler("ief_data_ready")
+    end
+
+    for _, f in ipairs(files) do
+        local file = f
+        WebRequest.get(file.url, function(req)
+            if req.is_error then
+                printToAll("[IEF_DATA] Errore: " .. file.key .. " — " .. tostring(req.error), {r=1,g=0.3,b=0.3})
+                failed = failed + 1
+                onAllLoaded()
+                return
+            end
+
+            local ok, data = pcall(JSON.decode, req.text)
+            if not ok or type(data) ~= "table" then
+                printToAll("[IEF_DATA] Parsing fallito: " .. file.key, {r=1,g=0.3,b=0.3})
+                failed = failed + 1
+                onAllLoaded()
+                return
+            end
+
+            -- Estrai il campo corretto o usa tutto il JSON
+            if file.field and data[file.field] then
+                IEF_DATA[file.key] = data[file.field]
+            else
+                IEF_DATA[file.key] = data
+            end
+
+            loaded = loaded + 1
+            onAllLoaded()
+        end)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_count()
+-- ============================================================
+function main_count(t)
+    if type(t) ~= "table" then return 0 end
+    local n = 0
+    for _ in pairs(t) do n = n + 1 end
+    return n
+end
+
+-- ============================================================
+-- FUNZIONE: main_getUnitType()
+-- ============================================================
+function main_getUnitType(tipo)
+    return tipo and IEF_DATA.unitTypes[tipo]
+end
+
+-- ============================================================
+-- FUNZIONE: main_getWeapon()
+-- ============================================================
+function main_getWeapon(arma)
+    return arma and IEF_DATA.weapons[arma]
+end
+
+-- ============================================================
+-- FUNZIONE: main_getMorale()
+-- ============================================================
+function main_getMorale(livello)
+    if not livello then return nil end
+    local m = IEF_DATA.morale
+    if not m then return nil end
+    return m.levels and m.levels[livello] or m[livello]
+end
