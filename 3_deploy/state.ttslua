@@ -1,0 +1,72 @@
+-- ============================================================
+-- WARFORGE IEF — 3_deploy/state.ttslua
+-- ============================================================
+
+ARMY = {
+    [1] = {
+        id     = 1,
+        name   = "ARMY1",
+        button = BUTTONS.BTN_ARMY1,
+        action = ACTION.ARMY1_CLICK,
+        color  = COLOR.ARMY1
+    },
+    [2] = {
+        id     = 2,
+        name   = "ARMY2",
+        button = BUTTONS.BTN_ARMY2,
+        action = ACTION.ARMY2_CLICK,
+        color  = COLOR.ARMY2
+    }
+}
+
+-- URL eserciti generati dall'app React
+-- Formato: generated/[tag]-army.json
+-- Contiene: unita[] + modelli{} embedded
+IEF_URL_ARMY1 = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/generated/tts-army/ang-army.json"
+IEF_URL_ARMY2 = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/generated/tts-army/vik-army.json"
+
+DEPLOYMENT = DEPLOYMENT or {
+    initialized = false,
+    loading     = false,
+    terrain     = "erba_verde",
+
+    urls = {
+        army1 = IEF_URL_ARMY1 or "",
+        army2 = IEF_URL_ARMY2 or "",
+    },
+
+    armies = {
+        [1] = nil,
+        [2] = nil
+    },
+
+    armyLoaded = {
+        [1] = false,
+        [2] = false
+    },
+
+    armyBusy = {
+        [1] = false,
+        [2] = false
+    },
+
+    scanned = {
+        [1] = {},
+        [2] = {}
+    },
+
+    errors = {}
+}
+
+-- ============================================================
+-- FUNZIONE: deployment_reset()
+-- ============================================================
+function deployment_reset()
+    DEPLOYMENT.initialized = false
+    DEPLOYMENT.loading     = false
+    DEPLOYMENT.armies      = { [1] = nil,   [2] = nil   }
+    DEPLOYMENT.armyLoaded  = { [1] = false, [2] = false }
+    DEPLOYMENT.armyBusy    = { [1] = false, [2] = false }
+    DEPLOYMENT.scanned     = { [1] = {},    [2] = {}    }
+    DEPLOYMENT.errors      = {}
+end
