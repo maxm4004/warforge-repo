@@ -1,0 +1,124 @@
+-- ============================================================
+-- engine/renderers.ttslua
+-- Renderer built-in — disponibili per qualsiasi ruleset.
+-- I ruleset aggiungono renderer custom con registerRenderer().
+-- Portato invariato da LH engine/renderers.ttslua
+-- ============================================================
+RENDERERS = {}
+
+-- ============================================================
+-- RENDERER: 1BtnClick
+-- Mostra solo BTN_SINGLE (panelBtnDown).
+-- ============================================================
+RENDERERS["1BtnClick"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "false")
+    UI.setAttribute("panelBtnDown", "active", "true")
+    UI.setAttribute("panelBtnDown", "offsetXY", "0 -192")
+    UI.setAttribute("BTN_SINGLE",   "active", "true")
+    UI.setAttribute("panelDices",   "active", "false")
+end
+
+-- ============================================================
+-- RENDERER: 2BtnClick
+-- Mostra BTN_ARMY1 e BTN_ARMY2 (panelBtnUp).
+-- ============================================================
+RENDERERS["2BtnClick"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
+    UI.setAttribute("panelDices",   "active", "false")
+end
+
+-- ============================================================
+-- RENDERER: 2BtnClickAndRoll
+-- Mostra BTN_ARMY1, BTN_ARMY2 e il panel dadi.
+-- ============================================================
+RENDERERS["2BtnClickAndRoll"] = function(phase)
+
+    print("RENDERER: 2BtnClickAndRoll")
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelDices",   "active", "true")
+    UI.setAttribute("panelDices",   "offsetXY", "0 -276")
+end
+
+-- ============================================================
+-- RENDERER: 3BtnClick
+-- Mostra BTN_ARMY1 e BTN_ARMY2, poi switcha a BTN_SINGLE
+-- quando entrambi hanno completato.
+-- ============================================================
+RENDERERS["3BtnClick"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelDices",   "active", "false")
+
+    local bothDone = ENGINE.state
+                  and ENGINE.state.Army1Done
+                  and ENGINE.state.Army2Done
+
+    if bothDone then
+        UI.setAttribute("panelBtnUp",   "active", "false")
+        UI.setAttribute("panelBtnDown", "active", "true")
+        UI.setAttribute("panelBtnDown", "offsetXY", "0 -223")
+        UI.setAttribute("BTN_SINGLE",   "active", "true")
+    end
+end
+
+-- ============================================================
+-- RENDERER: 2BtnFireOrCancel
+-- ============================================================
+RENDERERS["2BtnFireOrCancel"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelDices",   "active", "true")
+    UI.setAttribute("panelDices",   "offsetXY", "0 -276")
+end
+
+-- ============================================================
+-- RENDERER: 1BtnClickAndRoll
+-- Mostra BTN_SINGLE e un solo dado (diceField)
+-- ============================================================
+RENDERERS["1BtnClickAndRoll"] = function(phase)
+
+    UI.setAttribute("panelBtnUp",   "active", "false")
+    UI.setAttribute("panelBtnDown", "active", "true")
+    UI.setAttribute("panelBtnDown", "offsetXY", "0 -223")
+    UI.setAttribute("panelFieldDice",   "active", "true")
+    UI.setAttribute("panelDices", "active", "false")
+end
+-- ============================================================
+-- RENDERER: 1BtnClickAndRoll
+-- Mostra 2 BTN e 2 dadi
+-- ============================================================
+RENDERERS["tiebreaker"] = function(phase)
+    UI.setAttribute("panelDices",   "active", "true")
+    UI.setAttribute("panelDices", "offsetXY", "0 -276")
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnUp", "offsetXY", "0 -223")
+    UI.setAttribute("panelFieldDice", "active", "false")
+    UI.setAttribute("panelBtnDown", "active", "false")
+end
+-- ============================================================
+-- RENDERER: fieldConfirm
+-- Mostra BTN_ARMY1 e BTN_ARMY2 per conferma posizionamento
+-- con grigio quando già cliccati
+-- ============================================================
+RENDERERS["fieldConfirm"] = function(phase)
+    UI.setAttribute("panelBtnUp",     "active", "true")
+    UI.setAttribute("panelBtnUp",     "offsetXY", "0 -223")
+    UI.setAttribute("panelBtnDown",   "active", "false")
+    UI.setAttribute("panelDices",     "active", "false")
+    UI.setAttribute("panelFieldDice", "active", "false")
+
+    if TURN and TURN.completed and TURN.completed.Army1 then
+        UI.setAttribute("BTN_ARMY1", "color", COLOR.NOARMY)
+    end
+    
+    if TURN and TURN.completed and TURN.completed.Army2 then
+        UI.setAttribute("BTN_ARMY2", "color", COLOR.NOARMY)
+    end
+end
+

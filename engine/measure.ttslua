@@ -1,0 +1,141 @@
+    ENGINE_MEASURE = {
+        LINE_DURATION  = 8,
+        LINE_COLOR     = {0, 0, 0},
+        LINE_THICKNESS = 0.08,
+        SCALE          = 1.257,
+        UNIT_LABEL     = "cm",
+        activeLine     = nil,
+    }
+
+    UNIT = {
+        CM   = "cm",
+        INCH = "inch"
+    }
+
+    MEASURE_UNIT = UNIT.INCH -- default IEF
+
+    CM_TO_TTS = 88.71 / 119.5  -- 0.7423
+    INCH_TO_TTS = 0.7423 * 2.54  -- 1.885
+-- ============================================================
+-- FUNZIONE: engine_measure_getUnitObjects(obj)
+-- Dato un oggetto base, ritorna la lista di TUTTI gli oggetti
+-- TTS appartenenti alla stessa unità (o fallback {obj}).
+-- ============================================================
+function engine_measure_getUnitObjects(obj)
+    local info = deployment_parseNickname and deployment_parseNickname(obj.getName())
+    if not info then return { obj } end
+
+    local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+    if not slot then return { obj } end
+
+    local unita = deployment_findUnit and deployment_findUnit(slot, info.unitType, info.unitNumber)
+    if not unita or not unita.basi then return { obj } end
+
+    local oggetti = {}
+    for _, base in ipairs(unita.basi) do
+        local o = getObjectFromGUID(base.guid)
+        if o then table.insert(oggetti, o) end
+    end
+
+    if #oggetti == 0 then return { obj } end
+    return oggetti
+end
+
+-- ============================================================
+-- FUNZIONE: engine_measure_coppiaPiuVicina(oggettiA, oggettiB)
+-- Trova la coppia (oggA, oggB) con distanza centro-centro minima.
+-- ============================================================
+function engine_measure_coppiaPiuVicina(oggettiA, oggettiB)
+    local migliorA, migliorB, migliorDist = nil, nil, nil
+
+    for _, a in ipairs(oggettiA) do
+        local pa = a.getPosition()
+        for _, b in ipairs(oggettiB) do
+            local pb = b.getPosition()
+            local dist = (Vector(pb.x, pb.y, pb.z) - Vector(pa.x, pa.y, pa.z)):magnitude()
+
+            if migliorDist == nil or dist < migliorDist then
+                migliorDist = dist
+                migliorA = a
+                migliorB = b
+            end
+        end
+    end
+
+    return migliorA, migliorB
+end
+
+-- ============================================================
+-- FUNZIONE: engine_measure(player)
+-- ============================================================
+function engine_measure(player, value, id, buttonConfig)
+
+    local selected = main_SelectedObjects(player)
+
+    if not selected or #selected < 2 then
+        warningToColor("To measure the distance, select two items", player)
+        return false
+    end
+
+    local objA = selected[1]
+    local objB = selected[2]
+
+    local unitaA = engine_measure_getUnitObjects(objA)
+    local unitaB = engine_measure_getUnitObjects(objB)
+
+    local isMultiUnit = (#unitaA > 1) or (#unitaB > 1)
+
+    local realA, realB = objA, objB
+
+    if isMultiUnit then
+        realA, realB = engine_measure_coppiaPiuVicina(unitaA, unitaB)
+    end
+
+    local posA = realA and realA.getPosition()
+    local posB = realB and realB.getPosition()
+
+    local boundsA = realA and realA.getBounds()
+    local boundsB = realB and realB.getBounds()
+
+    if not posA or not posB or not boundsA or not boundsB then return end
+
+    local dirAB = (Vector(posB.x, posB.y, posB.z) - Vector(posA.x, posA.y, posA.z)):normalized()
+    local offsetA = math.abs(boundsA.size.x/2 * dirAB.x) + math.abs(boundsA.size.z/2 * dirAB.z)
+    local offsetB = math.abs(boundsB.size.x/2 * dirAB.x) + math.abs(boundsB.size.z/2 * dirAB.z)
+
+    local startPoint = Vector(posA.x + dirAB.x * offsetA, posA.y + 0.1, posA.z + dirAB.z * offsetA)
+    local endPoint   = Vector(posB.x - dirAB.x * offsetB, posB.y + 0.1, posB.z - dirAB.z * offsetB)
+
+      local distTTS   = (endPoint - startPoint):magnitude()
+      local distUnit, unitLabel = engine_measure_toUnit(distTTS)
+      local msg = string.format("Distanza tra %s e %s: %.1f %s", objA.getName(), objB.getName(), distUnit, unitLabel)
+
+    warningToColor(msg, player)
+    printToColor(msg, player.color, "Orange")
+
+    ENGINE_MEASURE.activeLine = {
+        points    = {startPoint, endPoint},
+        color     = ENGINE_MEASURE.LINE_COLOR,
+        thickness = ENGINE_MEASURE.LINE_THICKNESS,
+    }
+
+    callHandler("aggiornaLinee")
+
+    UI.setAttribute("measure_cancel_panel", "active", "true")
+    UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
+    return true
+end
+
+function engine_measure_cancel()
+    ENGINE_MEASURE.activeLine = nil
+    UI.setAttribute("measure_cancel_panel", "active", "false")
+    callHandler("aggiornaLinee")
+end
+
+function engine_measure_toUnit(distTTS)
+    if MEASURE_UNIT == UNIT.INCH then
+        return distTTS / INCH_TO_TTS, "inch"
+    else
+        return distTTS / CM_TO_TTS, "cm"
+    end
+end

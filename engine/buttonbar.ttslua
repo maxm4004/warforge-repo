@@ -1,0 +1,128 @@
+ENGINE_BUTTONBAR = ENGINE_BUTTONBAR or {
+    initialized = false,
+    slots = {},
+    slotCount = 10,
+    xmlPrefix = "WF_BAR_"
+}
+
+-- ============================================================
+-- FUNZIONE: engine_buttonBarEmptySlot
+-- ============================================================
+function engine_buttonBarEmptySlot()
+    return {
+        label = "",
+        onClick = nil,
+        tooltip = "",
+        visible = false,
+        enabled = false,
+        color = "rgba(0.15,0.15,0.15,1)",
+        textColor = "White"
+    }
+end
+-- ============================================================
+-- FUNZIONE: ief_loadButtonBar()
+-- ============================================================
+function engine_buttonBarLoadJson(jsonText)
+
+    engine_buttonBarInit()
+
+    if jsonText == nil or jsonText == "" then
+        printToAll("[BUTTONBAR] JSON vuoto", {r=1,g=0.3,b=0.3})
+        return false
+    end
+
+    local ok, data = pcall(JSON.decode, jsonText)
+
+    if not ok or type(data) ~= "table" then
+        printToAll("[BUTTONBAR] JSON non valido", {r=1,g=0.3,b=0.3})
+        return false
+    end
+
+    local slots = data.buttonbar and data.buttonbar.slots or data.slots or {}
+
+    for i = 1, ENGINE_BUTTONBAR.slotCount do
+        
+        local cfg = slots[tostring(i)] or slots[i]
+
+        if cfg ~= nil then
+            ENGINE_BUTTONBAR.slots[i] = {
+                label = cfg.label or "",
+                class = cfg.class,
+                callBack = cfg.callBack,
+                tooltip = cfg.tooltip or "",
+                visible = cfg.visible ~= false,
+                enabled = cfg.enabled ~= false,
+                colors = cfg.colors,
+                textColor = cfg.textColor or "Black"
+            }
+        else
+            ENGINE_BUTTONBAR.slots[i] = engine_buttonBarEmptySlot()
+        end
+    end
+
+    engine_buttonBarRender()
+    return true
+end
+-- ============================================================
+-- FUNZIONE: ief_loadButtonBar()
+-- ============================================================
+function engine_buttonBarRender()
+ 
+    if UI == nil then
+        return false
+    end
+
+    for i = 1, ENGINE_BUTTONBAR.slotCount do
+
+        local slot = ENGINE_BUTTONBAR.slots[i]
+        local id = engine_buttonBarSlotId(i)
+
+        UI.setAttribute(id, "text", slot.label or "")
+        UI.setAttribute(id, "tooltip", slot.tooltip or "")
+        UI.setAttribute(id, "active", slot.visible and "true" or "false")
+        UI.setAttribute(id, "interactable", slot.enabled and "true" or "false")
+        UI.setAttribute(id, "colors", slot.colors)
+        UI.setAttribute(id, "textColor", slot.textColor)
+
+    end
+
+    return true
+end
+-- ============================================================
+-- FUNZIONE: ief_loadButtonBar()
+-- ============================================================
+function engine_buttonBarInit()
+
+    if DEBUG then print("engine_buttonBarInit") end
+
+    if ENGINE_BUTTONBAR.initialized then
+        return true
+    end
+
+    ENGINE_BUTTONBAR.slots = {}
+
+    for i = 1, ENGINE_BUTTONBAR.slotCount do
+        ENGINE_BUTTONBAR.slots[i] = engine_buttonBarEmptySlot()
+    end
+
+    ENGINE_BUTTONBAR.initialized = true
+    return true
+end
+-- ============================================================
+-- FUNZIONE: ief_loadButtonBar()
+-- ============================================================
+function engine_buttonBarSlotId(slot)
+    return ENGINE_BUTTONBAR.xmlPrefix .. string.format("%02d", tonumber(slot))
+end
+function engine_buttonBarParseSlotFromId(id)
+    if id == nil then return nil end
+
+    local n = string.match(id, "(%d+)$")
+    if n == nil then return nil end
+
+    local slot = tonumber(n)
+    if slot == nil then return nil end
+    if slot < 1 or slot > ENGINE_BUTTONBAR.slotCount then return nil end
+
+    return slot
+end
