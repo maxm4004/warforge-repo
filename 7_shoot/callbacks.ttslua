@@ -1,0 +1,14 @@
+-- ============================================================
+-- FUNZIONE: shoot_btn_army1()
+-- ============================================================
+function shoot_btn_army1(player, value, id)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
+    return true
+end
+-- ============================================================
+-- FUNZIONE: shoot_btn_army2()
+-- ============================================================
+function shoot_btn_army2(player, value, id)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
+    return true
+end

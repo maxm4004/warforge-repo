@@ -1,0 +1,29 @@
+-- ============================================================
+-- WARFORGE IEF — 7_shoot/state.ttslua
+-- ============================================================
+
+-- Stato tiro corrente
+IEF_SHOOTING = IEF_SHOOTING or {
+    activeShooter   = nil,
+    activeTarget    = nil,
+    activeAnimation = nil,
+    range           = 60,
+    angle           = 45,
+    activeLines     = nil
+}
+
+IEF_SHOOT_STATE = {
+    shooter     = nil,
+    target      = nil,
+    shooterUnit = nil,
+    targetUnit  = nil,
+    shooterSlot = nil,
+    targetSlot  = nil,
+    basiObjs    = nil,
+    rangeUnits  = nil,
+    basiNemiche = nil,
+}
+
+-- IEF_FIRED: traccia le unità che hanno già sparato in questo turno
+-- (definito in 0_main/state.ttslua, qui solo riferimento)
+-- IEF_FIRED = {}

@@ -1,0 +1,1036 @@
+-- ============================================================
+-- FUNZIONE: lionheart_range_and_target
+-- ============================================================
+function shoot_range_and_target(player, value, id, buttonConfig)
+
+    local phase = ENGINE.phases[ENGINE.phase]
+    if not phase then print("No phase") return false end
+    
+    local selected = main_getSelectedObjects(player)
+    if not selected or #selected < 1 then
+        printToAll("[TIRO] Seleziona una base", {r=1,g=0.6,b=0})
+        return false
+    end
+
+    UI.setAttribute("btnAction", "Text", "Fire")
+    UI.setAttribute("btnAction", "onClick", "shoot_shootConfirm")
+    UI.setAttribute("btnCancelShoot", "onClick", "shoot_shootResetLines")
+    UI.setAttribute("btnAction", "textColor", "White")
+    UI.setAttribute("btnCancelShoot", "textColor", "White")
+
+    local shooter = selected[1]
+    local shooterSlot = nil
+    if shooter.hasTag("Army1") then shooterSlot = 1 end
+    if shooter.hasTag("Army2") then shooterSlot = 2 end
+    if shooterSlot == nil then return false end
+
+    local playerSlot = main_getArmyByColor(player)
+    if playerSlot ~= shooterSlot then
+        printToColor("[TIRO] Non è la tua unità", player.color, {r=1,g=0.3,b=0.3})
+        return false
+    end
+
+    local nickname    = shooter.getName()
+    local baseInfo    = deployment_parseNickname(nickname)
+    local shooterUnit = baseInfo and main_findUnit(shooterSlot, baseInfo.unitType, baseInfo.unitNumber)
+    -- armi è ora un array in IEF — prendi la prima arma da tiro disponibile
+    local armi = shooterUnit and (shooterUnit.armi or (shooterUnit.arma and {shooterUnit.arma}))
+    local weapon = nil
+    if armi then
+        for _, arma in ipairs(armi) do
+            local w = IEF_DATA.weapons and IEF_DATA.weapons[arma]
+            if w and w.range_inches then
+                weapon = w
+                weapon._arma_key = arma
+                break
+            end
+        end
+    end
+   
+    if not shooterUnit then
+        printToColor("[TIRO] Impossibile leggere le informazioni dell'unità", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    if not weapon then
+        printToColor("[TIRO] Questa unità non ha armi da tiro", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    if not baseInfo then
+        printToColor("[TIRO] Impossibile leggere le informazioni della base", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    local unitKey = shooterSlot .. "_" .. baseInfo.unitType .. "_" .. baseInfo.unitNumber
+    if IEF_FIRED[unitKey] then
+        printToColor("[TIRO] Questa unità ha già sparato in questo turno", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    -- IEF usa pollici — converti in unità TTS (INCH_TO_TTS = 1.885)
+    local INCH_TO_TTS = 1.885
+    local rangeUnits  = weapon.range_inches and (weapon.range_inches * INCH_TO_TTS)
+                        or weapon.rangeUnits
+                        or (weapon.range and (weapon.range * INCH_TO_TTS))
+                        or 20
+    local angoloGradi = IEF_SHOOTING.angle
+    local pos         = shooter.getPosition()
+
+    -- Usa le basi selezionate per determinare l'ampiezza del cono
+    local basiObjs = {}
+    for _, obj in ipairs(selected) do
+        if obj.hasTag and obj.hasTag(shooterSlot == 1 and "Army1" or "Army2") then
+            table.insert(basiObjs, obj)
+        end
+    end
+
+    if #basiObjs == 0 then
+        printToColor("[TIRO] Nessuna base valida selezionata", player.color, {r=1,g=0.3,b=0.3})
+        return false
+    end
+
+    -- Direzione iniziale dalla prima base per il sort
+    local fwdRef0 = basiObjs[1].getTransformForward()
+    local fwdXZ0  = Vector(fwdRef0.x, 0, fwdRef0.z):normalized()
+    local right0  = Vector(-fwdXZ0.z, 0, fwdXZ0.x)
+
+    -- Ordina basi per posizione lungo asse right
+    table.sort(basiObjs, function(a, b)
+        local pa = a.getPosition()
+        local pb = b.getPosition()
+        local da = pa.x * right0.x + pa.z * right0.z
+        local db = pb.x * right0.x + pb.z * right0.z
+        return da < db
+    end)
+
+    local primaBase  = basiObjs[1]
+    local ultimaBase = basiObjs[#basiObjs]
+    local pos1       = primaBase.getPosition()
+    local pos2       = ultimaBase.getPosition()
+
+    -- Ricalcola direzioni dalla posizione reale delle basi
+    local dirUnita, right, fwdXZ
+
+    if #basiObjs == 1 then
+        local fwd = primaBase.getTransformForward()
+        fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+        right = Vector(-fwdXZ.z, 0, fwdXZ.x)
+        dirUnita = right
+    else
+        dirUnita = Vector(pos2.x - pos1.x, 0, pos2.z - pos1.z):normalized()
+        right    = dirUnita
+        fwdXZ    = Vector(dirUnita.z, 0, -dirUnita.x)
+    end
+
+    -- Dimensioni fisse base (4x3)
+    local halfWidth = 1.65
+    local halfDepth = 1.15
+    local startLeft = Vector(
+        pos1.x - right.x * halfWidth + fwdXZ.x * halfDepth,
+        pos.y + 0.3,
+        pos1.z - right.z * halfWidth + fwdXZ.z * halfDepth
+    )
+    local startRight = Vector(
+        pos2.x + right.x * halfWidth + fwdXZ.x * halfDepth,
+        pos.y + 0.3,
+        pos2.z + right.z * halfWidth + fwdXZ.z * halfDepth
+    )
+
+    local frontCenter = Vector(
+        (startLeft.x + startRight.x) / 2,
+        pos.y + 0.3,
+        (startLeft.z + startRight.z) / 2
+    )
+
+    local angolo   = math.rad(angoloGradi)
+    local segmenti = 30
+
+    local function ruota(v, ang)
+        return Vector(
+            v.x * math.cos(ang) - v.z * math.sin(ang),
+            0,
+            v.x * math.sin(ang) + v.z * math.cos(ang)
+        )
+    end
+
+    local puntiArco  = {}
+    local firstPoint = nil
+    local lastPoint  = nil
+
+    for i = 0, segmenti do
+        local t   = i / segmenti
+        local ang = -angolo + (2 * angolo * t)
+        local dir = ruota(fwdXZ, ang)
+        local p   = Vector(
+            frontCenter.x + dir.x * rangeUnits,
+            frontCenter.y,
+            frontCenter.z + dir.z * rangeUnits
+        )
+        if i == 0        then firstPoint = p end
+        if i == segmenti then lastPoint  = p end
+        table.insert(puntiArco, shooter.positionToLocal(p))
+    end
+
+    if firstPoint == nil or lastPoint == nil then
+        printToColor("[TIRO] Errore nel calcolo del cono di tiro", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    local campioni      = 50
+    local puntiSinistro = {}
+    local puntiDestro   = {}
+
+    for i = 0, campioni do
+        local t  = i / campioni
+        local pS = Vector(
+            startLeft.x  + (firstPoint.x - startLeft.x)  * t,
+            startLeft.y  + (firstPoint.y - startLeft.y)  * t,
+            startLeft.z  + (firstPoint.z - startLeft.z)  * t
+        )
+        local pD = Vector(
+            startRight.x + (lastPoint.x - startRight.x) * t,
+            startRight.y + (lastPoint.y - startRight.y) * t,
+            startRight.z + (lastPoint.z - startRight.z) * t
+        )
+        table.insert(puntiSinistro, shooter.positionToLocal(pS))
+        table.insert(puntiDestro,   shooter.positionToLocal(pD))
+    end
+
+    local nemici = shoot_getNemici(shooter, shooterSlot)
+
+    -- target = una base nemica "rappresentativa" della UNITA' bersaglio scelta
+    -- (serve solo per identificare l'unita'; il conteggio readiness reale
+    -- usa TUTTE le basi dell'unita' bersaglio, vedi basiNemiche sotto)
+    local target, _ = shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
+
+    local conoLines = {
+        {points = puntiSinistro, color = {1, 0.8, 0.1}, thickness = 0.1},
+        {points = puntiDestro,   color = {1, 0.8, 0.1}, thickness = 0.1},
+        {points = puntiArco,     color = {1, 0.8, 0.1}, thickness = 0.1},
+    }
+
+    if target then
+
+        -- Risolve TUTTE le basi dell'unita' bersaglio (non solo "target")
+        local targetInfo  = deployment_parseNickname(target.getName())
+        local targetSlot  = shooterSlot == 1 and 2 or 1
+        local targetUnit  = targetInfo and main_findUnit(targetSlot, targetInfo.unitType, targetInfo.unitNumber)
+
+        local basiNemiche = {}
+        if targetUnit and targetUnit.basi then
+            for _, b in ipairs(targetUnit.basi) do
+                local o = getObjectFromGUID(b.guid)
+                if o then table.insert(basiNemiche, o) end
+            end
+        end
+        if #basiNemiche == 0 then
+            table.insert(basiNemiche, target)  -- fallback di sicurezza
+        end
+
+        -- Calcola direzione fronte unità per determinare il rango di ogni base
+        local fwdRango   = basiObjs[1].getTransformForward()
+        local fwdXZRango = Vector(fwdRango.x, 0, fwdRango.z):normalized()
+
+        local proiezioni = {}
+        local minProjRango = nil
+        for _, baseObj in ipairs(basiObjs) do
+            local p = baseObj.getPosition()
+            local proj = p.x * fwdXZRango.x + p.z * fwdXZRango.z
+            proiezioni[baseObj] = proj
+            if minProjRango == nil or proj < minProjRango then
+                minProjRango = proj
+            end
+        end
+
+        local sampleBounds = basiObjs[1].getBounds()
+        local rankStep = sampleBounds.size.z
+        local rankTolerance = rankStep * 0.6
+
+        local maxRanghi = 1
+        if shooterUnit.tipo == "SKC" and shooterUnit.arma == "ARC" then
+            maxRanghi = 2
+        end
+
+        local parabolaLines = {}
+        local basiPronte = 0
+
+        for _, baseObj in ipairs(basiObjs) do
+            local offset = proiezioni[baseObj] - minProjRango
+            local rangoIndex = math.floor((offset + rankTolerance) / rankStep)
+
+            if rangoIndex < maxRanghi then
+                local posA = baseObj.getPosition()
+
+                -- Cerca la PRIMA base nemica (qualsiasi dell'unita' bersaglio) in raggio+LOS
+                local bersaglioTrovato = nil
+                for _, baseNemica in ipairs(basiNemiche) do
+                    local targetPos = baseNemica.getPosition()
+                    local dist = (Vector(targetPos.x, 0, targetPos.z) - Vector(posA.x, 0, posA.z)):magnitude()
+
+                    if dist <= rangeUnits and shoot_checkLOS(baseObj, posA, targetPos) then
+                        bersaglioTrovato = baseNemica
+                        break
+                    end
+                end
+
+                if bersaglioTrovato then
+                    basiPronte = basiPronte + 1
+                    local targetPos = bersaglioTrovato.getPosition()
+
+                    local startPoint = Vector(posA.x, posA.y + 0.3, posA.z)
+                    local endPoint   = Vector(targetPos.x, targetPos.y + 0.3, targetPos.z)
+                    local baseAltezza = (endPoint - startPoint):magnitude() * 0.15
+                    local altezza = baseAltezza * (1 + rangoIndex * 0.5)
+
+                    local parabolaPoints = {}
+                    for i = 0, 20 do
+                        local t  = i / 20
+                        local px = startPoint.x + (endPoint.x - startPoint.x) * t
+                        local pz = startPoint.z + (endPoint.z - startPoint.z) * t
+                        local py = startPoint.y + (endPoint.y - startPoint.y) * t + altezza * (1 - (2*t - 1)^2)
+                        table.insert(parabolaPoints, Vector(px, py, pz))
+                    end
+
+                    table.insert(parabolaLines, {
+                        points    = parabolaPoints,
+                        color     = {0, 0, 0},
+                        thickness = 0.09
+                    })
+                end
+            end
+        end
+
+        local bersagliEvidenziati = {}
+        local parabolaLines = {}
+        local basiPronte = 0
+
+        for _, baseObj in ipairs(basiObjs) do
+            local offset = proiezioni[baseObj] - minProjRango
+            local rangoIndex = math.floor((offset + rankTolerance) / rankStep)
+
+            if rangoIndex < maxRanghi then
+                local posA = baseObj.getPosition()
+
+                -- Cerca la PRIMA base nemica (qualsiasi dell'unita' bersaglio) in raggio+LOS
+                local bersaglioTrovato = nil
+                for _, baseNemica in ipairs(basiNemiche) do
+                    local targetPos = baseNemica.getPosition()
+                    local dist = (Vector(targetPos.x, 0, targetPos.z) - Vector(posA.x, 0, posA.z)):magnitude()
+
+                    if dist <= rangeUnits and shoot_checkLOS(baseObj, posA, targetPos) then
+                        bersaglioTrovato = baseNemica
+                        break
+                    end
+                end
+
+                if bersaglioTrovato then
+                    basiPronte = basiPronte + 1
+
+                    local guid = bersaglioTrovato.getGUID()
+                    if not bersagliEvidenziati[guid] then
+                        bersagliEvidenziati[guid] = true
+                        bersaglioTrovato.highlightOn({0, 0, 0})
+                    end
+
+                    local targetPos = bersaglioTrovato.getPosition()
+
+                    local startPoint = Vector(posA.x, posA.y + 0.3, posA.z)
+                    local endPoint   = Vector(targetPos.x, targetPos.y + 0.3, targetPos.z)
+                    local baseAltezza = (endPoint - startPoint):magnitude() * 0.15
+                    local altezza = baseAltezza * (1 + rangoIndex * 0.5)
+
+                    local parabolaPoints = {}
+                    for i = 0, 20 do
+                        local t  = i / 20
+                        local px = startPoint.x + (endPoint.x - startPoint.x) * t
+                        local pz = startPoint.z + (endPoint.z - startPoint.z) * t
+                        local py = startPoint.y + (endPoint.y - startPoint.y) * t + altezza * (1 - (2*t - 1)^2)
+                        table.insert(parabolaPoints, Vector(px, py, pz))
+                    end
+
+                    table.insert(parabolaLines, {
+                        points    = parabolaPoints,
+                        color     = {0, 0, 0},
+                        thickness = 0.09
+                    })
+                end
+            end
+        end
+
+        IEF_SHOOT_STATE.shooter      = shooter
+        IEF_SHOOT_STATE.target       = target
+        IEF_SHOOT_STATE.shooterUnit  = shooterUnit
+        IEF_SHOOT_STATE.shooterSlot  = shooterSlot
+        IEF_SHOOT_STATE.basiObjs     = basiObjs
+        IEF_SHOOT_STATE.rangeUnits   = rangeUnits
+        IEF_SHOOT_STATE.targetUnit   = targetUnit
+        IEF_SHOOT_STATE.targetSlot   = targetSlot
+        IEF_SHOOT_STATE.basiNemiche  = basiNemiche
+
+        local pos = shooter.getPosition()
+        local targetPos = target.getPosition()
+        local boundsShooter = shooter.getBounds()
+        local boundsTarget  = target.getBounds()
+
+        local dirST = (Vector(targetPos.x, targetPos.y, targetPos.z) - Vector(pos.x, pos.y, pos.z)):normalized()
+
+        local offsetShooter  = math.abs(boundsShooter.size.x/2 * dirST.x) + math.abs(boundsShooter.size.z/2 * dirST.z)
+        local offsetTarget   = math.abs(boundsTarget.size.x/2 * dirST.x) + math.abs(boundsTarget.size.z/2 * dirST.z)
+
+        local dist           = (target.getPosition() - pos):magnitude()
+        local distBordoBordo = dist - offsetShooter - offsetTarget
+
+        local INCH_TO_TTS_msg = 1.885
+        local distInch = distBordoBordo / INCH_TO_TTS_msg
+        local rangeInch = state and state.rangeUnits and (state.rangeUnits / INCH_TO_TTS_msg) or (rangeUnits / INCH_TO_TTS_msg)
+        local msg = string.format("[TIRO] Bersaglio: %s dist: %.1f" .. " gittata: %.0f" .. " (basi pronte: %d/%d)", targetUnit and (targetUnit.tipo .. "_" .. targetUnit.unita_num) or target.getName(), distInch, rangeInch, basiPronte, #basiObjs)
+        printToColor(msg, player.color, {r=1,g=0.85,b=0.2})
+
+        UI.setAttribute("confirm_panel_shoot", "active", "true")
+        UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
+
+        if phase.title == PHASE.SHOOT then
+            if DEBUG_SHOW_CONFIRM_SHOOT then
+                  UI.setAttribute("btnActionShoot", "active", "true") 
+            else
+                  UI.setAttribute("btnActionShoot", "active", "false")      
+            end 
+      else
+          UI.setAttribute("btnActionShoot", "active", "false")   
+      end
+        
+        IEF_SHOOTING.activeLines = parabolaLines
+        
+    else
+        printToColor(string.format("[TIRO] Nessun bersaglio entro gittata (%.0f\")", rangeUnits / 1.885), player.color, {r=0.7,g=0.7,b=0.7})
+        IEF_SHOOTING.activeLines = nil
+
+        UI.setAttribute("confirm_panel_shoot", "active", "true")
+        UI.setAttribute("btnActionShoot", "active", "false")
+        UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
+      
+        if IEF_SHOOTING.activeShooter then
+              IEF_SHOOTING.activeShooter.setVectorLines({})
+        end
+    end
+
+    shooter.setVectorLines(conoLines)
+    IEF_SHOOTING.activeShooter = shooter
+    callHandler("aggiornaLinee")
+
+    return true
+end
+-- ============================================================
+-- FUNZIONE: lionheart_trovaBersagliPerBase
+-- Per ogni base in basiObjs, trova il PROPRIO nemico piu' vicino
+-- in LOS (puo' essere diverso da base a base).
+-- Ritorna una lista: { {base=obj, target=obj}, ... } solo per
+-- le basi che hanno trovato un bersaglio valido.
+-- ============================================================
+function shoot_trovaBersagliPerBase(basiObjs, nemici, rangeUnits, angoloGradi)
+
+    local risultati = {}
+
+    for _, base in ipairs(basiObjs) do
+        local posA = base.getPosition()
+        local fwd  = base.getTransformForward()
+        local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+
+        local candidati = {}
+
+        for _, nemico in ipairs(nemici) do
+            if nemico and nemico ~= base then
+                local posB = nemico.getPosition()
+                local dir  = Vector(posB.x - posA.x, 0, posB.z - posA.z)
+                local dist = dir:magnitude()
+
+                if dist > 0 and dist <= rangeUnits then
+                    local dirNorm = dir:normalized()
+                    local dot     = math.max(-1, math.min(1, fwdXZ.x*dirNorm.x + fwdXZ.z*dirNorm.z))
+                    local ang     = math.deg(math.acos(dot))
+
+                    if ang <= angoloGradi then
+                        table.insert(candidati, { obj = nemico, dist = dist })
+                    end
+                end
+            end
+        end
+
+        table.sort(candidati, function(a, b) return a.dist < b.dist end)
+
+        local trovato = nil
+
+        for _, cand in ipairs(candidati) do
+            if shoot_checkLOS(base, posA, cand.obj.getPosition()) then
+                trovato = cand.obj
+                break
+            end
+        end
+
+        print("[TIRO] base=" .. base.getName() .. " esito=" .. (trovato and ("target: " .. trovato.getName()) or "no target"))
+
+        if trovato then
+            table.insert(risultati, { base = base, target = trovato })
+        end
+    end
+
+    return risultati
+end
+-- ============================================================
+-- FUNZIONE: lionheart_trovaBersaglio
+-- 1. Trova tutte le UNITA' nemiche nel cono (per distanza minima
+--    base-a-base, senza ancora controllare la LOS).
+-- 2. Ordina le unita' candidate dalla piu' vicina alla piu' lontana.
+-- 3. Per ogni unita' candidata, in ordine: se ALMENO UNA base
+--    tiratrice ha LOS libera verso ALMENO UNA base di quell'unita',
+--    quella diventa il bersaglio definitivo. Altrimenti si scarta
+--    e si passa alla prossima unita' candidata piu' vicina.
+-- ============================================================
+function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
+
+    local unitaCandidate = {}
+
+    for _, base in ipairs(basiObjs) do
+        local posA = base.getPosition()
+        local fwd  = base.getTransformForward()
+        local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+
+        for _, nemico in ipairs(nemici) do
+            if nemico and nemico ~= base then
+                local posB = nemico.getPosition()
+                local dir  = Vector(posB.x - posA.x, 0, posB.z - posA.z)
+                local dist = dir:magnitude()
+
+                if dist > 0 and dist <= rangeUnits then
+                    local dirNorm = dir:normalized()
+                    local dot     = math.max(-1, math.min(1, fwdXZ.x*dirNorm.x + fwdXZ.z*dirNorm.z))
+                    local ang     = math.deg(math.acos(dot))
+
+                    if ang <= angoloGradi then
+                        local nemicoInfo = deployment_parseNickname(nemico.getName())
+                        if nemicoInfo then
+                            local nemicoSlot = nemico.hasTag("Army1") and 1 or 2
+                            local unitKey = nemicoSlot .. "_" .. nemicoInfo.unitType .. "_" .. nemicoInfo.unitNumber
+
+                            local entry = unitaCandidate[unitKey]
+                            if not entry then
+                                entry = { minDist = dist, basiNemiche = {} }
+                                unitaCandidate[unitKey] = entry
+                            end
+
+                            if dist < entry.minDist then
+                                entry.minDist = dist
+                            end
+
+                            local giaPresente = false
+                            for _, bn in ipairs(entry.basiNemiche) do
+                                if bn == nemico then giaPresente = true break end
+                            end
+                            if not giaPresente then
+                                table.insert(entry.basiNemiche, nemico)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local listaCandidate = {}
+    for unitKey, entry in pairs(unitaCandidate) do
+        table.insert(listaCandidate, { unitKey = unitKey, minDist = entry.minDist, basiNemiche = entry.basiNemiche })
+    end
+
+    table.sort(listaCandidate, function(a, b) return a.minDist < b.minDist end)
+
+    print("[TIRO] unita' candidate nel cono: " .. #listaCandidate)
+    for _, c in ipairs(listaCandidate) do
+        print("[TIRO]   unita=" .. c.unitKey .. " minDist=" .. c.minDist .. " basi=" .. #c.basiNemiche)
+    end
+
+    for _, c in ipairs(listaCandidate) do
+
+        for _, baseTiratrice in ipairs(basiObjs) do
+            local posA = baseTiratrice.getPosition()
+
+            for _, baseNemica in ipairs(c.basiNemiche) do
+                if shoot_checkLOS(baseTiratrice, posA, baseNemica.getPosition()) then
+                    print("[TIRO] bersaglio scelto: " .. c.unitKey .. " (visto da " .. baseTiratrice.getName() .. " -> " .. baseNemica.getName() .. ")")
+                    return baseNemica, nil
+                end
+            end
+        end
+
+        print("[TIRO] unita=" .. c.unitKey .. " scartata: nessuna base tiratrice ha LOS")
+    end
+
+    print("[TIRO] nessuna unita' nemica raggiungibile in LOS")
+    return nil, nil
+end
+-- ============================================================
+-- FUNZIONE: lionheart_isDentroCono
+-- ============================================================
+function shoot_isDentroCono(shooter, nemico, targetPos, angoloGradi, maxDist, puntiArco, puntiSinistro, puntiDestro)
+    if shoot_isToccata(shooter, puntiArco,     nemico) then return true end
+    if shoot_isToccata(shooter, puntiSinistro, nemico) then return true end
+    if shoot_isToccata(shooter, puntiDestro,   nemico) then return true end
+
+    local pos   = shooter.getPosition()
+    local dir   = targetPos - pos
+    local dist  = dir:magnitude()
+    if dist > maxDist then return false end
+
+    local fwd   = shooter.getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+    local dirXZ = Vector(dir.x, 0, dir.z):normalized()
+    local dot   = math.max(-1, math.min(1, fwdXZ:dot(dirXZ)))
+    local ang   = math.deg(math.acos(dot))
+
+    return ang <= angoloGradi
+end
+-- ============================================================
+-- FUNZIONE: lionheart_isToccata
+-- ============================================================
+function shoot_isToccata(shooter, punti, nemico)
+    if not nemico or not nemico.getBounds then return false end
+    local bounds = nemico.getBounds()
+    if not bounds or not bounds.size then return false end
+
+    local pos  = nemico.getPosition()
+    local xmin = pos.x - bounds.size.x / 2
+    local xmax = pos.x + bounds.size.x / 2
+    local zmin = pos.z - bounds.size.z / 2
+    local zmax = pos.z + bounds.size.z / 2
+
+    for _, p in ipairs(punti) do
+        local pw = shooter.positionToWorld(p)
+        if pw.x >= xmin and pw.x <= xmax and pw.z >= zmin and pw.z <= zmax then
+            return true
+        end
+    end
+    return false
+end
+-- ============================================================
+-- FUNZIONE: lionheart_checkLOS
+-- ============================================================
+function shoot_checkLOS(shooter, fromPos, toPos)
+    local dir       = toPos - fromPos
+    local enemyTag  = shooter.hasTag("Army1") and "Army2" or "Army1"
+    local friendTag = shooter.hasTag("Army1") and "Army1" or "Army2"
+
+    local hits = Physics.cast({
+        origin    = fromPos,
+        direction = dir:normalized(),
+        distance  = dir:magnitude(),
+        type      = 1
+    })
+
+    for _, hit in ipairs(hits) do
+        local n = hit.hit_object and hit.hit_object.getName() or "?"
+        --print("[LOS DEBUG]   " .. n .. " distance=" .. tostring(hit.distance) .. " point=" .. tostring(hit.point))
+    end
+
+    table.sort(hits, function(a, b)
+        return (a.distance or 0) < (b.distance or 0)
+    end)
+
+    for _, hit in ipairs(hits) do
+        local n = hit.hit_object and hit.hit_object.getName() or "?"
+       -- print("[LOS DEBUG]   " .. n .. " distance=" .. tostring(hit.distance))
+    end
+
+    for _, hit in ipairs(hits) do
+        if hit.hit_object then
+            if hit.hit_object.hasTag(friendTag) then
+                --print("[LOS DEBUG] BLOCCATO da amico: " .. hit.hit_object.getName())
+                return false
+            elseif hit.hit_object.hasTag(enemyTag) then
+                --print("[LOS DEBUG] OK, nemico trovato per primo: " .. hit.hit_object.getName())
+                return true
+            end
+        end
+    end
+    return true
+end
+-- ============================================================
+-- FUNZIONE: lionheart_getNemici
+-- ============================================================
+function shoot_getNemici(shooter, shooterSlot)
+    local nemici   = {}
+    local enemyTag = shooterSlot == 1 and "Army2" or "Army1"
+    for _, obj in ipairs(getAllObjects()) do
+        if obj ~= shooter and obj.hasTag and obj.hasTag(enemyTag) then
+            table.insert(nemici, obj)
+        end
+    end
+    return nemici
+end
+-- ============================================================
+-- FUNZIONE: lionheart_shootResetLines
+-- ============================================================
+function shoot_shootResetLines(player, value, id)
+
+    if IEF_SHOOTING.activeShooter then
+        IEF_SHOOTING.activeShooter.setVectorLines({})
+    end
+
+    IEF_SHOOTING.activeLines = nil
+
+    if IEF_SHOOT_STATE.basiNemiche then
+        for _, b in ipairs(IEF_SHOOT_STATE.basiNemiche) do
+            b.highlightOff()
+        end
+    elseif IEF_SHOOT_STATE.target then
+        IEF_SHOOT_STATE.target.highlightOff()
+    end
+
+    UI.setAttribute("confirm_panel", "active", "false")
+    callHandler("aggiornaLinee")
+end
+-- shoot_fire e shoot_stopFire rimossi — animazione laser non usata in IEF
+-- ============================================================
+-- FUNZIONE: lionheart_shootConfirm(player)
+-- Supporta bersagli multipli: raggruppa le basi pronte per
+-- unita' bersaglio, e tira i dadi separatamente per ciascun
+-- gruppo.
+-- ============================================================
+function shoot_shootConfirm(player)
+
+    local state = IEF_SHOOT_STATE
+    if not state.shooter or not state.target then
+        printToColor("[TIRO] Nessun tiro in attesa", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    if not state.shooterUnit then
+        printToColor("[TIRO] Dati tiratore mancanti", player.color, {r=1,g=0.3,b=0.3})
+        return
+    end
+
+    if not state.targetUnit then
+        printToColor("[TIRO] Dati bersaglio mancanti", player.color, {r=1,g=0.3,b=0.3})
+        return
+    end
+
+    local shooterUnit = state.shooterUnit
+    local targetUnit  = state.targetUnit
+    -- armi è array in IEF — cerca la prima arma da tiro
+    local weapon = nil
+    local armi_unit = state.shooterUnit.armi or (state.shooterUnit.arma and {state.shooterUnit.arma})
+    if armi_unit then
+        for _, arma in ipairs(armi_unit) do
+            local w = IEF_DATA.weapons and IEF_DATA.weapons[arma]
+            if w and w.range_inches then weapon = w; break end
+        end
+    end
+    -- IEF: soglia tiro da regolamento_ief.json (weapons[arma].min_to_hit)
+    -- Se non presente, default 4+
+    local soglia = 4
+    if weapon and weapon.min_to_hit then
+        if type(weapon.min_to_hit) == "table" then
+            soglia = weapon.min_to_hit[state.targetUnit.tipo] or weapon.min_to_hit.default or 4
+        else
+            soglia = tonumber(weapon.min_to_hit) or 4
+        end
+    end
+
+    -- IEF: 1D6 per base tiratrice con LOS (non per figura)
+    local numDadi = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits)
+
+    print("[TIRO] numDadi=" .. tostring(numDadi) .. " soglia=" .. tostring(soglia))
+
+    if numDadi <= 0 then
+        printToColor("[TIRO] Nessuna base in gittata con LOS", player.color, {r=1,g=0.6,b=0})
+        shoot_shootReset()
+        return
+    end
+
+    printToAll(string.format("[TIRO] %s tira %dD6 vs %s (soglia %d+)",
+        state.shooterUnit.tipo .. "_" .. state.shooterUnit.unita_num,
+        numDadi,
+        state.targetUnit.tipo  .. "_" .. state.targetUnit.unita_num,
+        soglia), {r=1,g=0.85,b=0.2})
+
+    engine_rollDice(numDadi, soglia, function(hits, results)
+        if hits > 0 then
+            shoot_applyHits(state.targetUnit, state.targetSlot, hits, player, state.target)
+        else
+            printToAll("[TIRO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
+        end
+        shoot_shootReset()
+    end)
+
+    local unitKey = state.shooterSlot .. "_" .. state.shooterUnit.tipo .. "_" .. state.shooterUnit.unita_num
+    IEF_FIRED[unitKey] = true
+
+    shoot_shootResetLines(player)
+end
+-- ============================================================
+-- FUNZIONE: shoot_basiPronte()
+-- IEF: conta le basi tiratici con LOS verso il bersaglio
+-- Ogni base pronta = 1D6
+-- ============================================================
+function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
+    if not basiObjs or #basiObjs == 0 then return 0 end
+    if not basiNemiche or #basiNemiche == 0 then return 0 end
+
+    local count = 0
+    for _, baseObj in ipairs(basiObjs) do
+        local posA = baseObj.getPosition()
+        for _, baseNemica in ipairs(basiNemiche) do
+            local targetPos = baseNemica.getPosition()
+            local dist = (Vector(targetPos.x, 0, targetPos.z) - Vector(posA.x, 0, posA.z)):magnitude()
+            if dist <= rangeUnits and shoot_checkLOS(baseObj, posA, targetPos) then
+                count = count + 1
+                break
+            end
+        end
+    end
+    return count
+end
+-- ============================================================
+-- FUNZIONE: lionheart_figureValideTiro(unita, basiObjs, basiNemiche, rangeUnits)
+-- Per ogni base tiratrice, controlla se ha raggio+LOS verso
+-- ALMENO UNA base dell'unita' bersaglio (basiNemiche), non solo
+-- verso una base specifica. Se si', conta le sue figure (solo
+-- primo rango, fpb/2; SKC+ARC: primo+secondo rango).
+-- ============================================================
+function shoot_figureValideTiro(unita, basiObjs, basiNemiche, rangeUnits)
+    if not basiObjs or #basiObjs == 0 then return 0 end
+    if not basiNemiche or #basiNemiche == 0 then return 0 end
+
+    -- IEF: figures_per_base dal regolamento_ief.json
+    local unitTypeData = IEF_DATA.unitTypes and IEF_DATA.unitTypes[unita.tipo] or {}
+    local fpb = unitTypeData.figures_per_base or 3
+    -- In IEF solo il primo rango tira (base sottile 4x1.5cm per FP)
+    local fpbRango = fpb
+
+    local maxRanghi = 1
+    if unita.tipo == "SKC" and unita.arma == "ARC" then
+        maxRanghi = 2
+    end
+
+    local fwd   = basiObjs[1].getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+
+    local proiezioni = {}
+    local minProj = nil
+
+    for _, baseObj in ipairs(basiObjs) do
+        local p = baseObj.getPosition()
+        local proj = p.x * fwdXZ.x + p.z * fwdXZ.z
+        proiezioni[baseObj] = proj
+        if minProj == nil or proj < minProj then
+            minProj = proj
+        end
+    end
+
+    local sampleBounds = basiObjs[1].getBounds()
+    local rankStep = sampleBounds.size.z
+    local rankTolerance = rankStep * 0.6
+
+    local figure = 0
+
+    for _, baseObj in ipairs(basiObjs) do
+        local offset = proiezioni[baseObj] - minProj
+        local rangoIndex = math.floor((offset + rankTolerance) / rankStep)
+
+        if rangoIndex < maxRanghi then
+            local posA = baseObj.getPosition()
+
+            -- Cerca la PRIMA base nemica (qualsiasi dell'unita' bersaglio) in raggio+LOS
+            local trovata = false
+            for _, baseNemica in ipairs(basiNemiche) do
+                local targetPos = baseNemica.getPosition()
+                local dist = (Vector(targetPos.x, 0, targetPos.z) - Vector(posA.x, 0, posA.z)):magnitude()
+
+                if dist <= rangeUnits and shoot_checkLOS(baseObj, posA, targetPos) then
+                    trovata = true
+                    break
+                end
+            end
+
+            if trovata then
+                local nickname = baseObj.getName()
+                local wounds = wounds_data and wounds_data[nickname] or 0
+                figure = figure + math.max(0, fpbRango - wounds)
+            end
+        end
+    end
+
+    return figure
+end
+-- ============================================================
+-- FUNZIONE: lionheart_shootCancel()
+-- ============================================================
+function shoot_shootCancel(player)
+    if IEF_SHOOT_STATE.target then
+        IEF_SHOOT_STATE.target.highlightOff()
+    end
+    shoot_shootReset()
+    printToColor("[TIRO] Annullato", player.color, {r=0.7,g=0.7,b=0.7})
+end
+-- ============================================================
+-- FUNZIONE: lionheart_shootReset()
+-- ============================================================
+function shoot_shootReset()
+    IEF_SHOOT_STATE = {
+        shooter=nil, 
+        target=nil,
+        shooterUnit=nil, 
+        targetUnit=nil,
+        shooterSlot=nil, 
+        targetSlot=nil,
+        basiObjs=nil,
+        rangeUnits=nil
+    }
+end
+-- ============================================================
+-- FUNZIONE: lionheart_applyHits(unita, slot, hits, player)
+-- Applica N ferite all'unità distribuendole sulle basi
+-- ============================================================
+function shoot_applyHits(unita, slot, hits, player, targetObj)
+
+        if not unita then
+            printToAll("[TIRO] Errore: unità bersaglio nil", {r=1,g=0.3,b=0.3})
+            return
+        end
+        if not unita.basi then
+            printToAll("[TIRO] Errore: basi nil per " .. tostring(unita.tipo), {r=1,g=0.3,b=0.3})
+            return
+        end
+
+    -- Riordina basi mettendo quella colpita per prima
+    local basiOrdinate = {}
+    local targetNickname = targetObj and targetObj.getName() or nil
+
+    for _, base in ipairs(unita.basi) do
+        if base.nickname == targetNickname then
+            table.insert(basiOrdinate, 1, base)  -- prima
+        else
+            table.insert(basiOrdinate, base)
+        end
+    end
+
+    local tipo      = unita.tipo
+    local unitTypeData = IEF_DATA.unitTypes and IEF_DATA.unitTypes[tipo] or {}
+    local fpb       = unitTypeData.figures_per_base or 3
+    local rimasti   = hits
+    local basiRimosse = 0
+
+    wounds_data = wounds_data or {}
+
+    -- Distribuisce ferite base per base (dalla prima)
+    for _, base in ipairs(basiOrdinate) do 
+        if rimasti <= 0 then break end
+
+        local nickname     = base.nickname
+        local ferite_curr  = wounds_data[nickname] or 0
+        local spazio       = fpb - ferite_curr
+
+        if spazio > 0 then
+            local da_aggiungere = math.min(rimasti, spazio)
+            wounds_data[nickname] = ferite_curr + da_aggiungere
+            rimasti = rimasti - da_aggiungere
+
+            -- Rimuovi base se ferite >= fpb
+            if wounds_data[nickname] >= fpb then
+                local obj = getObjectFromGUID(base.guid)
+                if obj then
+                    obj.highlightOn({1,0,0}, 2)
+                    Wait.time(function()
+                        if obj then obj.destruct() end
+                    end, 2)
+                    basiRimosse = basiRimosse + 1
+                end
+            else
+                -- Aggiorna tinta base ferita
+                local obj = getObjectFromGUID(base.guid)
+                if obj and aggiornaTintaBase then
+                    aggiornaTintaBase(obj, wounds_data[nickname], fpb)
+                end
+            end
+        end
+    end
+
+    Wait.time(function()
+        callHandler("deployment_scanTable")
+        local unitaAgg = main_findUnit(slot, unita.tipo, unita.unita_num)
+        if unitaAgg then
+            main_aggiornaPopupUnita(slot, unitaAgg.tipo, unitaAgg.unita_num)
+        end
+        shoot_checkMorale(unita, slot, player)
+    end, 2.5)
+
+    local msg = string.format("[TIRO] %s subisce %d HIT — basi rimosse: %d",
+        tipo .. "_" .. unita.unita_num, hits, basiRimosse)
+    printToAll(msg, {r=1,g=0.4,b=0.4})
+end
+-- ============================================================
+-- FUNZIONE: lionheart_checkMorale(unita, slot, player)
+-- Verifica se l'unità deve testare il morale
+-- ============================================================
+function shoot_checkMorale(unita, slot, player)
+
+    -- Rileggi unità aggiornata dopo scan
+    local unitaAgg = main_findUnit(slot, unita.tipo, unita.unita_num)
+    if not unitaAgg then return end
+
+    local tipo     = unitaAgg.tipo
+    local fpb      = (IEF_DATA.unitTypes and IEF_DATA.unitTypes[tipo] or {}).figures_per_base or 3
+    local fig_att  = main_figureTotaliUnita(unitaAgg)
+    local fig_max  = (unitaAgg.basi_max or #unitaAgg.basi) * fpb
+    local perc     = fig_max > 0 and (fig_att / fig_max) or 0
+
+    if perc == 0 then
+        printToAll("[MORALE] " .. tipo .. "_" .. unitaAgg.unita_num .. " — DESTROYED", {r=1,g=0.2,b=0.2})
+        return
+    end
+
+    -- IEF: soglia morale da regolamento_ief.json
+    local moraleData = IEF_DATA.morale and IEF_DATA.morale.levels and IEF_DATA.morale.levels[unitaAgg.morale]
+    local threshold  = moraleData and moraleData.threshold or 6
+    local basiTot    = unitaAgg.basi_max or #unitaAgg.basi
+    local basiRim    = main_basiPresentiUnita(unitaAgg)
+
+    if basiRim <= math.floor(basiTot / 2) then
+        printToAll(string.format("[MORALE] %s_%d sotto 50%% — TEST MORALE (soglia %d+)",
+            tipo, unitaAgg.unita_num, threshold), {r=1,g=0.6,b=0})
+    end
+end
+-- ============================================================
+-- FUNZIONE: lionheart_findNearestEnemy(shooter, shooterSlot, range)
+-- Trova il nemico più vicino entro la gittata (in TTS units)
+-- ============================================================
+function shoot_findNearestEnemy(shooter, shooterSlot, rangeUnits)
+
+    local enemyTag  = shooterSlot == 1 and "Army2" or "Army1"
+    local pos       = shooter.getPosition()
+    local fwd       = shooter.getTransformForward()
+    local dir       = Vector(fwd.x, 0, fwd.z):normalized()
+    local halfAngle = math.rad(IEF_SHOOTING.angle)
+    local nearest   = nil
+    local minDist   = 999999
+
+    for _, obj in ipairs(getAllObjects()) do
+        if obj ~= shooter and obj.hasTag and obj.hasTag(enemyTag) then
+            local objPos = obj.getPosition()
+            if objPos then
+                local toObj = Vector(objPos.x - pos.x, 0, objPos.z - pos.z)
+                local d     = toObj:magnitude()
+                if d > 0 and d <= rangeUnits then
+                    local toObjNorm = toObj:normalized()
+                    local dot       = dir.x * toObjNorm.x + dir.z * toObjNorm.z
+                    local angle     = math.acos(math.max(-1, math.min(1, dot)))
+                    if angle <= halfAngle and d < minDist then
+                        minDist = d
+                        nearest = obj
+                    end
+                end
+            end
+        end
+    end
+
+    return nearest, minDist
+end
