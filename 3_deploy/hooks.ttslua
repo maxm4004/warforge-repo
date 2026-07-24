@@ -1,0 +1,38 @@
+-- ============================================================
+-- WARFORGE IEF — 3_deploy/hooks.ttslua
+-- ============================================================
+
+-- ============================================================
+-- FUNZIONE: before_deploy_spawn()
+-- ============================================================
+function before_deploy_spawn(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+    linee_deploy = true
+    callHandler("aggiornaLinee")
+end
+
+-- ============================================================
+-- FUNZIONE: after_deploy_spawn()
+-- ============================================================
+function after_deploy_spawn(phaseName, phase)
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+
+-- ============================================================
+-- FUNZIONE: before_deploy_position()
+-- ============================================================
+function before_deploy_position(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+
+-- ============================================================
+-- FUNZIONE: after_deploy_position()
+-- ============================================================
+function after_deploy_position(phaseName, phase)
+    linee_deploy = false
+    deployment_revealAllSpawned()
+    deployment_scanTable()
+    callHandler("aggiornaSchedeUnita")
+end
