@@ -1,0 +1,64 @@
+-- ============================================================
+-- FUNZIONE: lionheart_lineLeft()
+-- ============================================================
+function move_lineLeft(player, value, id, buttonConfig) return move_applyFormation("lineLeft", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_lineRight()
+-- ============================================================
+function move_lineRight(player, value, id, buttonConfig) return move_applyFormation("lineRight", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_columnUp()
+-- ============================================================
+function move_columnUp(player, value, id, buttonConfig) return move_applyFormation("columnUp", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_columnDown()
+-- ============================================================
+function move_columnDown(player, value, id, buttonConfig) return move_applyFormation("columnDown", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_skirmish()
+-- ============================================================
+function move_skirmish(player, value, id, buttonConfig) return move_applyFormation("skirmish", player) end
+-- ============================================================
+-- FUNZIONE: lionheart_applyFormation()
+-- ============================================================
+function move_applyFormation(mode, player)
+
+    local selected = main_getSelectedObjects(player)
+    if selected == nil or #selected < 2 then
+        warningToColor(("Seleziona almeno 2 basi"):upper(), player, "Yellow")
+        return false
+    end
+
+    local leader = selected[1]
+    local right = leader.getTransformRight()
+    local forward = leader.getTransformForward()
+
+    local leaderBounds = leader.getBounds()
+    local horizontalSpacing = leaderBounds.size.x + 0.05
+    local verticalSpacing   = leaderBounds.size.z + 0.05
+
+    for i = 2, #selected do
+        local obj = selected[i]
+        local index = i - 1
+        local pos = nil
+
+        if mode == "lineLeft" then
+            pos = leader.getPosition() - right * (horizontalSpacing * index)
+        elseif mode == "lineRight" then
+            pos = leader.getPosition() + right * (horizontalSpacing * index)
+        elseif mode == "columnUp" then
+            pos = leader.getPosition() + forward * (verticalSpacing * index)
+        elseif mode == "columnDown" then
+            pos = leader.getPosition() - forward * (verticalSpacing * index)
+        elseif mode == "skirmish" then
+            pos = leader.getPosition() + right * (horizontalSpacing * 2 * index)
+        end
+
+        if pos ~= nil then
+            obj.setPosition(pos)
+            obj.setRotation(leader.getRotation())
+        end
+    end
+
+    return true
+end
