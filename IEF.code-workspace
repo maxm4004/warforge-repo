@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "Tabletop Simulator Lua",
+			"path": "Tabletop Simulator Lua"
+		},
+		{
+			"path": "E:/Wargaming-DEV/Warforge-IEF"
+		}
+	],
+	"settings": {
+		"TTSLua.includeOtherFilesPaths": [
+			"E:\\Wargaming-DEV\\Warforge-IEF"
+		],
+		"TTSLua.includeOtherFilesExtension": "ttslua",
+		"files.associations": {
+			"*.ttslua": "lua"
+		},
+		"Lua.codeLens.enable": true
+	}
+}
