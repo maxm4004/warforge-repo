@@ -1,9 +1,0 @@
--- ============================================================
--- WARFORGE IEF — 7_shoot/register.ttslua
--- ============================================================
-
-registerHandler("move_lineLeft",           function(p,v,i,b)      return move_lineLeft(p,v,i,b)         end)
-registerHandler("move_lineRight",          function(p,v,i,b)      return move_lineRight(p,v,i,b)        end)
-registerHandler("move_columnUp",           function(p,v,i,b)      return move_columnUp(p,v,i,b)         end)
-registerHandler("move_columnDown",         function(p,v,i,b)      return move_columnDown(p,v,i,b)       end)
-registerHandler("move_skirmish",           function(p,v,i,b)      return move_skirmish(p,v,i,b)         end)
