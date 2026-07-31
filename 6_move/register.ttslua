@@ -1,0 +1,23 @@
+-- ============================================================
+-- WARFORGE IEF — 7_shoot/register.ttslua
+-- ============================================================
+
+registerHandler("move_lineLeft",           function(p,v,i,b)      return move_lineLeft(p,v,i,b)         end)
+registerHandler("move_lineRight",          function(p,v,i,b)      return move_lineRight(p,v,i,b)        end)
+registerHandler("move_columnUp",           function(p,v,i,b)      return move_columnUp(p,v,i,b)         end)
+registerHandler("move_columnDown",         function(p,v,i,b)      return move_columnDown(p,v,i,b)       end)
+registerHandler("move_skirmish",           function(p,v,i,b)      return move_skirmish(p,v,i,b)         end)
+registerHandler("move_avanti_rectangle",   function(p,v,i,b)      return move_avanti_rectangle(p,v,i,b)         end)
+registerHandler("move_avanti_rectangle",   function(p,v,i,b) return move_avanti_rectangle(p,v,i,b) end)
+registerHandler("move_apply1",             function(p,v,i,b) return move_apply1()      end)
+registerHandler("move_apply2",             function(p,v,i,b) return move_apply2()      end)
+registerHandler("move_applyMax",           function(p,v,i,b) return move_applyMax()    end)
+registerHandler("move_pivotSx",            function(p,v,i,b) return move_pivotSx()     end)
+registerHandler("move_pivotDx",            function(p,v,i,b) return move_pivotDx()     end)
+registerHandler("move_frontMinus2",        function(p,v,i,b) return move_frontMinus2() end)
+registerHandler("move_frontMinus1",        function(p,v,i,b) return move_frontMinus1() end)
+registerHandler("move_frontPlus1",         function(p,v,i,b) return move_frontPlus1()  end)
+registerHandler("move_frontPlus2",         function(p,v,i,b) return move_frontPlus2()  end)
+registerHandler("move_sistemaFormazione",         function(p,v,i,b) return move_sistemaFormazione()  end)
+registerHandler("move_cambioFronte180",    function(p,v,i,b) return move_cambioFronte180(p,v,i,b) end)
+registerHandler("move_avanti_reset",       function(p,v,i) return move_avanti_reset(p,v,i) end)
