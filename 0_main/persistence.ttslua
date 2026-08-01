@@ -33,19 +33,23 @@ function main_onSave()
         }
     end
 
-    local saveData = {
-        engine = {
-            phase = ENGINE and ENGINE.phase or nil,
-            turn  = ENGINE and ENGINE.turn  or nil,
-        },
-        players_saved     = players_saved,
-        dice_contest      = DICE_CONTEST,
-        turn              = TURN,
-        colorArmy1        = colorArmy1,
-        colorArmy2        = colorArmy2,
-        wounds_data       = wounds_data,
-        deployment_armies = DEPLOYMENT and DEPLOYMENT.armies or nil,
-    }
+  local saveData = {
+    engine = {
+        phase = ENGINE and ENGINE.phase or nil,
+        turn  = ENGINE and ENGINE.turn  or nil,
+    },
+    players_saved     = players_saved,
+    dice_contest      = DICE_CONTEST,
+    turn              = TURN,
+    colorArmy1        = colorArmy1,
+    colorArmy2        = colorArmy2,
+    wounds_data       = wounds_data,
+    deployment_armies = DEPLOYMENT and DEPLOYMENT.armies or nil,
+    ief_front_width   = IEF_FRONT_WIDTH,
+    ief_reform_used   = IEF_REFORM_USED,
+    ief_move_budget   = IEF_MOVE_BUDGET,
+    ief_pivot_budget  = IEF_PIVOT_BUDGET,
+}
 
     return JSON.encode(saveData)
 end
@@ -91,6 +95,19 @@ function main_restoreState(save_state)
     if data.deployment_armies then
         DEPLOYMENT = DEPLOYMENT or {}
         DEPLOYMENT.armies = data.deployment_armies
+    end
+
+    if data.ief_front_width then
+        IEF_FRONT_WIDTH = data.ief_front_width
+    end
+    if data.ief_reform_used then
+        IEF_REFORM_USED = data.ief_reform_used
+    end
+    if data.ief_move_budget then
+        IEF_MOVE_BUDGET = data.ief_move_budget
+    end
+    if data.ief_pivot_budget then
+        IEF_PIVOT_BUDGET = data.ief_pivot_budget
     end
 
     Wait.time(function()

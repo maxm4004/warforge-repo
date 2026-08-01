@@ -100,16 +100,18 @@ end
 -- in base a budget residuo E main_canManeuver per tipo unità.
 -- ============================================================
 function move_redraw(player)
+
     local basiObjs = IEF_MOVE.basiObjs
     local unitKey  = IEF_MOVE.unitKey
+    local nomeUnita = IEF_MOVE.nomeUnita
+
     if not basiObjs or not unitKey then return end
 
     local moveResiduo  = IEF_MOVE_BUDGET[unitKey]  or 0
     local pivotResiduo = IEF_PIVOT_BUDGET[unitKey] or 0
-    local reformUsed   = IEF_REFORM_USED[unitKey]  or false
 
     if moveResiduo <= 0 then
-        move_avanti_reset()
+        move_avanti_close()
         return
     end
 
@@ -147,42 +149,37 @@ function move_redraw(player)
     UI.setAttribute("confirm_panel_move", "active", "true")
     UI.setAttribute("confirm_panel_move", "visibility", player.color)
 
-    local fronteAttuale = IEF_FRONT_WIDTH[unitKey] or #basiObjs
-    UI.setAttribute("move_residuo_label", "text",
-        string.format("Movimento: %.0f\"   Perno: %.0f\"   Fronte: %d", moveResiduo, pivotResiduo, fronteAttuale))
+    UI.setAttribute("unitInfoMove", "text", nomeUnita)
+    UI.setAttribute("move_residuo_label", "text", string.format("Movimento: %.0f\"   Perno: %.0f\"", moveResiduo, pivotResiduo)
+        )
 
     local function canDo(manovra)
         return tipo and main_canManeuver(manovra, tipo)
     end
 
+    local COLOR_ON  = "rgba(0.45,0.45,0.45,1)"
+    local COLOR_OFF = "rgba(0.2,0.2,0.2,0.5)"
+
+    local function setBtn(id, ok)
+        UI.setAttribute(id, "interactable", ok and "true" or "false")
+        UI.setAttribute(id, "color", ok and COLOR_ON or COLOR_OFF)
+        Wait.frames(function()
+            UI.setAttribute(id, "textColor", "White")
+        end, 1)
+    end
+
     -- Avanti
     local avantiOk = canDo("avanti")
-    UI.setAttribute("btnMove1",   "active", (avantiOk and moveResiduo >= 1) and "true" or "false")
-    UI.setAttribute("btnMove2",   "active", (avantiOk and moveResiduo >= 2) and "true" or "false")
-    UI.setAttribute("btnMoveMax", "active", avantiOk and "true" or "false")
-    UI.setAttribute("btnMoveMax", "text",   string.format("%.0f\"", moveResiduo))
+    setBtn("btnMove1",   avantiOk and moveResiduo >= 1)
+    setBtn("btnMove2",   avantiOk and moveResiduo >= 2)
+    setBtn("btnMoveMax", avantiOk)
+    UI.setAttribute("btnMoveMax", "text", string.format("%.0f\"", moveResiduo))
 
     -- Perno
     local pivotOk = canDo("perno_max3_fermi") and pivotResiduo >= 1 and moveResiduo >= 1
-    UI.setAttribute("btnPivotSx", "active", pivotOk and "true" or "false")
-    UI.setAttribute("btnPivotDx", "active", pivotOk and "true" or "false")
-
-    -- Espandi/Contrai
-    local reformOk = canDo("espandi_contrai_1_2_basi_fermi") and (IEF_MOVE_TEST_MODE or not reformUsed)
-    UI.setAttribute("btnFrontMinus2", "active", reformOk and "true" or "false")
-    UI.setAttribute("btnFrontMinus1", "active", reformOk and "true" or "false")
-    UI.setAttribute("btnFrontPlus1",  "active", reformOk and "true" or "false")
-    UI.setAttribute("btnFrontPlus2",  "active", reformOk and "true" or "false")
-
-    -- Dietrofront 180°
-    local fronte180Ok = canDo("cambio_fronte_180_fermi") and (IEF_MOVE_TEST_MODE or not reformUsed)
-    UI.setAttribute("btnCambio180", "active", fronte180Ok and "true" or "false")
-
-    -- Cambio fronte 90° — richiede ANCHE formazione rettangolare pura
-    local isRettangolare = (#basiObjs % fronteAttuale == 0)
-    local fronte90Ok = canDo("cambio_fronte_90_fermi") and isRettangolare and (IEF_MOVE_TEST_MODE or not reformUsed)
-    UI.setAttribute("btnCambio90Sx", "active", fronte90Ok and "true" or "false")
-    UI.setAttribute("btnCambio90Dx", "active", fronte90Ok and "true" or "false")
+    setBtn("btnPivotSx", pivotOk)
+    setBtn("btnPivotDx", pivotOk)
+    
 end
 
 -- ============================================================
@@ -191,6 +188,13 @@ end
 -- budget/fronte se serve, apre il pannello.
 -- ============================================================
 function move_avanti_rectangle(player, value, id, buttonConfig)
+
+    --Chiudo il Formation Panel se aperto
+    IEF_FORM.basiObjs     = nil
+    IEF_FORM.unitKey      = nil
+    IEF_FORM.activePlayer = nil
+    IEF_FORM.nomeUnita    = nil
+    UI.setAttribute("confirm_panel_formation", "active", "false")
 
     local selected = main_getSelectedObjects(player)
     if not selected or #selected < 1 then
@@ -248,9 +252,12 @@ function move_avanti_rectangle(player, value, id, buttonConfig)
         IEF_FRONT_WIDTH[unitKey] = moverUnit.basi_per_rango or #basiObjs
     end
 
+   local nomeUnita = mover.getName():gsub("%.%d+$", "")
+
     IEF_MOVE.basiObjs     = basiObjs
     IEF_MOVE.unitKey      = unitKey
     IEF_MOVE.activePlayer = player
+    IEF_MOVE.nomeUnita    = nomeUnita   
 
     move_redraw(player)
     return true
@@ -260,10 +267,13 @@ end
 -- FUNZIONE: move_avanti_apply(distanzaInch)
 -- ============================================================
 function move_avanti_apply(distanzaInch)
+
     local basiObjs = IEF_MOVE.basiObjs
     local unitKey  = IEF_MOVE.unitKey
     local player   = IEF_MOVE.activePlayer
+
     if not basiObjs or not unitKey then return false end
+    if not move_checkMatch() then return false end  
 
     local residuo = IEF_MOVE_BUDGET[unitKey] or 0
     if residuo <= 0 then return false end
@@ -352,15 +362,19 @@ function move_pivotDx()         return move_perno_apply("right") end
 -- ============================================================
 -- FUNZIONE: move_avanti_reset()
 -- ============================================================
-function move_avanti_reset(player, value, id)
+function move_avanti_close(player, value, id)
+    
     if IEF_MOVE.lineHost then
         IEF_MOVE.lineHost.setVectorLines({})
     end
+
     IEF_MOVE.lineHost     = nil
     IEF_MOVE.basiObjs     = nil
     IEF_MOVE.unitKey      = nil
     IEF_MOVE.activePlayer = nil
+    IEF_FORM.nomeUnita    = nil
     UI.setAttribute("confirm_panel_move", "active", "false")
+    player.clearSelectedObjects()
 end
 -- ============================================================
 -- FUNZIONE: move_getFrontLine(basiObjs, unitKey)
@@ -464,5 +478,35 @@ function move_highlightAndOpen(player, unitKey)
     IEF_MOVE.activePlayer = player
 
     move_redraw(player)
+    return true
+end
+-- ============================================================
+-- FUNZIONE: main_moveCheckMatch()
+-- Verifica che la selezione mouse attuale corrisponda ancora
+-- al gruppo (unitKey) memorizzato in IEF_MOVE. Se non combacia,
+-- avvisa e blocca l'azione senza toccare nulla.
+-- ============================================================
+function move_checkMatch()
+    local player = IEF_MOVE.activePlayer
+    local unitKey = IEF_MOVE.unitKey
+    if not player or not unitKey then return false end
+
+    local selected = main_getSelectedObjects(player)
+    if not selected or #selected < 1 then
+        printToColor("[MOVIMENTO] Seleziona di nuovo l'unità: nessuna base selezionata", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+
+    local mover = selected[1]
+    local moverSlot = mover.hasTag("Army1") and 1 or (mover.hasTag("Army2") and 2 or nil)
+    local baseInfo = main_parseNickname(mover.getName())
+    if not moverSlot or not baseInfo then return false end
+
+    local currentKey = moverSlot .. "_" .. baseInfo.unitType .. "_" .. baseInfo.unitNumber
+    if currentKey ~= unitKey then
+        warningToColor(("La selezione dell'unità è cambiata riapri l'unità corretta"), player, "Yellow")
+        return false
+    end
+
     return true
 end

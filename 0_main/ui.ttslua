@@ -264,54 +264,35 @@ function getRulesetUiXml()
     
    <Panel id="confirm_panel_move"
        rectAlignment="UpperCenter"
-       width="180" height="260"
+       width="195" height="300"
        color="rgba(0,0,0,0.35)"
-       offsetXY="-200 -350"
+       offsetXY="-700 -350"
        active="false">
     <VerticalLayout spacing="4" padding="8 8 8 8" childAlignment="MiddleCenter">
-        <Text id="move_residuo_label" text="" font="warforge_font"
-              fontSize="12" fontStyle="Bold" color="White"
-              alignment="MiddleCenter" width="160" height="40"/>
-        <Button id="btnMove1"    text="1&quot;"     font="warforge_font" fontSize="12" fontStyle="Bold"
-                image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White"
-                width="160" height="28" onClick="move_apply1"/>
-        <Button id="btnMove2"    text="2&quot;"     font="warforge_font" fontSize="12" fontStyle="Bold"
-                image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White"
-                width="160" height="28" onClick="move_apply2"/>
-        <Button id="btnMoveMax"  text="Max"         font="warforge_font" fontSize="12" fontStyle="Bold"
-                image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White"
-                width="160" height="28" onClick="move_applyMax"/>
-        <Button id="btnPivotSx"  text="Perno Sx"    font="warforge_font" fontSize="12" fontStyle="Bold"
-                image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White"
-                width="160" height="28" onClick="move_pivotSx"/>
-        <Button id="btnPivotDx"  text="Perno Dx"    font="warforge_font" fontSize="12" fontStyle="Bold"
-                image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White"
-                width="160" height="28" onClick="move_pivotDx"/>           
-        <Button id="btnCancelMove" text="X"         font="warforge_font" fontSize="12" fontStyle="Bold"
-                image="Sprites/Layout/Button" color="rgba(0.4,0.4,0.4,1)" textColor="White"
-                width="160" height="28" onClick="move_avanti_reset"/>
+        <Text id="unitInfoMove"       text=""                       fontStyle="Bold" font="warforge_font" fontSize="11" color="Orange" alignment="MiddleCenter" width="160" height="40" outline="#000000" outlineSize="1"/>  
+        <Text id="move_residuo_label" text=""                       font="warforge_font" fontSize="11" color="White" alignment="MiddleCenter" width="160" height="40"/>  
+        <Button id="btnMove1"       text="Muovi 1&quot;"            font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28"         onClick="move_apply1"/>
+        <Button id="btnMove2"       text="Muovi 2&quot;"            font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28"         onClick="move_apply2"/>
+        <Button id="btnMoveMax"     text="Muovi Max"                font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28"         onClick="move_applyMax"/>
+        <Button id="btnPivotSx"     text="Perno 1&quot; Sn"         font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28"         onClick="move_pivotSx"/>
+        <Button id="btnPivotDx"     text="Perno 1&quot; Dx"         font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28"         onClick="move_pivotDx"/>
+        <Button id="btnCancelMove"  text="Chiudi"                   font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28"         onClick="move_avanti_close"/>
     </VerticalLayout>
 </Panel>
 
-<Panel id="confirm_panel_formation"
-       rectAlignment="UpperCenter"
-       width="180" height="300"
-       color="rgba(0,0,0,0.35)"
-       offsetXY="200 -350"
-       active="false">
+<Panel id="confirm_panel_formation" rectAlignment="UpperCenter" width="195" height="400" color="rgba(0,0,0,0.35)" offsetXY="-700 -350" active="false">
     <VerticalLayout spacing="4" padding="8 8 8 8" childAlignment="MiddleCenter">
-        <Text id="formation_label" text="" font="warforge_font"
-              fontSize="12" fontStyle="Bold" color="White"
-              alignment="MiddleCenter" width="160" height="30"/>
-                <Button id="btnFrontMinus2" text="Fronte -2"     font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontMinus2"/>
-               <Button id="btnFrontMinus1" text="Fronte -1"     font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontMinus1"/>
-                <Button id="btnFrontPlus1"  text="Fronte +1"     font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontPlus1"/>
-                <Button id="btnFrontPlus2"  text="Fronte +2"     font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontPlus2"/>
-                <Button id="btnCambio90Sx"  text="90° Sx"        font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_cambioFronte90Sx"/>
-                <Button id="btnCambio90Dx"  text="90° Dx"        font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_cambioFronte90Dx"/>
-                <Button id="btnCambio180"   text="Dietrofront"   font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_cambioFronte180"/>
-        <Button id="btnSistema"     text="Sistema Formazione"    font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_sistemaFormazione"/>                   
-        <Button id="btnCancelFormation" text="Chiudi"            font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_formationClose"/>
+        <Text id="unitInfoFormation"      text=""                  fontStyle="Bold" font="warforge_font" fontSize="11" color="Orange" alignment="MiddleCenter" width="160" height="30" outline="#000000" outlineSize="1"/>
+        <Text id="formation_label"      text=""                    font="warforge_font" fontSize="11" color="White" alignment="MiddleCenter" width="160" height="30"/>
+        <Button id="btnFrontMinus2"       text="Cambia Fronte -2"    font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontMinus2"/>                   
+        <Button id="btnFrontMinus1"       text="Cambia Fronte -1"    font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontMinus1"/>                   
+        <Button id="btnFrontPlus2"       text="Cambia Fronte +2"    font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontPlus2"/>                   
+        <Button id="btnFrontPlus1"       text="Cambia Fronte +1"    font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_frontPlus1"/>                   
+        <Button id="btnCambio90Sx"       text="Cambia 90° Sn"       font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_cambioFronte90Sx"/>                   
+        <Button id="btnCambio90Dx"       text="Cambia 90° Dx"       font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_cambioFronte90Dx"/>                   
+        <Button id="btnCambio180"       text="Cambia 180°"         font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_cambioFronte180"/>                   
+        <Button id="btnSistema"         text="Sistema Formazione"  font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_sistemaFormazione"/>                   
+        <Button id="btnCancelFormation" text="Chiudi"              font="warforge_font" fontSize="11" image="Sprites/Layout/Button" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="160" height="28" onClick="main_formationClose"/>                                
     </VerticalLayout>
 </Panel>    
 

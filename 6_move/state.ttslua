@@ -6,6 +6,7 @@ IEF_MOVE = IEF_MOVE or {
     unitKey      = nil,
     activePlayer = nil,
     lineHost     = nil,
+    nomeUnita    = nil,   
 }
 
 IEF_MOVE_TEST_MODE = true

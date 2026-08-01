@@ -38,6 +38,7 @@ IEF_FORM = IEF_FORM or {
     basiObjs     = nil,
     unitKey      = nil,
     activePlayer = nil,
+    nomeUnita    = nil,
 }
 
 IEF_FORM_TEST_MODE = true

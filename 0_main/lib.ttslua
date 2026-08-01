@@ -1086,105 +1086,6 @@ function main_getScenario(nome)
     return r
 end
 -- ============================================================
--- FUNZIONE: main_formation_open(player)
--- ============================================================
-function main_formation_open(player, value, id, buttonConfig)
-    local selected = main_getSelectedObjects(player)
-    if not selected or #selected < 1 then
-        warningToColor("Seleziona almeno una base", player, "Yellow")
-        return false
-    end
-
-    local mover = selected[1]
-    local moverSlot = mover.hasTag("Army1") and 1 or (mover.hasTag("Army2") and 2 or nil)
-    if moverSlot == nil then return false end
-
-    local baseInfo = main_parseNickname(mover.getName())
-    if not baseInfo then
-        printToColor("[FORMAZIONE] Impossibile leggere le informazioni dell'unità", player.color, {r=1,g=0.6,b=0})
-        return false
-    end
-
-    local unitKey = moverSlot .. "_" .. baseInfo.unitType .. "_" .. baseInfo.unitNumber
-
-    local basiObjs = {}
-    for _, obj in ipairs(selected) do
-        local info = main_parseNickname(obj.getName())
-        if info then
-            local objSlot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
-            local objKey  = objSlot and (objSlot .. "_" .. info.unitType .. "_" .. info.unitNumber)
-            if objKey == unitKey then
-                table.insert(basiObjs, obj)
-            end
-        end
-    end
-    if #basiObjs == 0 then return false end
-
-    if IEF_FRONT_WIDTH[unitKey] == nil then
-        IEF_FRONT_WIDTH[unitKey] = #basiObjs
-    end
-
-    IEF_FORM.basiObjs     = basiObjs
-    IEF_FORM.unitKey      = unitKey
-    IEF_FORM.activePlayer = player
-
-    main_formation_redraw(player)
-    return true
-end
-
--- ============================================================
--- FUNZIONE: formation_redraw(player)
--- ============================================================
-function main_formation_redraw(player)
-    local basiObjs = IEF_FORM.basiObjs
-    local unitKey  = IEF_FORM.unitKey
-    if not basiObjs or not unitKey then return end
-
-    local baseInfo = main_parseNickname(basiObjs[1].getName())
-    local tipo = baseInfo and baseInfo.unitType
-    local inMovePhase = (TURN.phase == "MOVE")
-    local reformUsed  = IEF_REFORM_USED[unitKey] or false
-
-    UI.setAttribute("confirm_panel_formation", "active", "true")
-    UI.setAttribute("confirm_panel_formation", "visibility", player.color)
-
-    local fronteAttuale = IEF_FRONT_WIDTH[unitKey] or #basiObjs
-    UI.setAttribute("formation_label", "text", string.format("Fronte: %d", fronteAttuale))
-
-    local function canDo(manovra)
-        if not inMovePhase then return true end
-        return tipo and main_canManeuver(manovra, tipo)
-    end
-    local function turnOk()
-        if not inMovePhase then return true end
-        return IEF_FORM_TEST_MODE or not reformUsed
-    end
-
-    local reformOk = canDo("espandi_contrai_1_2_basi_fermi") and turnOk()
-    UI.setAttribute("btnFrontMinus2", "active", reformOk and "true" or "false")
-    UI.setAttribute("btnFrontMinus1", "active", reformOk and "true" or "false")
-    UI.setAttribute("btnFrontPlus1",  "active", reformOk and "true" or "false")
-    UI.setAttribute("btnFrontPlus2",  "active", reformOk and "true" or "false")
-
-    local fronte180Ok = canDo("cambio_fronte_180_fermi") and turnOk()
-    UI.setAttribute("btnCambio180", "active", fronte180Ok and "true" or "false")
-
-    local isRettangolare = (#basiObjs % fronteAttuale == 0)
-    local fronte90Ok = canDo("cambio_fronte_90_fermi") and isRettangolare and turnOk()
-    UI.setAttribute("btnCambio90Sx", "active", fronte90Ok and "true" or "false")
-    UI.setAttribute("btnCambio90Dx", "active", fronte90Ok and "true" or "false")
-end
-
--- ============================================================
--- FUNZIONE: formation_close()
--- ============================================================
-function main_formation_close(player, value, id)
-    IEF_FORM.basiObjs     = nil
-    IEF_FORM.unitKey      = nil
-    IEF_FORM.activePlayer = nil
-    UI.setAttribute("confirm_panel_formation", "active", "false")
-end
--- ============================================================
 -- FUNZIONE: move_ricostruisciFormazione(basiObjs, fronte)
 -- Ancora la nuova griglia al CENTRO del rango frontale attuale
 -- (non più alla base seq=1), così il fronte resta centrato
@@ -1287,6 +1188,8 @@ function main_espandiContrai(deltaFronte)
     local baseInfo = main_parseNickname(basiObjs[1].getName())
     if not baseInfo then return false end
 
+    if not main_CheckMatch() then return false end
+
     if not IEF_FORM_TEST_MODE then
         if IEF_REFORM_USED[unitKey] then
             printToColor("[MOVIMENTO] Manovra di riorganizzazione già usata questo turno", player.color, {r=1,g=0.6,b=0})
@@ -1301,8 +1204,11 @@ function main_espandiContrai(deltaFronte)
     if IEF_FRONT_WIDTH[unitKey] == nil then
         IEF_FRONT_WIDTH[unitKey] = #basiObjs
     end
-
     local newFront = IEF_FRONT_WIDTH[unitKey] + deltaFronte
+
+    local fronteAttuale = main_detectFormation(basiObjs)
+    local newFront = fronteAttuale + deltaFronte
+
     if newFront < 1 then newFront = 1 end
     if newFront > #basiObjs then newFront = #basiObjs end
 
@@ -1311,7 +1217,7 @@ function main_espandiContrai(deltaFronte)
     IEF_FRONT_WIDTH[unitKey] = newFront
     IEF_REFORM_USED[unitKey] = true
 
-    main_formation_redraw(player)
+    main_formationRedraw(player)
     return true
 end
 
@@ -1322,17 +1228,18 @@ function main_cambioFronte180(player, value, id, buttonConfig)
     local basiObjs = IEF_FORM.basiObjs
     local unitKey  = IEF_FORM.unitKey
     if not basiObjs or not unitKey then return false end
+    local player = IEF_FORM.activePlayer
 
-    local activePlayer = IEF_FORM.activePlayer
+    if not main_CheckMatch() then return false end
 
     if TURN.phase == "MOVE" and not IEF_FORM_TEST_MODE then
         if IEF_REFORM_USED[unitKey] then
-            printToColor("[FORMAZIONE] Manovra di riorganizzazione già usata questo turno", activePlayer.color, {r=1,g=0.6,b=0})
+            printToColor("[FORMAZIONE] Manovra di riorganizzazione già usata questo turno", player.color, {r=1,g=0.6,b=0})
             return false
         end
         local baseInfo = main_parseNickname(basiObjs[1].getName())
         if not baseInfo or not main_canManeuver("cambio_fronte_180_fermi", baseInfo.unitType) then
-            printToColor("[FORMAZIONE] Questa unità non può fare dietrofront", activePlayer.color, {r=1,g=0.6,b=0})
+            printToColor("[FORMAZIONE] Questa unità non può fare dietrofront", player.color, {r=1,g=0.6,b=0})
             return false
         end
     end
@@ -1353,7 +1260,7 @@ function main_cambioFronte180(player, value, id, buttonConfig)
     end
 
     IEF_REFORM_USED[unitKey] = true
-    main_formation_redraw(activePlayer)
+    main_formationRedraw(player)
     return true
 end
 
@@ -1366,8 +1273,10 @@ function main_cambioFronte90(direction)
     local player   = IEF_FORM.activePlayer
     if not basiObjs or not unitKey or #basiObjs < 2 then return false end
 
-    local fronteAttuale = IEF_FRONT_WIDTH[unitKey] or #basiObjs
+    local fronteAttuale = main_detectFormation(basiObjs)
     local totalBasi = #basiObjs
+
+    if not main_CheckMatch() then return false end
 
     if totalBasi % fronteAttuale ~= 0 then
         printToColor("[FORMAZIONE] Cambio fronte 90° disponibile solo su formazioni rettangolari", player.color, {r=1,g=0.6,b=0})
@@ -1447,7 +1356,7 @@ function main_cambioFronte90(direction)
     IEF_FRONT_WIDTH[unitKey] = nuovoFronte
     IEF_REFORM_USED[unitKey] = true
 
-    main_formation_redraw(player)
+    main_formationRedraw(player)
     return true
 end
 -- ============================================================
@@ -1480,11 +1389,14 @@ function main_cambioFronte90Dx() return main_cambioFronte90("right") end
 -- FUNZIONE: move_sistemaFormazione(player)
 -- ============================================================
 function main_sistemaFormazione(player, value, id, buttonConfig)
+
     local selected = main_getSelectedObjects(player)
     if not selected or #selected < 1 then
         warningToColor("Seleziona almeno una base", player, "Yellow")
         return false
     end
+
+    if not main_CheckMatch() then return false end
 
     local mover = selected[1]
     local moverSlot = mover.hasTag("Army1") and 1 or (mover.hasTag("Army2") and 2 or nil)
@@ -1509,13 +1421,13 @@ function main_sistemaFormazione(player, value, id, buttonConfig)
     end
     if #basiObjs == 0 then return false end
 
-    local fronte = IEF_FRONT_WIDTH[unitKey] or (moverUnit and moverUnit.basi_per_rango) or #basiObjs
+    local fronte = main_detectFormation(basiObjs)
     main_ricostruisciFormazione(basiObjs, fronte)
 
     IEF_FORM.basiObjs     = basiObjs
     IEF_FORM.unitKey      = unitKey
     IEF_FORM.activePlayer = player
-    main_formation_redraw(player)
+    main_formationRedraw(player)
 
     return true
 end
@@ -1558,6 +1470,19 @@ end
 -- FUNZIONE: main_formationOpen(player)
 -- ============================================================
 function main_formationOpen(player, value, id, buttonConfig)
+
+    --Chiudo il Move Panel se aperto
+    if IEF_MOVE.lineHost then
+        IEF_MOVE.lineHost.setVectorLines({})
+    end
+    
+    IEF_MOVE.lineHost     = nil
+    IEF_MOVE.basiObjs     = nil
+    IEF_MOVE.unitKey      = nil
+    IEF_MOVE.activePlayer = nil
+    IEF_MOVE.nomeUnita    = nil
+    UI.setAttribute("confirm_panel_move", "active", "false")
+
     local selected = main_getSelectedObjects(player)
     if not selected or #selected < 1 then
         warningToColor("Seleziona almeno una base", player, "Yellow")
@@ -1589,13 +1514,13 @@ function main_formationOpen(player, value, id, buttonConfig)
     end
     if #basiObjs == 0 then return false end
 
-    if IEF_FRONT_WIDTH[unitKey] == nil then
-        IEF_FRONT_WIDTH[unitKey] = #basiObjs
-    end
+    local nomeUnita = mover.getName():gsub("%.%d+$", "")
+    if not nomeUnita or nomeUnita == "" then nomeUnita = unitKey end
 
     IEF_FORM.basiObjs     = basiObjs
     IEF_FORM.unitKey      = unitKey
     IEF_FORM.activePlayer = player
+    IEF_FORM.nomeUnita    = nomeUnita
 
     main_formationRedraw(player)
     return true
@@ -1617,9 +1542,10 @@ function main_formationRedraw(player)
     UI.setAttribute("confirm_panel_formation", "active", "true")
     UI.setAttribute("confirm_panel_formation", "visibility", player.color)
 
-    local fronteAttuale = IEF_FRONT_WIDTH[unitKey] or #basiObjs
+    local fronteAttuale = main_detectFormation(basiObjs)
+    UI.setAttribute("unitInfoFormation", "text", IEF_FORM.nomeUnita)
     UI.setAttribute("formation_label", "text", string.format("Fronte: %d", fronteAttuale))
-
+    
     local function canDo(manovra)
         if not inMovePhase then return true end
         return tipo and main_canManeuver(manovra, tipo)
@@ -1635,8 +1561,11 @@ function main_formationRedraw(player)
     local function setBtn(id, ok)
         UI.setAttribute(id, "interactable", ok and "true" or "false")
         UI.setAttribute(id, "color", ok and COLOR_ON or COLOR_OFF)
+        Wait.frames(function()
+            UI.setAttribute(id, "textColor", "White")
+        end, 1)
     end
-
+    
     local reformOk = canDo("espandi_contrai_1_2_basi_fermi") and turnOk()
     setBtn("btnFrontMinus2", reformOk)
     setBtn("btnFrontMinus1", reformOk)
@@ -1655,9 +1584,127 @@ end
 -- FUNZIONE: main_formationClose()
 -- ============================================================
 function main_formationClose(player, value, id)
+
     IEF_FORM.basiObjs     = nil
     IEF_FORM.unitKey      = nil
     IEF_FORM.activePlayer = nil
-    UI.setAttribute("confirm_panel_formation", "active", "false")
-end
+    IEF_FORM.nomeUnita    = nil
 
+    UI.setAttribute("confirm_panel_formation", "active", "false")
+    player.clearSelectedObjects()
+end
+-- ============================================================
+-- FUNZIONE: main_formationCheckMatch()
+-- Verifica che la selezione mouse attuale corrisponda ancora
+-- al gruppo (unitKey) memorizzato in IEF_FORM. Se non combacia,
+-- avvisa e blocca l'azione senza toccare nulla.
+-- ============================================================
+function main_CheckMatch()
+    local player = IEF_FORM.activePlayer
+    local unitKey = IEF_FORM.unitKey
+    if not player or not unitKey then return false end
+
+    local selected = main_getSelectedObjects(player)
+    if not selected or #selected < 1 then
+        warningToColor("Seleziona di nuovo l'unità: nessuna base selezionata", player, player)
+        return false
+    end
+
+    local mover = selected[1]
+    local moverSlot = mover.hasTag("Army1") and 1 or (mover.hasTag("Army2") and 2 or nil)
+    local baseInfo = main_parseNickname(mover.getName())
+    if not moverSlot or not baseInfo then return false end
+
+    local currentKey = moverSlot .. "_" .. baseInfo.unitType .. "_" .. baseInfo.unitNumber
+    if currentKey ~= unitKey then
+        warningToColor(("La selezione dell'unità è cambiata riapri l'unità corretta"), player, "Yellow")
+        return false
+    end
+
+    return true
+end
+-- ============================================================
+-- FUNZIONE: main_detectFormationSelected(player)
+-- Wrapper da console: prende la selezione mouse corrente,
+-- filtra per unitKey, rileva il fronte reale con
+-- main_detectFormation() e lo stampa in console.
+-- ============================================================
+function main_detectFormationSelected(player)
+
+    local selected = main_getSelectedObjects(player)
+    if not selected or #selected < 1 then
+        print("[DETECT] Nessuna base selezionata")
+        return nil
+    end
+
+    local mover = selected[1]
+    local moverSlot = mover.hasTag("Army1") and 1 or (mover.hasTag("Army2") and 2 or nil)
+    if moverSlot == nil then
+        print("[DETECT] La base selezionata non appartiene a nessun esercito")
+        return nil
+    end
+
+    local baseInfo = main_parseNickname(mover.getName())
+    if not baseInfo then
+        print("[DETECT] Impossibile leggere il nickname della base")
+        return nil
+    end
+
+    local unitKey = moverSlot .. "_" .. baseInfo.unitType .. "_" .. baseInfo.unitNumber
+
+    local basiObjs = {}
+    for _, obj in ipairs(selected) do
+        local info = main_parseNickname(obj.getName())
+        if info then
+            local objSlot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+            local objKey  = objSlot and (objSlot .. "_" .. info.unitType .. "_" .. info.unitNumber)
+            if objKey == unitKey then
+                table.insert(basiObjs, obj)
+            end
+        end
+    end
+
+    local fronte = main_detectFormation(basiObjs)
+    local profondita = math.ceil(#basiObjs / fronte)
+
+    print(string.format("[DETECT] Unità %s: %d basi totali, fronte rilevato = %d, profondità ≈ %d",
+        unitKey, #basiObjs, fronte, profondita))
+
+    return fronte
+end
+-- ============================================================
+-- FUNZIONE: main_detectFormation(basiObjs)
+-- Rileva il fronte ATTUALE dell'unità leggendo le posizioni
+-- fisiche reali sul tavolo, invece di fidarsi di uno stato
+-- memorizzato che può disallinearsi. Ritorna il numero di basi
+-- nel rango più avanzato (il fronte).
+-- ============================================================
+function main_detectFormation(basiObjs)
+    if not basiObjs or #basiObjs < 1 then return 1 end
+    if #basiObjs == 1 then return 1 end
+
+    local ref   = basiObjs[1]
+    local fwd   = ref.getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+
+    -- Proiezione di ogni base lungo il fronte
+    local maxProj = -math.huge
+    local projections = {}
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        local proj = p.x*fwdXZ.x + p.z*fwdXZ.z
+        table.insert(projections, proj)
+        if proj > maxProj then maxProj = proj end
+    end
+
+    -- Conta quante basi condividono la proiezione massima (stesso rango frontale)
+    local EPS = 0.5
+    local count = 0
+    for _, proj in ipairs(projections) do
+        if math.abs(proj - maxProj) < EPS then
+            count = count + 1
+        end
+    end
+
+    return count
+end

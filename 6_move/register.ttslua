@@ -14,5 +14,5 @@ registerHandler("move_applyMax",           function(p,v,i,b) return move_applyMa
 registerHandler("move_pivotSx",            function(p,v,i,b) return move_pivotSx()     end)
 registerHandler("move_pivotDx",            function(p,v,i,b) return move_pivotDx()     end)
 registerHandler("main_formationOpen",            function(p,v,i,b) return main_formationOpen(p,v,i,b)     end)
-registerHandler("move_avanti_reset",       function(p,v,i) return move_avanti_reset(p,v,i) end)
+registerHandler("move_avanti_reset",       function(p,v,i) return move_avanti_close(p,v,i) end)
 
