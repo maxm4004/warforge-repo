@@ -1,0 +1,16 @@
+-- rulesets/imperifeudi/6_move/hooks.ttslua
+
+function before_move(phaseName, phase)
+    if TURN.phase ~= phaseName then main_resetTurnForPhase() end
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+
+    IEF_MOVE_BUDGET  = {}
+    IEF_PIVOT_BUDGET = {}
+    IEF_REFORM_USED  = {}
+    -- IEF_FRONT_WIDTH NON si resetta: persiste tra turni
+end
+
+function after_move(phaseName, phase)
+    -- stub
+end
