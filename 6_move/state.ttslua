@@ -1,0 +1,10 @@
+IEF_MOVE_BUDGET   = IEF_MOVE_BUDGET   or {}   -- [unitKey] = pollici movimento residui nel turno
+IEF_PIVOT_BUDGET  = IEF_PIVOT_BUDGET  or {}   -- [unitKey] = pollici perno residui (tetto fisso 3)
+IEF_MOVE_TEST_MODE = true   -- true = bypassa budget/limiti manovra per i test. Rimettere false a validazione conclusa.
+
+IEF_MOVE = IEF_MOVE or {
+    basiObjs     = nil,
+    unitKey      = nil,
+    activePlayer = nil,
+    lineHost     = nil,
+}
