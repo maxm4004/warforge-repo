@@ -126,9 +126,16 @@ function deployment_spawnArmy(slot, armyData)
         basiSpawnate = basiSpawnate + 1
         if basiSpawnate >= totaleBasi then
             Wait.time(function()
-                     deployment_AttachMinisToBase(slot)
+                    warning("Attendere che il caricamento sia completo...", "Yellow")
+                    deployment_AttachMinisToBase(slot)
                     Wait.time(function()
+                        warning("Controllo informazioni esercito...", "Yellow")
                         callHandler("deployment_scanTable")
+                            Wait.time(function()
+                                  warning("Caricamento UI...", "Yellow")
+                                  callHandler("initUI")
+                                  callHandler("updateCenterPanel")
+                            end, 3)
                     end, 5)                     
              end, 3)
         end
@@ -282,8 +289,6 @@ function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
     local x = slot == 1 and x1 or x2
     local z = slot == 1 and z1 or z2
     local y = Y
-
-    --print(string.format("%.2f", sourcePos.x * CM_TO_TTS), " ", string.format("%.2f", unitOffsetX), " ", string.format("%.2f", x))
     
     return {x = x, y = y, z=z}
 end
@@ -460,42 +465,7 @@ function deployment_spawnChildrenRecursive(baseObj, basePos, baseRot, armyTag, c
     end
 
     spawnLevel(children, nicknameBase)
-
-    --Attach tutte le figure alla base dopo 2 secondi
-    -- Wait.time(function()
-    --     for _, obj in ipairs(collected) do
-    --         if baseObj and obj then
-    --             pcall(function() baseObj.addAttachment(obj) end)
-    --         end
-    --     end
-    -- end, 2.0)
 end
--- ============================================================
--- FUNZIONE: deployment_AttachMinisToBase
--- ============================================================
--- function deployment_AttachMinisToBase(slot)
-
---     print("deployment_AttachMinisToBase ", slot)
-
---     for _, value in ipairs(nomeUnit[slot]) do
-
---         print(value)
-
---         local base = basiModel[value]
-
---         print(base.getName())
-
---         local minis = minisModel[value]
---         if minis ~= nil then
---             for _, minisObj in ipairs(minis) do
---                 if minisObj ~= nil then
---                     print(minisObj.getName())
---                     pcall(function() base.addAttachment(minisObj) end)
---                 end
---             end
---         end
---     end
--- end
 function deployment_AttachMinisToBase(slot)
       for _, value in ipairs(nomeUnit[slot]) do
         local base = basiModel[value]
@@ -618,9 +588,7 @@ function deployment_validateDeploy(player)
 
     if #fuori + #sbagliata > 0 then
          warningToColor("Posizionare tutte le unità nell'area di DEPLOY", player, "Yellow")
-        --for _, n in ipairs(fuori)     do printToAll("[DEPLOY] Fuori zona: " .. n, {r=1,g=0.7,b=0.3}) end
-        --for _, n in ipairs(sbagliata) do printToAll("[DEPLOY] Zona sbagliata: " .. n, {r=1,g=0.4,b=0.4}) end
-        return false
+         return false
     end
 
     printToAll("[DEPLOY] Army" .. slot .. " — posizionamento OK!", {r=0.4,g=0.9,b=0.4})
