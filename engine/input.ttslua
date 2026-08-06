@@ -1,0 +1,59 @@
+-- ============================================================
+-- FUNZIONE:
+-- ============================================================
+function engine_handleButton(slot, player, value, id)
+
+    if DEBUG then print("engine_handleButton: " .. tostring(slot)) end
+
+    local phase = ENGINE and ENGINE.phases and ENGINE.phases[ENGINE.phase]
+    if not phase or not phase.buttons then return end
+
+    local button = phase.buttons[slot]
+    if not button then return end
+
+    if phase.enforceOwnership then
+        local ok = callHandler("canUseButton", slot, player, value, id, button, phase)
+        if ok == false then return end
+    end
+
+    local allowed = true
+
+    if button.callback then
+        local result = callHandler(button.callback, player, value, id, button)
+        if result == false then
+            allowed = false
+        end
+    end
+
+    if not allowed then return end
+
+    if button.action then
+        engine_handleAction({
+            type   = button.action,
+            player = player
+        })
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: onBtnArmy1()
+-- ============================================================
+function onBtnArmy1(player, value, id)
+    engine_handleButton("BTN_ARMY1", player, value, id)
+end
+
+-- ============================================================
+-- FUNZIONE: onBtnArmy2()
+-- onClick="onBtnArmy2" nel Global.xml
+-- ============================================================
+function onBtnArmy2(player, value, id)
+    engine_handleButton("BTN_ARMY2", player, value, id)
+end
+
+-- ============================================================
+-- FUNZIONE: onBtnScelta()
+-- onClick="onBtnScelta" nel Global.xml — bottone singolo
+-- ============================================================
+function onBtnScelta(player, value, id)
+    engine_handleButton("BTN_SINGLE", player, value, id)
+end

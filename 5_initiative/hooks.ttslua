@@ -1,0 +1,31 @@
+-- INITIATIVE — Hooks
+function before_initiative_roll(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: after_initiative_roll()
+-- ============================================================
+function after_initiative_roll(phaseName, phase)
+end
+-- ============================================================
+-- FUNZIONE: before_initiative_choice()
+-- ============================================================
+function before_initiative_choice(phaseName, phase)
+    if DICE_CONTEST and DICE_CONTEST.winner then
+        print("BTN_ARMY"..DICE_CONTEST.winner)
+        UI.setAttribute("iconWinnerArmy"..DICE_CONTEST.winner, "active", "true")
+    end
+
+
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: after_initiative_choice()
+-- ============================================================
+function after_initiative_choice(phaseName, phase)
+    if DICE_CONTEST and DICE_CONTEST.winner then
+        UI.setAttribute("iconWinnerArmy"..DICE_CONTEST.winner, "active", "false")
+    end
+end

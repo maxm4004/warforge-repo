@@ -1,0 +1,48 @@
+-- ============================================================
+-- FUNZIONE: registerDefaultConditions()
+-- ============================================================
+
+function registerDefaultConditions()
+
+    -- Entrambi i giocatori hanno scelto un colore (SITTING)
+    registerCondition(COND.REQUIREMENT_MET, function(action)
+        return colorArmy1 == COLOR.ARMY1 and colorArmy2 == COLOR.ARMY2
+    end)
+
+    -- Entrambi hanno completato l'azione della fase corrente
+    registerCondition(COND.BOTH_PLAYERS_SELECTED, function(action)
+
+        return TURN and TURN.completed
+            and TURN.completed.Army1 == true
+            and TURN.completed.Army2 == true
+    end)
+
+    -- CONFIRM arriva e entrambi hanno completato
+    registerCondition(COND.CONFIRM_READY, function(action)
+        return action
+            and action.type == ACTION.CONFIRM
+            and TURN and TURN.completed
+            and TURN.completed.Army1 and TURN.completed.Army2
+    end)
+
+    -- CONFIRM immediato (qualsiasi condizione)
+    registerCondition(COND.CONFIRM_IMMEDIATE, function(action)
+        return action and action.type == ACTION.CONFIRM
+    end)
+
+    -- Vincitore contest dadi determinato
+    registerCondition(COND.WINNER, function(action)
+        return DICE_CONTEST and DICE_CONTEST.winner ~= nil
+    end)
+
+    -- Iniziativa assegnata
+    registerCondition(COND.ASSIGNMENT, function(action)
+        return DICE_CONTEST and DICE_CONTEST.initiative ~= nil
+    end)
+
+    -- Avanza sempre automaticamente
+    registerCondition(COND.AUTO_ADVANCE, function(action)
+        return true
+    end)
+
+end

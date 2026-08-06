@@ -1,0 +1,11 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/loader.ttslua
+-- Ordine: state → lib → phase → register → callbacks → hooks
+-- ============================================================
+
+require("rulesets.imperifeudi.8_melee.state")
+require("rulesets.imperifeudi.8_melee.lib")
+require("rulesets.imperifeudi.8_melee.phase")
+require("rulesets.imperifeudi.8_melee.register")
+require("rulesets.imperifeudi.8_melee.callbacks")
+require("rulesets.imperifeudi.8_melee.hooks")

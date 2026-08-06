@@ -1,0 +1,50 @@
+-- ============================================================
+-- FUNZIONE: roll_btn_all()
+-- ============================================================
+function roll_btn_all(player, value, id)
+
+    if id == BUTTONS.BTN_ARMY1 then
+        if DICE_CONTEST.rolledNumberArmy1 ~= nil then return false end
+        spinDie("diceArmy1", 1, function(finalValue)
+            DICE_CONTEST.rolledNumberArmy1 = finalValue
+            callHandler("dice_check")
+            engine_handleAction({ type = ACTION.ARMY1_CLICK })
+        end)
+    end
+
+    if id == BUTTONS.BTN_ARMY2 then
+        if DICE_CONTEST.rolledNumberArmy2 ~= nil then return false end
+        spinDie("diceArmy2", 2, function(finalValue)
+            DICE_CONTEST.rolledNumberArmy2 = finalValue
+            callHandler("dice_check")
+            engine_handleAction({ type = ACTION.ARMY2_CLICK })
+        end)
+    end
+
+    return false
+end
+-- ============================================================
+-- FUNZIONE: assign_initiative_btn_all()
+-- ============================================================
+function assign_initiative_btn_all(player, value, id)
+
+    local winner = ARMY[DICE_CONTEST.winner]
+    local clicker = ARMY[main_getArmyByColor(player)]
+    local clicked = ARMY[main_getArmyByButton(id)]
+    
+    if clicker.name ~= winner.name then
+        fadeOut(clicker.name.." can't assign anything", player) 
+    else 
+        DICE_CONTEST.initiative = clicked
+        callHandler("resetTurnForPhase")
+        local army = callHandler("getArmySlotByColor", clicked.color)
+
+        TURN.firstArmy = army
+        TURN.activeArmy = army
+
+        TURN.completed.Army1 = false
+        TURN.completed.Army2 = false
+        warning("Iniziativa assegnata a "..clicked.name, Player.color)
+    end
+end
+

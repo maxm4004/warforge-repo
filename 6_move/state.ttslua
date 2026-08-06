@@ -1,0 +1,9 @@
+IEF_MOVE_BUDGET   = IEF_MOVE_BUDGET   or {}   -- [unitKey] = pollici movimento residui
+IEF_PIVOT_BUDGET  = IEF_PIVOT_BUDGET  or {}   -- [unitKey] = pollici perno residui
+
+IEF_MOVE = IEF_MOVE or {
+    [1] = { basiObjs = nil, unitKey = nil, activePlayer = nil, lineHost = nil, nomeUnita = nil },
+    [2] = { basiObjs = nil, unitKey = nil, activePlayer = nil, lineHost = nil, nomeUnita = nil },
+}
+
+IEF_MOVE_TEST_MODE = true

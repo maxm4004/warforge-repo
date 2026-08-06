@@ -1,0 +1,39 @@
+-- 5_initiative/phase.ttslua
+function initiative_phase()
+    return {
+        INITIATIVE_ROLL = {
+            title = "FASE 2: INIZIATIVA",
+            desc  = "Tira il dado per stabilire chi muove per primo",
+            before = "before_initiative_roll",
+            after  = "after_initiative_roll",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
+            render = "2BtnClickAndRoll",
+            enforceOwnership = true,
+            inputMode = "OWNER",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira dado", textColor="White", color="Red",   callback="roll_btn_all" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tira dado", textColor="White", color="Green", callback="roll_btn_all" },
+            },
+            transitions = {
+                { to="INITIATIVE_CHOICE", conditions={ COND.WINNER } }
+            }
+        },
+        INITIATIVE_CHOICE = {
+            title = "FASE 2: INIZIATIVA",
+            desc  = "Assegna l'iniziativa",
+            before = "before_initiative_choice",
+            after  = "after_initiative_choice",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
+            render = "2BtnClick",
+            enforceOwnership = false,
+            inputMode = "FREE",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Assegna Iniziativa", textColor="White", color="Red",   callback="assign_initiative_btn_all" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Assegna Iniziativa", textColor="White", color="Green", callback="assign_initiative_btn_all" },
+            },
+            transitions = {
+                { to="MOVE", conditions={ COND.ASSIGNMENT } }
+            }
+        }
+    }
+end

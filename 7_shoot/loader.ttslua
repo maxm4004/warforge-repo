@@ -1,0 +1,11 @@
+-- ============================================================
+-- WARFORGE IEF — 7_shoot/loader.ttslua
+-- Ordine: state → lib → phase → register → callbacks → hooks
+-- ============================================================
+
+require("rulesets.imperifeudi.7_shoot.state")
+require("rulesets.imperifeudi.7_shoot.lib")
+require("rulesets.imperifeudi.7_shoot.phase")
+require("rulesets.imperifeudi.7_shoot.register")
+require("rulesets.imperifeudi.7_shoot.callbacks")
+require("rulesets.imperifeudi.7_shoot.hooks")

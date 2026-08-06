@@ -1,0 +1,22 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/state.ttslua
+-- ============================================================
+
+IEF_CONTACT_THRESHOLD = 0.1  -- TODO RENAME → IEF_CONTACT_THRESHOLD
+
+IEF_MELEE_STATE = {
+    attacker       = nil,
+    attackerUnit   = nil,
+    attackerSlot   = nil,
+    defenderUnit   = nil,
+    defenderSlot   = nil,
+    defenderBases  = {},
+    isFlanked      = false,
+    isFirstTurn    = false,
+    basiAttaccanti = {},
+    -- Sistema B (lista mischie per coppia)
+    mischie        = {},
+    nextId         = 1,
+}
+
+IEF_MELEE_ENGAGED = IEF_MELEE_ENGAGED or {}

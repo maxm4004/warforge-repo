@@ -1,0 +1,22 @@
+-- 4_charge/phase.ttslua
+function charge_phase()
+    return {
+        CHARGE = {
+            title = "FASE 1: DICHIARAZIONI CARICHE",
+            desc  = "Dichiarazioni di carica e risposte alla carica",
+            before = "before_charge",
+            after  = "after_charge",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
+            render = "2BtnClick",
+            enforceOwnership = true,
+            inputMode = "OWNER",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Avanti", textColor="White", color="Red",   callback="charge_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Avanti", textColor="White", color="Green", callback="charge_btn_army2" },
+            },
+            transitions = {
+                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+            }
+        }
+    }
+end
