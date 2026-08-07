@@ -1,0 +1,36 @@
+-- 0_main/phases.ttslua
+-- Collettore: merge di tutti i nodi fase IEF.
+function initPhases()
+
+    if DEBUG then print("initPhases") end
+
+    ENGINE        = ENGINE or {}
+    ENGINE.phases = {}
+
+    for k, v in pairs(sitting_phase())    do ENGINE.phases[k] = v end
+    for k, v in pairs(field_phase())      do ENGINE.phases[k] = v end
+    for k, v in pairs(deploy_phase())     do ENGINE.phases[k] = v end
+    for k, v in pairs(charge_phase())     do ENGINE.phases[k] = v end
+    for k, v in pairs(initiative_phase()) do ENGINE.phases[k] = v end
+    for k, v in pairs(move_phase())       do ENGINE.phases[k] = v end
+    for k, v in pairs(shoot_phase())      do ENGINE.phases[k] = v end
+    for k, v in pairs(melee_phase())      do ENGINE.phases[k] = v end
+    for k, v in pairs(recovery_phase())   do ENGINE.phases[k] = v end
+
+    ENGINE.phase = PHASE.SITTING
+    ENGINE.turn  = ENGINE.turn or 1
+
+    DICE_CONTEST = {
+        rolledNumberArmy1 = nil,
+        rolledNumberArmy2 = nil,
+        winner            = nil,
+        initiative        = nil,
+    }
+
+    TURN = {
+        phase      = PHASE.SITTING,
+        activeArmy = nil,
+        firstArmy  = nil,
+        completed  = { Army1 = false, Army2 = false },
+    }
+end
