@@ -251,8 +251,10 @@ IEF_DICE_FIXED_COUNT = {
 -- Default: centro tavolo per entrambi — da aggiustare al test.
 -- ============================================================
 IEF_DICE_SPAWN_POS = IEF_DICE_SPAWN_POS or {
-    [1] = { x = 75.95, y = 1.44, z = -53.24 },
-    [2] = { x = -75.95, y = 1.44, z = 53.24 },    
+    -- [1] = { x = 75.95, y = 1.44, z = -53.24 },
+    -- [2] = { x = -75.95, y = 1.44, z = 53.24 },    
+    [1] = { x = 0, y = 1.44, z = 0 },
+    [2] = { x = 0, y = 1.44, z = 0 },
 }
 
 IEF_DICE_ZONE = IEF_DICE_ZONE or {
@@ -279,75 +281,70 @@ function engine_diceCheck(tipo, numDadi, soglia_calcolata, zonaSpawn, zonaTarget
 
     Wait.time(function()
         engine_diceRollToZone(dadi, zonaTarget)
-    end, 0.3)
 
-    -- ... resto della funzione INVARIATO da qui in poi (usa sempre zonaTarget dove serviva prima)
-
-    Wait.frames(function()
-        Wait.condition(
-            function()
-                -- Dadi fermi: leggo, smisto, distruggo i non validi
-                local risultati  = {}
-                local validDadi  = {}
-                local invalidDadi = {}
-
-                for _, d in ipairs(dadi) do
-                    if not d.isDestroyed() then
-                        table.insert(risultati, d.getValue())
-                    end
-                end
-
-                if tipo == "recovery" or tipo == "generali" then
-                    local somma = 0
-                    for _, v in ipairs(risultati) do somma = somma + v end
-                    local superato = somma >= soglia_calcolata
+        Wait.frames(function()
+            Wait.condition(
+                function()
+                    local risultati   = {}
+                    local validDadi   = {}
+                    local invalidDadi = {}
 
                     for _, d in ipairs(dadi) do
                         if not d.isDestroyed() then
-                            if superato then table.insert(validDadi, d)
-                            else table.insert(invalidDadi, d) end
+                            table.insert(risultati, d.getValue())
                         end
                     end
 
-                    for _, d in ipairs(invalidDadi) do d.destruct() end
+                    if tipo == "recovery" or tipo == "generali" then
+                        local somma = 0
+                        for _, v in ipairs(risultati) do somma = somma + v end
+                        local superato = somma >= soglia_calcolata
 
-                    printToAll("[DICE:" .. tipo .. "] " .. table.concat(risultati, "+") ..
-                        " = " .. somma .. " vs soglia " .. soglia_calcolata ..
-                        " → " .. (superato and "SUPERATO" or "FALLITO"), {r=1,g=0.85,b=0.2})
-
-                    if callback then callback(superato, risultati, validDadi, somma) end
-
-                else
-                    local successi = 0
-                    for _, d in ipairs(dadi) do
-                        if not d.isDestroyed() then
-                            if d.getValue() >= soglia_calcolata then
-                                successi = successi + 1
-                                table.insert(validDadi, d)
-                            else
-                                table.insert(invalidDadi, d)
+                        for _, d in ipairs(dadi) do
+                            if not d.isDestroyed() then
+                                if superato then table.insert(validDadi, d)
+                                else table.insert(invalidDadi, d) end
                             end
                         end
+                        for _, d in ipairs(invalidDadi) do d.destruct() end
+
+                        printToAll("[DICE:" .. tipo .. "] " .. table.concat(risultati, "+") ..
+                            " = " .. somma .. " vs soglia " .. soglia_calcolata ..
+                            " → " .. (superato and "SUPERATO" or "FALLITO"), {r=1,g=0.85,b=0.2})
+
+                        if callback then callback(superato, risultati, validDadi, somma) end
+
+                    else
+                        local successi = 0
+                        for _, d in ipairs(dadi) do
+                            if not d.isDestroyed() then
+                                if d.getValue() >= soglia_calcolata then
+                                    successi = successi + 1
+                                    table.insert(validDadi, d)
+                                else
+                                    table.insert(invalidDadi, d)
+                                end
+                            end
+                        end
+                        for _, d in ipairs(invalidDadi) do d.destruct() end
+
+                        printToAll("[DICE:" .. tipo .. "] " .. table.concat(risultati, " | ") ..
+                            " (soglia " .. soglia_calcolata .. "+) → successi: " .. successi, {r=1,g=0.85,b=0.2})
+
+                        if callback then callback(successi, risultati, validDadi) end
                     end
-
-                    for _, d in ipairs(invalidDadi) do d.destruct() end
-
-                    printToAll("[DICE:" .. tipo .. "] " .. table.concat(risultati, " | ") ..
-                        " (soglia " .. soglia_calcolata .. "+) → successi: " .. successi, {r=1,g=0.85,b=0.2})
-
-                    if callback then callback(successi, risultati, validDadi) end
+                end,
+                function()
+                    for _, d in ipairs(dadi) do
+                        if not d.isDestroyed() and not d.resting then return false end
+                    end
+                    return true
                 end
-            end,
-            function()
-                for _, d in ipairs(dadi) do
-                    if not d.isDestroyed() and not d.resting then return false end
-                end
-                return true
-            end
-        )
-    end, 10)
+            )
+        end, 10)
+
+    end, 0.3)
 end
-
 -- ============================================================
 -- METODO: engine_diceClearValid(validDadi)
 -- Rimuove dal tavolo i dadi validi lasciati da engine_diceCheck,
