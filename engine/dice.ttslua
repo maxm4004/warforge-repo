@@ -195,45 +195,148 @@ function engine_diceRoll(dadi)
         end
     end, 5)   -- 5 frame di ritardo prima di applicare le velocità
 end
+-- ============================================================
+-- METODO: engine_diceRollToZone(dadi, zonaTarget, opts)
+-- Lancia i dadi (già spawnati, fermi) verso un punto preciso,
+-- usando la fisica del proiettile (stesso principio del vecchio
+-- mod diceRoller.ttslua, riscritto pulito e senza dipendenze
+-- esterne). Ogni dado riceve uno spread casuale per non
+-- sovrapporsi esattamente nello stesso punto di atterraggio.
+-- opts = { rollHeight = 1, spread = 3 } (entrambi opzionali)
+-- ============================================================
+function engine_diceRollToZone(dadi, zonaTarget, opts)
+    opts = opts or {}
+    local rollHeight = opts.rollHeight or 1
+    local spread     = (opts.spread or 3) / 2
 
+    local g = Physics.getGravity()
+    local h = 0.25 + rollHeight / 4
+
+    Wait.frames(function()
+        for _, d in ipairs(dadi) do
+            local pos    = d.getPosition()
+            local offset = Vector(zonaTarget.x - pos.x, zonaTarget.y - pos.y, zonaTarget.z - pos.z)
+
+            local vx = offset.x / h - g.x * h
+            local vy = offset.y / h - g.y * h
+            local vz = offset.z / h - g.z * h
+
+            local randomVelocity = Vector(
+                (vx + math.random(-spread, spread)) * 0.68,
+                (vy) * 0.68,
+                (vz + math.random(-spread, spread)) * 0.68
+            )
+
+            d.setVelocity(randomVelocity)
+            d.setAngularVelocity({
+                x = math.random(8, 16),
+                y = math.random(8, 16),
+                z = math.random(8, 16)
+            })
+        end
+    end, 5)
+end
 -- ============================================================
--- METODO 3: engine_diceReadResults(dadi, sogliaSuccesso, onComplete)
--- Aspetta che tutti i dadi siano fermi, mostra i risultati a
--- schermo, poi pulisce. onComplete(risultati, successi) riceve
--- l'array dei valori e il conteggio >= sogliaSuccesso (nil se
--- sogliaSuccesso non è passata).
+-- Punti di spawn dei dadi, uno per player/slot (partenza del
+-- lancio). L'atterraggio resta IEF_DICE_ZONE[slot] (già esistente).
+-- Default: centro tavolo per entrambi, sollevati di 5 sopra il
+-- piano — da aggiustare quando vedi il test dal vivo.
 -- ============================================================
-function engine_diceReadResults(dadi, sogliaSuccesso, onComplete)
+IEF_DICE_FIXED_COUNT = {
+    recovery = 2,   -- Test di Morale: sempre 2D6
+    generali = 2,   -- Morte dei Generali: sempre 2D6
+}
+-- ============================================================
+-- Punti di spawn/atterraggio dei dadi, uno per player/slot.
+-- Default: centro tavolo per entrambi — da aggiustare al test.
+-- ============================================================
+IEF_DICE_SPAWN_POS = IEF_DICE_SPAWN_POS or {
+    [1] = { x = 75.95, y = 1.44, z = -53.24 },
+    [2] = { x = -75.95, y = 1.44, z = 53.24 },    
+}
+
+IEF_DICE_ZONE = IEF_DICE_ZONE or {
+    [1] = { x = 75.70, y = 1.44, z = -67.99 },
+    [2] = { x = -75.70, y = 1.44, z = 67.99 },
+}
+-- ============================================================
+-- METODO: engine_diceCheck(tipo, numDadi, soglia_calcolata, zonaSpawn, zonaTarget, callback)
+-- zonaSpawn:  punto di partenza del lancio (es. IEF_DICE_SPAWN_POS[slot])
+-- zonaTarget: punto di atterraggio        (es. IEF_DICE_ZONE[slot])
+-- ============================================================
+function engine_diceCheck(tipo, numDadi, soglia_calcolata, zonaSpawn, zonaTarget, callback)
+
+    if IEF_DICE_FIXED_COUNT[tipo] then
+        numDadi = IEF_DICE_FIXED_COUNT[tipo]
+    end
+
+    if numDadi <= 0 then
+        if callback then callback(0, {}, {}) end
+        return
+    end
+
+    local dadi = engine_diceSpawn(zonaSpawn, numDadi)
+
+    Wait.time(function()
+        engine_diceRollToZone(dadi, zonaTarget)
+    end, 0.3)
+
+    -- ... resto della funzione INVARIATO da qui in poi (usa sempre zonaTarget dove serviva prima)
+
     Wait.frames(function()
         Wait.condition(
             function()
-                local risultati = {}
+                -- Dadi fermi: leggo, smisto, distruggo i non validi
+                local risultati  = {}
+                local validDadi  = {}
+                local invalidDadi = {}
+
                 for _, d in ipairs(dadi) do
                     if not d.isDestroyed() then
                         table.insert(risultati, d.getValue())
                     end
                 end
 
-                local testo = {}
-                for _, v in ipairs(risultati) do
-                    table.insert(testo, tostring(v))
-                end
-                broadcastToAll("Dadi: " .. table.concat(testo, ", "), {r=1, g=0.9, b=0.4})
+                if tipo == "recovery" or tipo == "generali" then
+                    local somma = 0
+                    for _, v in ipairs(risultati) do somma = somma + v end
+                    local superato = somma >= soglia_calcolata
 
-                Wait.time(function()
                     for _, d in ipairs(dadi) do
-                        if not d.isDestroyed() then d.destruct() end
-                    end
-
-                    local successi = nil
-                    if sogliaSuccesso then
-                        successi = 0
-                        for _, v in ipairs(risultati) do
-                            if v >= sogliaSuccesso then successi = successi + 1 end
+                        if not d.isDestroyed() then
+                            if superato then table.insert(validDadi, d)
+                            else table.insert(invalidDadi, d) end
                         end
                     end
-                    onComplete(risultati, successi)
-                end, 2)
+
+                    for _, d in ipairs(invalidDadi) do d.destruct() end
+
+                    printToAll("[DICE:" .. tipo .. "] " .. table.concat(risultati, "+") ..
+                        " = " .. somma .. " vs soglia " .. soglia_calcolata ..
+                        " → " .. (superato and "SUPERATO" or "FALLITO"), {r=1,g=0.85,b=0.2})
+
+                    if callback then callback(superato, risultati, validDadi, somma) end
+
+                else
+                    local successi = 0
+                    for _, d in ipairs(dadi) do
+                        if not d.isDestroyed() then
+                            if d.getValue() >= soglia_calcolata then
+                                successi = successi + 1
+                                table.insert(validDadi, d)
+                            else
+                                table.insert(invalidDadi, d)
+                            end
+                        end
+                    end
+
+                    for _, d in ipairs(invalidDadi) do d.destruct() end
+
+                    printToAll("[DICE:" .. tipo .. "] " .. table.concat(risultati, " | ") ..
+                        " (soglia " .. soglia_calcolata .. "+) → successi: " .. successi, {r=1,g=0.85,b=0.2})
+
+                    if callback then callback(successi, risultati, validDadi) end
+                end
             end,
             function()
                 for _, d in ipairs(dadi) do
@@ -243,4 +346,17 @@ function engine_diceReadResults(dadi, sogliaSuccesso, onComplete)
             end
         )
     end, 10)
+end
+
+-- ============================================================
+-- METODO: engine_diceClearValid(validDadi)
+-- Rimuove dal tavolo i dadi validi lasciati da engine_diceCheck,
+-- da chiamare quando il chiamante ha finito di mostrarli
+-- (es. dopo che il giocatore ha confermato di aver visto l'esito).
+-- ============================================================
+function engine_diceClearValid(validDadi)
+    if not validDadi then return end
+    for _, d in ipairs(validDadi) do
+        if not d.isDestroyed() then d.destruct() end
+    end
 end
