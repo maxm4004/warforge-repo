@@ -1,0 +1,31 @@
+diceUrls = {
+    [1] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/1d6.png",
+    [2] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-L/uarefs/heads/main/dice/2d6.png",
+    [3] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/3d6.png",
+    [4] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/4d6.png",
+    [5] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/5d6.png",
+    [6] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/6d6.png"
+}
+
+-- ============================================================
+-- FIELD STATE
+-- Stato runtime della fase FIELD
+-- ============================================================
+FIELD_STATE = FIELD_STATE or {
+    diceResult   = nil,   -- risultato dado principale
+    numElements  = nil,   -- 2, 3 o 4
+    army1Elements = 0,    -- elementi assegnati Army1
+    army2Elements = 0,    -- elementi assegnati Army2
+    tieBreaker   = false, -- serve tiro aggiuntivo
+    tbResult1    = nil,   -- risultato tiebreaker Army1
+    tbResult2    = nil,   -- risultato tiebreaker Army2
+}
+
+FIELD_PERCENTAGES = {
+    { tipo = "Hill",  weight = 50 },
+    { tipo = "Wood",  weight = 35 },
+    { tipo = "Field", weight = 15 },
+
+}
+
+IEF_TERRAIN_BAG = "a87f74"

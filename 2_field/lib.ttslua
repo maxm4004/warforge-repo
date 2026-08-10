@@ -1,0 +1,218 @@
+-- ============================================================
+-- FUNZIONE: field_rollDice()
+-- Step 1: tiro dado per determinare numero elementi
+-- ============================================================
+army1_elements = {}
+army2_elements = {}
+
+function field_rollDice(player, value, id)
+
+   spinDie("diceField", 1, function(result)
+
+        result = 3
+        FIELD_STATE.diceResult = result 
+
+        if result <= 2 then
+            -- 2 elementi: 1 per player
+            FIELD_STATE.numElements   = 2
+            FIELD_STATE.army1Elements = 1
+            FIELD_STATE.army2Elements = 1
+            FIELD_STATE.tieBreaker    = false
+            printToAll("[FIELD] Dado: " .. result .. " → 2 elementi (1 per player)", {r=0.8,g=0.7,b=0.2})
+            field_spawnElements()
+         elseif result <= 4 then
+            -- 3 elementi: tiro aggiuntivo per il terzo
+            FIELD_STATE.numElements   = 3
+            FIELD_STATE.army1Elements = 1
+            FIELD_STATE.army2Elements = 1
+            FIELD_STATE.tieBreaker    = true
+            printToAll("[FIELD] Dado: " .. result .. " → 3 elementi, tiro per il terzo!", {r=0.8,g=0.7,b=0.2})
+            Wait.time(function()
+                TURN.completed.Army1 = true
+                TURN.completed.Army2 = true
+                ENGINE.phases["FIELD"].transitions[1].to = "FIELD_ROLL"
+                engine_handleAction({ type = ACTION.CONFIRM })
+            end, 1)
+        else
+            -- 4 elementi: 2 per player
+            FIELD_STATE.numElements   = 4
+            FIELD_STATE.army1Elements = 2
+            FIELD_STATE.army2Elements = 2
+            FIELD_STATE.tieBreaker    = false
+            printToAll("[FIELD] Dado: " .. result .. " → 4 elementi (2 per player)", {r=0.8,g=0.7,b=0.2})
+            ENGINE.phases["FIELD"].transitions[1].to = "FIELD_DONE"
+            field_spawnElements()
+        end
+    end)
+
+    return false
+end
+-- ============================================================
+-- FUNZIONE: field_randomTipo()
+-- Estrae un tipo di terreno in base alle percentuali
+-- ============================================================
+function field_randomTipo(elements)
+
+    local r = math.random(1, 100)
+    local cumul = 0
+    for i, entry in ipairs(FIELD_PERCENTAGES) do
+        cumul = cumul + entry.weight
+        if r <= cumul then
+            return entry.tipo  
+
+        end
+    end
+end
+-- ============================================================
+-- FUNZIONE: field_checkTieBreaker()
+-- Verifica se entrambi hanno tirato e assegna il terzo elemento
+-- ============================================================
+function field_checkTieBreaker()
+
+    if FIELD_STATE.tbResult1 == nil or FIELD_STATE.tbResult2 == nil then return end
+
+    if FIELD_STATE.tbResult1 == FIELD_STATE.tbResult2 then
+        -- Pareggio: ritiro
+        printToAll("[FIELD] Pareggio! Ritiro...", {r=1,g=0.6,b=0})
+        FIELD_STATE.tbResult1 = nil
+        FIELD_STATE.tbResult2 = nil
+        return
+    end
+
+    if FIELD_STATE.tbResult1 > FIELD_STATE.tbResult2 then
+        FIELD_STATE.army1Elements = FIELD_STATE.army1Elements + 1
+        printToAll("[FIELD] Army1 vince il terzo elemento!", {r=0.8,g=0.7,b=0.2})
+    else
+        FIELD_STATE.army2Elements = FIELD_STATE.army2Elements + 1
+        printToAll("[FIELD] Army2 vince il terzo elemento!", {r=0.8,g=0.7,b=0.2})
+    end
+
+    field_spawnElements()
+end
+-- ============================================================
+-- FUNZIONE: field_goToPositioning()
+-- Imposta l'UI per la fase di posizionamento (Step 4+5)
+-- ============================================================
+function field_goToPositioning()
+
+        TURN.completed = { Army1 = false, Army2 = false }
+        printToAll("[FIELD] Posizionate i vostri elementi e confermate", {r=0.8,g=0.7,b=0.2})
+        main_goToPhase("FIELD_DONE")
+end
+-- ============================================================
+-- FUNZIONE: field_spawnElements()
+-- Spawna tutti gli elementi terreno per entrambi i player
+-- Usa FIELD_STATE per sapere quanti e di che tipo
+-- ============================================================
+function field_spawnElements()
+
+    if not FIELD_STATE then
+        printToAll("[FIELD] FIELD_STATE non inizializzato", {r=1,g=0.3,b=0.3})
+        return
+    end
+
+    local spawned = 0
+    local total   = (FIELD_STATE.army1Elements or 0) + (FIELD_STATE.army2Elements or 0)
+
+    if total == 0 then
+        printToAll("[FIELD] Nessun elemento da spawnare", {r=0.6,g=0.6,b=0.6})
+        return
+    end
+
+    printToAll("[FIELD] Spawn elementi terreno...", {r=0.6,g=0.9,b=0.6})
+
+    local function onSpawned(obj)
+        spawned = spawned + 1
+        if spawned >= total then
+            printToAll("[FIELD] Tutti gli elementi spawnati", {r=0.4,g=0.9,b=0.4})
+        end
+    end
+
+    -- Army1
+    for i = 1, (FIELD_STATE.army1Elements or 0) do
+        local tipo = field_randomTipo(army1_elements)
+        field_spawnTerrain(tipo, 1, i, onSpawned)
+    end
+
+    -- Army2
+    for i = 1, (FIELD_STATE.army2Elements or 0) do
+        local tipo = field_randomTipo(army2_elements)
+        field_spawnTerrain(tipo, 2, i, onSpawned)        
+    end
+ 
+    -- Passa a conferma posizionamento
+    Wait.time(function()
+        field_goToPositioning()
+    end, 2)
+end
+-- ============================================================
+-- FUNZIONE: printObject()
+-- ============================================================
+function printObject()
+    local obj = getObjectFromGUID("7f86fe")
+    print(JSON.encode(obj.getCustomObject()))
+end
+-- ============================================================
+-- FUNZIONE: field_spawnTerrain()
+-- ============================================================
+function field_spawnTerrain(tipo, slot, index, callback)
+
+    local bag = getObjectFromGUID(IEF_TERRAIN_BAG)
+    if not bag then
+        printToAll("[FIELD] Bag terreno non trovata", {r=1,g=0.3,b=0.3})
+        return
+    end
+
+    -- Trova tutti gli oggetti nella bag con il tag corrispondente al tipo
+    local objects = bag.getObjects()
+    local matches = {}
+    for _, obj in ipairs(objects) do
+        for _, tag in ipairs(obj.tags or {}) do
+            if tag == tipo then
+                table.insert(matches, obj)
+                break
+            end
+        end
+    end
+
+    if #matches == 0 then
+        printToAll("[FIELD] Nessun oggetto tipo " .. tipo .. " nella bag", {r=1,g=0.3,b=0.3})
+        return
+    end
+
+    -- Prende un elemento casuale tra quelli disponibili
+    local target = matches[math.random(1, #matches)]
+
+    local zBase  = slot == 1 and -20 or 20
+    local xSpawn = -10 + (index - 1) * 20
+
+    printToAll(string.format("[FIELD] Spawn %s slot=%d pos=%.1f,%.1f", tipo, slot, xSpawn, zBase), {r=0.6,g=0.6,b=0.6})
+
+    bag.takeObject({
+        guid              = target.guid,
+        position          = { x = xSpawn, y = 10.70, z = zBase },
+        rotation          = { x = 0, y = 0, z = 0 },
+        smooth            = false,
+        callback_function = function(obj)
+            obj.setPosition({ x = xSpawn, y = 10.70, z = zBase })  
+            local clone = obj.clone({ position = { x = xSpawn, y = 10.70, z = zBase } })
+            clone.setPosition({ x = xSpawn, y = 10.70, z = zBase })
+            Wait.time(function()
+                bag.putObject(obj)
+            end, 2.5)
+            if callback then callback(clone) end
+        end
+    })
+end
+-- ============================================================
+-- FUNZIONE: field_spawnTerrain()
+-- ============================================================
+function lockTerrain()
+
+    -- Lock di tutti gli elementi terreno a fine fase FIELD
+    for _, obj in ipairs(getAllObjects()) do
+        if obj.hasTag and (obj.hasTag("Wood") or obj.hasTag("Hill") or obj.hasTag("Field")) then
+            obj.setLock(true)
+        end
+    end
+end
