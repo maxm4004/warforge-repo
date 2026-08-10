@@ -438,22 +438,9 @@ function debug_diceRoll()
     engine_diceRoll(IEF_DEBUG_DADI)
     print("[DEBUG] Lancio orizzontale avviato su " .. #IEF_DEBUG_DADI .. " dadi")
 end
-
 -- ============================================================
--- DEBUG: testa engine_diceReadResults da sola
+-- DEBUG: 
 -- ============================================================
-function debug_diceReadResults(sogliaSuccesso)
-    if not IEF_DEBUG_DADI or #IEF_DEBUG_DADI == 0 then
-        print("[DEBUG] Nessun dado da leggere — chiama prima debug_diceSpawn()")
-        return
-    end
-    engine_diceReadResults(IEF_DEBUG_DADI, sogliaSuccesso, function(risultati, successi)
-        print("[DEBUG] Risultati: " .. table.concat(risultati, ", "))
-        if successi then print("[DEBUG] Successi: " .. successi) end
-        IEF_DEBUG_DADI = nil
-    end)
-end
-
 function debug_addFormButton(guid)
     local obj = getObjectFromGUID(guid)
     if not obj then print("GUID non trovato") return end
@@ -536,4 +523,40 @@ function debug_testFormationPanel(guid, x, z)
     local labelText = string.format("%s - TEST x=%.1f z=%.1f", unitKey, x, z)
 
     obj.UI.setXml(main_buildFormationPanel3DXml(unitKey, x, z, "Red", labelText))
+end
+-- ============================================================
+-- DEBUG: testa engine_diceCheck completo, tenendo i dadi validi
+-- sul tavolo per ispezione manuale
+-- Esempi da console:
+--   debug_diceCheck("shoot", 6, 4, 1)
+--   debug_diceCheck("recovery", 2, 6, 1)
+--   debug_diceClearValid()   -- rimuove i dadi validi dell'ultimo test
+-- ============================================================
+function debug_diceCheck(tipo, numDadi, soglia, slot)
+    tipo    = tipo or "shoot"
+    numDadi = numDadi or 6
+    soglia  = soglia or 4
+    slot    = slot or 1
+
+    print("[DEBUG] engine_diceCheck(" .. tipo .. ", " .. numDadi .. ", soglia=" .. soglia .. ", slot=" .. slot .. ")")
+
+    engine_diceCheck(tipo, numDadi, soglia, IEF_DICE_SPAWN_POS[slot], IEF_DICE_ZONE[slot], function(esito, risultati, validDadi, extra)
+        IEF_DEBUG_DADI_VALID = validDadi
+        if tipo == "recovery" or tipo == "generali" then
+            print("[DEBUG] Somma: " .. tostring(extra) .. " → " .. (esito and "SUPERATO" or "FALLITO"))
+        else
+            print("[DEBUG] Successi: " .. esito .. " / " .. numDadi)
+        end
+        print("[DEBUG] Dadi validi rimasti sul tavolo: " .. #validDadi .. " — chiama debug_diceClearValid() per rimuoverli")
+    end)
+end
+
+function debug_diceClearValid()
+    if not IEF_DEBUG_DADI_VALID or #IEF_DEBUG_DADI_VALID == 0 then
+        print("[DEBUG] Nessun dado valido da rimuovere")
+        return
+    end
+    engine_diceClearValid(IEF_DEBUG_DADI_VALID)
+    print("[DEBUG] Dadi validi rimossi")
+    IEF_DEBUG_DADI_VALID = nil
 end
