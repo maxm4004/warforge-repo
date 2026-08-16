@@ -1,0 +1,10 @@
+-- ============================================================
+-- WARFORGE IEF — 6_move/register.ttslua
+-- Solo pannello 3D Movimento: nessuna registrazione per il
+-- vecchio pannello 2D / trigger mouse (rimossi).
+-- ============================================================
+
+-- I pulsanti 3D chiamano le funzioni Global direttamente
+-- (onClick="Global/nomeFunzione"), non serve registerHandler
+-- per loro. Queste voci restano solo se qualche altro punto del
+-- motore le richiama esplicitamente via callHandler().

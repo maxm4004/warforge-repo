@@ -1,0 +1,40 @@
+-- ============================================================
+-- FUNZIONE: roll_btn_all()
+-- ============================================================
+function roll_btn_all(player, value, id, buttonConfig)
+
+    if id == BUTTONS.BTN_ARMY1 then
+        engine_diceCameraZoom(player, 1)
+    end
+
+    if id == BUTTONS.BTN_ARMY2 then
+        engine_diceCameraZoom(player, 2)
+    end
+
+    return false
+end
+-- ============================================================
+-- FUNZIONE: assign_initiative_btn_all()
+-- ============================================================
+function assign_initiative_btn_all(player, value, id, buttonConfig)
+
+    local winner = ARMY[DICE_CONTEST.winner]
+    local clicker = ARMY[main_getArmyByColor(player)]
+    local clicked = ARMY[main_getArmyByButton(id)]
+    
+    if clicker.name ~= winner.name then
+        fadeOut(clicker.name.." can't assign anything", player) 
+    else 
+        DICE_CONTEST.initiative = clicked
+        callHandler("resetTurnForPhase")
+        local army = callHandler("getArmySlotByColor", clicked.color)
+
+        TURN.firstArmy = army
+        TURN.activeArmy = army
+
+        TURN.completed.Army1 = false
+        TURN.completed.Army2 = false
+        warning("Iniziativa assegnata a "..clicked.name, player.color)
+    end
+end
+

@@ -1,0 +1,28 @@
+-- ============================================================
+-- FUNZIONE: before_recovery(phaseName, phase)
+-- ============================================================
+function before_recovery(phaseName, phase)
+    if TURN.phase ~= phaseName then main_resetTurnForPhase() end
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: after_recovery(phaseName, phase)
+-- ============================================================
+function after_recovery(phaseName, phase)
+
+    ENGINE.turn = (ENGINE.turn or 1) + 1
+
+    DICE_CONTEST.initiative        = nil
+    DICE_CONTEST.winner            = nil
+    DICE_CONTEST.rolledNumberArmy1 = nil
+    DICE_CONTEST.rolledNumberArmy2 = nil
+
+    TURN.phase       = nil
+    TURN.activeArmy  = nil
+    TURN.firstArmy   = nil
+    TURN.completed.Army1 = false
+    TURN.completed.Army2 = false
+
+    printToAll("Turno " .. tostring(ENGINE.turn) .. " inizia", {r=0.4,g=0.9,b=0.4})
+end

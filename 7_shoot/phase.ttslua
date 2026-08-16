@@ -1,0 +1,22 @@
+-- 7_shoot/phase.ttslua
+function shoot_phase()
+    return {
+        SHOOT = {
+            title = "FASE: TIRO",
+            desc  = "Tutte le unità con armi da tiro possono bersagliare il nemico",
+            before = "before_shoot",
+            after  = "after_shoot",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
+            render = "2BtnClick",
+            enforceOwnership = true,
+            inputMode = "INITIATIVE",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tiro Completato", textColor="White", color="Red",   callback="shoot_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tiro Completato", textColor="White", color="Green", callback="shoot_btn_army2" },
+            },
+            transitions = {
+                { to="MELEE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+            }
+        }
+    }
+end

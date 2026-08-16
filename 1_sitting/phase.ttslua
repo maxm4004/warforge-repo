@@ -1,0 +1,24 @@
+-- ============================================================
+-- FASE: SITTING
+-- ============================================================
+function sitting_phase()
+    return {
+        SITTING = {
+            title = "SCELTA COLORE",
+            desc  = "Entrambi i giocatori giocheranno con l'esercito associato al colore scelto",
+            before = "before_sitting",
+            after  = "after_sitting",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
+            render = "2BtnClick",
+            enforceOwnership = false,
+            inputMode = "FREE",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Rosso",  textColor="White", color="Red",   callback="sitting_btn_all" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Verde",  textColor="White", color="Green", callback="sitting_btn_all" },
+            },
+            transitions = {
+                { to="FIELD", conditions={ COND.REQUIREMENT_MET } }
+            }
+        }
+    }
+end

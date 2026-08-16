@@ -1,0 +1,28 @@
+-- ============================================================
+-- FUNZIONE: sitting_btn_all()
+-- ============================================================
+function sitting_btn_all(player, value, id, buttonConfig)
+    local colorPlayer = player.color
+
+    if id == BUTTONS.BTN_ARMY1 then
+        if colorArmy1 == COLOR.NOARMY then
+            if colorArmy2 == colorPlayer then colorArmy2 = COLOR.NOARMY end
+            player.changeColor(COLOR.ARMY1)
+            colorArmy1 = COLOR.ARMY1
+        else
+           warningToColor("Colore già in uso", player, "Yellow")
+        end
+    end
+
+    if id == BUTTONS.BTN_ARMY2 then
+        if colorArmy2 == COLOR.NOARMY then
+            if colorArmy1 == colorPlayer then colorArmy1 = COLOR.NOARMY end
+            player.changeColor(COLOR.ARMY2)
+            colorArmy2 = COLOR.ARMY2
+        else
+            warningToColor("Colore già in uso", player, "Yellow")
+        end
+    end
+
+    return true
+end

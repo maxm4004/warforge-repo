@@ -1,0 +1,38 @@
+-- ============================================================
+-- FUNZIONE: after_initiative_roll()
+-- ============================================================
+function before_initiative_roll(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+    IEF_DICE_ROLL_TRY[1] = { dadi = 1, soglia = nil }
+    IEF_DICE_ROLL_TRY[2] = { dadi = 1, soglia = nil }
+    DICE_CONTEST.rolledNumberArmy1 = nil
+    DICE_CONTEST.rolledNumberArmy2 = nil
+    DICE_CONTEST.winner = nil
+end
+-- ============================================================
+-- FUNZIONE: after_initiative_roll()
+-- ============================================================
+function after_initiative_roll(phaseName, phase)
+end
+-- ============================================================
+-- FUNZIONE: before_initiative_choice()
+-- ============================================================
+function before_initiative_choice(phaseName, phase)
+    if DICE_CONTEST and DICE_CONTEST.winner then
+        print("BTN_ARMY"..DICE_CONTEST.winner)
+        UI.setAttribute("iconWinnerArmy"..DICE_CONTEST.winner, "active", "true")
+    end
+
+
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: after_initiative_choice()
+-- ============================================================
+function after_initiative_choice(phaseName, phase)
+    if DICE_CONTEST and DICE_CONTEST.winner then
+        UI.setAttribute("iconWinnerArmy"..DICE_CONTEST.winner, "active", "false")
+    end
+end

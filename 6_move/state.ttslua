@@ -1,0 +1,12 @@
+IEF_MOVE_BUDGET   = IEF_MOVE_BUDGET   or {}   -- [unitKey] = pollici movimento residui
+IEF_PIVOT_BUDGET  = IEF_PIVOT_BUDGET  or {}   -- [unitKey] = pollici perno residui (tetto fisso 3)
+
+-- ============================================================
+-- SISTEMA PANNELLO 3D MOVIMENTO — stato indicizzato per unitKey,
+-- NON più per slot. Il vecchio pannello 2D (IEF_MOVE[1]/[2]) è
+-- stato rimosso: niente più overlay a schermo per Movimento.
+-- ============================================================
+IEF_MOVE_UNITS = IEF_MOVE_UNITS or {}
+-- [unitKey] = { basiObjs = {...}, activePlayer = Player, panel3DObj = obj, lineHost = obj|nil }
+
+IEF_MOVE_TEST_MODE = true

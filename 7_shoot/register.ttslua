@@ -1,0 +1,6 @@
+-- ============================================================
+-- WARFORGE IEF — 7_shoot/register.ttslua
+-- ============================================================
+
+registerHandler("shoot_btn_army1",  function(p,v,i) return shoot_btn_army1(p,v,i) end)
+registerHandler("shoot_btn_army2",  function(p,v,i) return shoot_btn_army2(p,v,i) end)

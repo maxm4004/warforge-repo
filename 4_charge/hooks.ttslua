@@ -1,0 +1,14 @@
+-- rulesets/imperifeudi/4_charge/hooks.ttslua
+-- ============================================================
+-- FUNZIONE: before_charge(phaseName, phase)  
+-- ============================================================
+function before_charge(phaseName, phase)                                                              
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: after_charge(phaseName, phase)
+-- ============================================================
+function after_charge(phaseName, phase)
+    -- stub
+end

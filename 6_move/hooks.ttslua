@@ -1,0 +1,17 @@
+-- ============================================================
+-- FUNZIONE: before_move(phaseName, phase)
+-- ============================================================
+function before_move(phaseName, phase)
+    if TURN.phase ~= phaseName then main_resetTurnForPhase() end
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+    IEF_MOVE_BUDGET  = {}
+    IEF_PIVOT_BUDGET = {}
+    IEF_REFORM_USED  = {}
+end
+-- ============================================================
+-- FUNZIONE: after_move(phaseName, phase)
+-- ============================================================
+function after_move(phaseName, phase)
+    -- stub
+end

@@ -1,0 +1,14 @@
+-- ============================================================
+-- FUNZIONE: before_shoot()
+-- ============================================================
+function before_shoot(phaseName, phase)
+    if TURN.phase ~= phaseName then main_resetTurnForPhase() end
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: after_shoot()
+-- ============================================================
+function after_shoot(phaseName, phase)
+    IEF_FIRED = {}
+end

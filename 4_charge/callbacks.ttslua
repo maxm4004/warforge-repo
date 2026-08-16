@@ -1,0 +1,11 @@
+-- rulesets/imperifeudi/4_charge/callbacks.ttslua
+
+function charge_btn_army1(player, value, id, buttonConfig)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
+    return true
+end
+
+function charge_btn_army2(player, value, id, buttonConfig)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
+    return true
+end

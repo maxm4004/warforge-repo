@@ -1,0 +1,14 @@
+-- ============================================================
+-- FUNZIONE: before_sitting()
+-- ============================================================
+function before_sitting(phaseName, phase)
+    TURN.phase = phaseName
+    linea_field   = false
+    linee_deploy  = false
+    linee_settori = false
+    callHandler("aggiornaLinee")
+end
+-- ============================================================
+-- FUNZIONE: after_sitting()
+-- ============================================================
+function after_sitting(phaseName, phase) end
