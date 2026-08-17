@@ -1,0 +1,83 @@
+-- ============================================================
+-- FUNZIONE: before_field()
+-- ============================================================
+function before_field(phaseName, phase)
+    TURN.phase = phaseName
+    FIELD_STATE = field_defaultState()
+
+    FIELD_STATE.orientamento1 = orientamentoArmy1
+    FIELD_STATE.orientamento2 = orientamentoArmy2
+    FIELD_STATE.army1Elements = FIELD_ELEMENTS_BY_ORIENTAMENTO[orientamentoArmy1]
+    FIELD_STATE.army2Elements = FIELD_ELEMENTS_BY_ORIENTAMENTO[orientamentoArmy2]
+
+    linee_settori = true
+    callHandler("aggiornaLinee")
+end
+-- ============================================================
+-- FUNZIONE: after_field()
+-- ============================================================
+function after_field(phaseName, phase)
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: before_field_roll()
+-- ============================================================
+function before_field_roll(phaseName, phase)
+
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+
+    Wait.time(function()
+        UI.setAttribute(BUTTONS.BTN_ARMY1, "text", "ELEMENTO 1/" .. (FIELD_STATE.army1Elements or 0))
+        UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
+        UI.setAttribute(BUTTONS.BTN_ARMY2, "text", "ELEMENTO 1/ " .. (FIELD_STATE.army2Elements or 0))
+        UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
+    end, 0.5)
+end
+-- ============================================================
+-- FUNZIONE: after_field_roll()
+-- ============================================================
+function after_field_roll(phaseName, phase)
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+-- ============================================================
+-- FUNZIONE: before_field_done()
+-- ============================================================
+function before_field_done(phaseName, phase)
+    if DEBUG then print("before_field_done") end    
+    TURN.phase = phaseName
+    callHandler("engine_resetState")
+end
+-- ============================================================
+-- FUNZIONE: after_field_done()
+-- ============================================================
+function after_field_done(phaseName, phase)
+    if DEBUG then print("after_field_done") end
+    
+    TURN.completed = { Army1 = false, Army2 = false }
+    linea_field = false
+    linee_settori = false
+    callHandler("lockTerrain")
+    callHandler("aggiornaLinee")
+end
+
+
+function before_field_block(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+
+    FIELD_STATE.blockPlaced = { [1] = 0, [2] = 0 }
+    FIELD_STATE.blockCards  = {
+        [1] = { destro = {}, centro = {}, sinistro = {} },
+        [2] = { destro = {}, centro = {}, sinistro = {} },
+    }
+
+    Wait.time(function()
+        UI.setAttribute(BUTTONS.BTN_ARMY1, "text", "BLOCCO 1/" .. (FIELD_STATE.army1Elements or 0))
+        UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
+        UI.setAttribute(BUTTONS.BTN_ARMY2, "text", "BLOCCO 1/" .. (FIELD_STATE.army2Elements or 0))
+        UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
+    end, 1)
+end
+function after_field_block(phaseName, phase)
+end
