@@ -10,9 +10,8 @@ registerHandler("engine_validatePhases",        function()             return en
 registerHandler("engine_resetState",            function()             return engine_resetState()                 end)
 registerHandler("engine_buttonBarLoadJson",     function(j)            return engine_buttonBarLoadJson(j)         end)
 registerHandler("engine_diceButtons3DShow",     function()             return engine_diceButtons3DShow()         end)
-
-registerHandler("engine_diceClearLastRoll",     function(slot)             return engine_diceClearLastRoll(slot) end)
-
+registerHandler("engine_diceClearLastRoll",     function(slot)         return engine_diceClearLastRoll(slot) end)
+registerHandler("engine_cameraResetAll",     function()                return engine_cameraResetAll() end)
 -- Ruleset lifecycle
 registerHandler("rulesetInit",                  function(ss)           return main_rulesetInit(ss)                     end)
 registerHandler("initPhases",                   function()             return initPhases()                        end)

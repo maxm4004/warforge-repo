@@ -39,6 +39,7 @@ function field_defaultState()
             [1] = { destro = {}, centro = {}, sinistro = {} },
             [2] = { destro = {}, centro = {}, sinistro = {} },
         },
+        fiumeUsato = false,
     }
 end
 
@@ -86,16 +87,31 @@ army1_elements = {}
 army2_elements = {}
 
 IEF_FIELD_BLOCK_CENTER = {
-    [1] = {   -- Army1, z negativo
-        destro   = { x =  44.537, y = 3, z = -22.268 },
-        centro   = { x =   0,     y = 3, z = -22.268 },
-        sinistro = { x = -44.537, y = 3, z = -22.268 },
+    [1] = {
+        destro   = { x =  44.537, y = 1.21, z = -22.268 },
+        centro   = { x =   0,     y = 1.21, z = -22.268 },
+        sinistro = { x = -44.537, y = 1.21, z = -22.268 },
     },
-    [2] = {   -- Army2, z positivo
-        destro   = { x = -44.537, y = 3, z = 22.268 },
-        centro   = { x =   0,     y = 3, z = 22.268 },
-        sinistro = { x =  44.537, y = 3, z = 22.268 },
+    [2] = {
+        destro   = { x = -44.537, y = 1.21, z = 22.268 },
+        centro   = { x =   0,     y = 1.21, z = 22.268 },
+        sinistro = { x =  44.537, y = 1.21, z = 22.268 },
     },
 }
 
 IEF_FIELD_BLOCK_CARD_GAP = 4
+
+IEF_FIELD_BLOCK_LABELS_POS = {
+    [2] = {
+        destro   = { pos = { x = -44.48, y = 1.21, z =  5.55 }, rot = { x = 90, y = 180, z = 0 }, testo = "2 - 3 - 4 - 5" },
+        centro   = { pos = { x =   0.14, y = 1.21, z =  5.53 }, rot = { x = 90, y = 180, z = 0 }, testo = "6 - 7 - 8" },
+        sinistro = { pos = { x =  43.54, y = 1.21, z =  5.55 }, rot = { x = 90, y = 180, z = 0 }, testo = "9 - 10 - 11 - 12" },
+    },
+    [1] = {
+        destro   = { pos = { x =  44.48, y = 1.21, z = -5.55 }, rot = { x = 90, y = 0, z = 0 }, testo = "2 - 3 - 4 - 5" },
+        centro   = { pos = { x =  -0.14, y = 1.21, z = -5.53 }, rot = { x = 90, y = 0, z = 0 }, testo = "6 - 7 - 8" },
+        sinistro = { pos = { x = -43.54, y = 1.21, z = -5.55 }, rot = { x = 90, y = 0, z = 0 }, testo = "9 - 10 - 11 - 12" },
+    },
+}
+
+IEF_FIELD_BLOCK_LABELS = {}

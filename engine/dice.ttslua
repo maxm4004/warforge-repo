@@ -526,28 +526,16 @@ function engine_diceRoll_start(player)
     end
 
     if ENGINE.phase == "FIELD_ROLL" then
-        engine_diceClearLastRoll(slot)
-        field_doRollFieldElement(player, slot)
-        Wait.time(function() 
-                 local rolls = slot == 1 and #FIELD_STATE.rolls1 or #FIELD_STATE.rolls2
-                 local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
-                if rolls == totale then
-                    engine_diceRoll_clear(player)
-                    Wait.time(function() 
-                        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
-                    end, 5) 
-                    return
-                end 
-        end, 5) 
-        return
-    end
+            engine_diceClearLastRoll(slot)
+            field_doRollFieldElement(player, slot)
+            return
+        end
 
     if ENGINE.phase == "FIELD_BLOCK" then
-        local slot = main_SlotByColor(player.color)
          engine_diceClearLastRoll(slot)
         field_doRollBlock(player, slot)
         return
-    end
+    end      
 
         engine_diceClearLastRoll(slot)
         engine_diceThrowFromBag(slot, nil, function(risultati, successi)
@@ -573,21 +561,42 @@ end
 -- ============================================================
 -- FUNZIONE: engine_diceCameraReturn(player, slot)
 -- ============================================================
-function engine_diceCameraReturn(player, slot)
 
-    local curremtElement =  slot == 1 and #FIELD_STATE.rolls1 or #FIELD_STATE.rolls2
+-- ============================================================
+-- FUNZIONE: engine_diceCameraReturn(player, slot)
+-- Dopo ogni tiro: camera sulla card appena piazzata, poi dopo
+-- 2s torna sui dadi (se ci sono altri tiri da fare) oppure va
+-- alla vista home (se era l'ultimo elemento).
+-- ============================================================
+function engine_diceCameraReturn(player, slot, faseOrigine)
+    faseOrigine = faseOrigine or ENGINE.phase
 
-    if ENGINE.phase == "FIELD_ROLL" or ENGINE.phase == "FIELD_BLOCK" then
-        engine_cameraByNamme(player, curremtElement, CAMERA_ZONE.ARMY_CARDS)
-        Wait.time(function ()
+    if faseOrigine == "FIELD_ROLL" then
+        local currentElement = slot == 1 and #FIELD_STATE.rolls1 or #FIELD_STATE.rolls2
+        local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
+        local isLast = currentElement >= totale
+
+        engine_cameraByNamme(player, currentElement, CAMERA_ZONE.ARMY_CARDS)
+        Wait.time(function()
+            if isLast then
+                engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+            else
                 engine_diceCameraZoom(player, slot)
+            end
         end, 2)
-    end
 
-    if  ENGINE.phase == "FIELD_BLOCK" then
+    elseif faseOrigine == "FIELD_BLOCK" then
+        local currentElement = FIELD_STATE.blockPlaced[slot]
+        local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
+        local isLast = currentElement >= totale
+
         engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_BLOCK)
-        Wait.time(function ()
+        Wait.time(function()
+            if isLast then
+                engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+            else
                 engine_diceCameraZoom(player, slot)
+            end
         end, 2)
     end
 end

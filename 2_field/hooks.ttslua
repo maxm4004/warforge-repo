@@ -41,30 +41,16 @@ function after_field_roll(phaseName, phase)
     TURN.completed = { Army1 = false, Army2 = false }
 end
 -- ============================================================
--- FUNZIONE: before_field_done()
+-- FUNZIONE: after_field_roll()
 -- ============================================================
-function before_field_done(phaseName, phase)
-    if DEBUG then print("before_field_done") end    
-    TURN.phase = phaseName
-    callHandler("engine_resetState")
-end
--- ============================================================
--- FUNZIONE: after_field_done()
--- ============================================================
-function after_field_done(phaseName, phase)
-    if DEBUG then print("after_field_done") end
-    
-    TURN.completed = { Army1 = false, Army2 = false }
-    linea_field = false
-    linee_settori = false
-    callHandler("lockTerrain")
-    callHandler("aggiornaLinee")
-end
-
-
 function before_field_block(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
+
+    engine_diceClearLastRoll(1)
+    engine_diceClearLastRoll(2)
+
+    field_createBlockLabels()
 
     FIELD_STATE.blockPlaced = { [1] = 0, [2] = 0 }
     FIELD_STATE.blockCards  = {
@@ -79,5 +65,55 @@ function before_field_block(phaseName, phase)
         UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
     end, 1)
 end
+-- ============================================================
+-- FUNZIONE: after_field_roll()
+-- ============================================================
 function after_field_block(phaseName, phase)
+    TURN.completed = { Army1 = false, Army2 = false }
 end
+
+-- ============================================================
+-- FUNZIONE: before_field_done()
+-- ============================================================
+function before_field_done(phaseName, phase)
+    if DEBUG then print("before_field_done") end    
+    TURN.phase = phaseName
+    callHandler("engine_resetState")
+end
+-- ============================================================
+-- FUNZIONE: after_field_done()
+-- ============================================================
+function after_field_done(phaseName, phase)
+
+    if DEBUG then print("after_field_done") end
+    
+    TURN.completed = { Army1 = false, Army2 = false }
+    linea_field = false
+    linee_settori = false
+
+    field_clearTerrainCards()
+
+    callHandler("lockTerrain")
+    callHandler("aggiornaLinee")
+end
+
+-- ============================================================
+-- FUNZIONE: before_field_positioning_terrain()
+-- ============================================================
+function before_field_positioning_terrain(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+end
+
+-- ============================================================
+-- FUNZIONE: after_field_positioning_terrain()
+-- ============================================================
+function after_field_positioning_terrain(phaseName, phase)
+    TURN.completed = { Army1 = false, Army2 = false }
+    linea_field = false
+    linee_settori = false
+    callHandler("lockTerrain")
+    callHandler("aggiornaLinee")
+end
+
+

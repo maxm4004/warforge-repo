@@ -235,15 +235,20 @@ function main_restart()
     main_resetPlayers()
     restoreDiceUiState()
     main_updateCenterPanel()
+    field_clearTerrainCards()
     callHandler("deployment_resetRuntimeOnly")
-    callHandler("deployment_clearSpawnedModels")  -- esterni: deploy module
+    callHandler("deployment_clearSpawnedModels") 
 
     linee_spawn = true
     linea_field   = false
     linee_deploy  = false
     linee_settori = false
+    callHandler("engine_diceClearLastRoll", 1)
+    callHandler("engine_diceClearLastRoll", 2)
+    callHandler("engine_cameraResetAll")
     callHandler("aggiornaLinee")
     warning("RESTART...", "Yellow")
+    
 end
 -- ============================================================
 -- FUNZIONE: main_SlotByColor(color)

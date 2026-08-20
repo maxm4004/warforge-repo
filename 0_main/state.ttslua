@@ -74,8 +74,10 @@ ArmyHomePos = {
 }
 
 ArmyYaw = {
-    [1] = 0,
-    [2] = 180,
+  ["ArmyRollDices"]  =  { [1] = 30, [2] = 210 },
+    ["ArmyCards"]    =  { [1] = 0, [2]  = 180 },
+    ["ArmyBlock"]    =  { [1] = 0, [2] = 180 },
+    ["ArmyHome"]     =  { [1] = 0, [2] = 180 },
 }
 
 -- ============================================================
@@ -92,8 +94,8 @@ CAMERA_ZONE = {
 -- IEF_CAMERA_ZONE — ora referenzia tabelle già esistenti
 -- ============================================================
 IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
-    ["ArmyRollDices"] = { position = ArmyRollDicesPos, pitch = 40, yaw = ArmyYaw, distance = 12 },
-    ["ArmyCards"]    = { position = ArmyCardsPos,     pitch = 40, yaw = ArmyYaw, distance = 32 },
+    ["ArmyRollDices"] = { position = ArmyRollDicesPos, pitch = 30, yaw = ArmyYaw, distance = 12 },
+    ["ArmyCards"]    = { position = ArmyCardsPos,     pitch = 40, yaw = ArmyYaw, distance =20 },
     ["ArmyBlock"]    = { position = ArmyBlockPos,     pitch = 60, yaw = ArmyYaw, distance = 60 },
     ["ArmyHome"]      = { position = ArmyHomePos,      pitch = 40, yaw = ArmyYaw, distance = 80 },
 }
@@ -102,6 +104,7 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
 -- FUNZIONE: engine_diceCamera(player, position, pitch, yaw, distance)
 -- ============================================================
 function engine_diceCamera(player, position, pitch, yaw, distance)
+    if not player then print("Player on presente") return end
     player.lookAt({ position = position, pitch = pitch, yaw = yaw, distance = distance })
 end
 
@@ -122,7 +125,20 @@ function engine_cameraByNamme(player, subSlot, cameraName)
     local posSlot = camera.position[slot]
     local position = (subSlot and posSlot[subSlot]) or posSlot
 
-    local yaw = camera.yaw[slot]
-
-    engine_diceCamera(player, position, camera.pitch, yaw, camera.distance)
+    local yaw = camera.yaw[cameraName]
+    engine_diceCamera(player, position, camera.pitch, yaw[slot], camera.distance)
+ end
+-- ============================================================
+-- FUNZIONE: engine_diceCameraResetAll()
+-- Riporta la camera di ENTRAMBI i giocatori alla vista home
+-- del proprio slot (equivalente a "spacebar" per tutti insieme).
+-- ============================================================
+function engine_cameraResetAll()
+ 
+    Wait.time(function ()
+        engine_cameraByNamme(Player["Red"], nil, CAMERA_ZONE.ARMY_HOME)
+    end, 2)
+    Wait.time(function ()
+        engine_cameraByNamme(Player["Green"], nil, CAMERA_ZONE.ARMY_HOME)
+    end, 2)    
 end

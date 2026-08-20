@@ -111,14 +111,29 @@ function field_doRollFieldElement(player, slot)
 
     IEF_DICE_ROLL_TRY[slot] = { dadi = 2, soglia = nil }
 
-    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        engine_diceThrowFromBag(slot, nil, function(risultati, successi)
 
+        local faseCorrente = ENGINE.phase
+        if not risultati[1] and not risultati[2] then return end
         local somma = risultati[1] + risultati[2]
-        table.insert(rolls, somma)
+
         Wait.time(function()
+            local tipo = field_sommaToTipo(somma)
+
+            if tipo == "Fiume" and FIELD_STATE.fiumeUsato then
+                printToAll("[FIELD] Slot " .. slot .. " tira " .. somma .. " → Fiume già assegnato in questa partita, si ritira", {r=0.9,g=0.6,b=0.2})
+                field_doRollFieldElement(player, slot)
+                return
+            end
+
+            if tipo == "Fiume" then
+                FIELD_STATE.fiumeUsato = true
+            end
+
+            table.insert(rolls, somma)
+
             printToAll("[FIELD] Slot " .. slot .. " tiro " .. #rolls .. "/" .. totale .. ": " .. somma, {r=0.8,g=0.7,b=0.2})
 
-            local tipo = field_sommaToTipo(somma)
             field_spawnTerrainCard(tipo, slot, #rolls)
 
             if #rolls >= totale then
@@ -135,12 +150,14 @@ function field_doRollFieldElement(player, slot)
             else
                 UI.setAttribute(btnId, "text", "ELEMENTO " .. (#rolls + 1) .. "/" .. totale)
                 UI.setAttribute(btnId, "textColor", "White")
-                engine_diceCameraReturn(player, slot)
             end
+
+            engine_diceCameraReturn(player, slot, faseCorrente)
+
         end, 2)
 
         if slot == 1 then FIELD_STATE.rolls1 = rolls else FIELD_STATE.rolls2 = rolls end
-      end)
+    end)
 end
 
 -- ============================================================
@@ -195,7 +212,7 @@ function field_spawnTerrainCard(tipo, slot, index)
     local card = spawnObjectData({
         data     = template,
         position = pos,
-        rotation = rot,
+        rotation = rot
     })
 
         if card then
@@ -212,7 +229,7 @@ function field_sommaToBlocco(somma)
     return "sinistro"
 end
 -- ============================================================
--- FUNZIONE: field_posizioniBlocco(slot, blocco)
+-- FUNZIONE: field_posizioniBlocco(slot,b locco)
 -- ============================================================
 function field_posizioniBlocco(slot, blocco)
     local center = IEF_FIELD_BLOCK_CENTER[slot][blocco]
@@ -241,10 +258,15 @@ end
 -- riposizionando anche l'eventuale carta già presente (simmetria).
 -- somma = nil se piazzamento automatico (nessun dado tirato).
 -- ============================================================
-function field_placeCardInBlock(player, slot, index, blocco, somma)
+function field_placeCardInBlock(player, slot, index, blocco, somma, faseOrigine)
+    
+    faseOrigine = faseOrigine or ENGINE.phase
+
     local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
     local btnId  = slot == 1 and BUTTONS.BTN_ARMY1 or BUTTONS.BTN_ARMY2
     local card   = FIELD_STATE.cards[slot][index]
+
+    print("[DEBUG PLACE] slot=" .. slot .. " index=" .. index .. " card=" .. tostring(card))
 
     table.insert(FIELD_STATE.blockCards[slot][blocco], card)
     local cardsInBlocco = FIELD_STATE.blockCards[slot][blocco]
@@ -252,22 +274,28 @@ function field_placeCardInBlock(player, slot, index, blocco, somma)
     Wait.time(function()
         if #cardsInBlocco == 1 then
             local c = IEF_FIELD_BLOCK_CENTER[slot][blocco]
+            card.setLock(false)
             card.setPositionSmooth({ x = c.x, y = c.y, z = c.z })
         else
             local posizioni = field_posizioniBlocco(slot, blocco)
             for i, c in ipairs(cardsInBlocco) do
+                c.setLock(false)
                 c.setPositionSmooth(posizioni[i])
             end
         end
 
-        FIELD_STATE.blockPlaced[slot] = index
+        Wait.time(function()
+            for _, c in ipairs(cardsInBlocco) do
+                c.setLock(true)
+            end
+        end, 1)
 
+        FIELD_STATE.blockPlaced[slot] = index
+        
         local msg = somma
             and ("[FIELD] Slot " .. slot .. " tira " .. somma .. " → elemento " .. index .. "/" .. totale .. " nel blocco " .. blocco)
             or  ("[FIELD] Slot " .. slot .. " → elemento " .. index .. "/" .. totale .. " assegnato automaticamente al blocco " .. blocco)
         printToAll(msg, {r=0.6,g=0.9,b=0.6})
-
-        engine_diceCameraReturn(player, slot)
 
         if index >= totale then
             UI.setAttribute(btnId, "text", "Completato")
@@ -284,6 +312,8 @@ function field_placeCardInBlock(player, slot, index, blocco, somma)
             UI.setAttribute(btnId, "text", "Tiro " .. (index + 1) .. "/" .. totale)
             UI.setAttribute(btnId, "textColor", "White")
         end
+
+        engine_diceCameraReturn(player, slot, faseOrigine)
     end, 2)
 end
 -- ============================================================
@@ -298,18 +328,10 @@ function field_doRollBlock(player, slot)
     local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
     local placed = FIELD_STATE.blockPlaced[slot]
     local index  = placed + 1
+    local faseOrigine = ENGINE.phase
 
     if placed >= totale then
         printToColor("[FIELD] Hai già piazzato tutti i tuoi elementi", player.color, {r=0.7,g=0.7,b=0.7})
-        return
-    end
-
-    if totale == 3 and index == 3 then
-        local blocco = nil
-        for _, b in ipairs({"destro", "centro", "sinistro"}) do
-            if #FIELD_STATE.blockCards[slot][b] == 0 then blocco = b break end
-        end
-        field_placeCardInBlock(player, slot, index, blocco, nil)
         return
     end
 
@@ -317,8 +339,9 @@ function field_doRollBlock(player, slot)
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         local somma  = risultati[1] + risultati[2]
+        if not risultati[1] and not risultati[2] then return end
+        somma = 11
         local blocco = field_sommaToBlocco(somma)
-
         if #FIELD_STATE.blockCards[slot][blocco] >= 2 then
             local liberi = field_blocchiLiberi(slot)
             if #liberi > 0 then
@@ -334,23 +357,27 @@ function field_doRollBlock(player, slot)
             return
         end
 
-        field_placeCardInBlock(player, slot, index, blocco, somma)
+        field_placeCardInBlock(player, slot, index, blocco, somma, faseOrigine)
     end)
 end
-
 -- ============================================================
 -- FUNZIONE: field_clearTerrainCards()
--- Distrugge tutte le carte terreno spawnate (entrambi gli
--- eserciti) e resetta gli array di riferimento in FIELD_STATE.
+-- Distrugge tutte le carte terreno presenti sul tavolo (tag
+-- "Cards"), indipendentemente dai riferimenti salvati in
+-- FIELD_STATE — così funziona anche se quei riferimenti sono
+-- andati persi (es. dopo un cambio fase/reload).
 -- ============================================================
 function field_clearTerrainCards()
-    for slot = 1, 2 do
-        if FIELD_STATE.cards and FIELD_STATE.cards[slot] then
-            for _, card in pairs(FIELD_STATE.cards[slot]) do
-                if card and not card.isDestroyed() then
-                    card.destruct()
-                end
-            end
+
+    for _, obj in ipairs(getAllObjects()) do
+        if obj.hasTag and obj.hasTag("ZoneCardsNumbers") then
+            obj.destruct()
+        end
+    end
+    
+    for _, obj in ipairs(getAllObjects()) do
+        if obj.hasTag and obj.hasTag("Cards") then
+            obj.destruct()
         end
     end
 
@@ -440,6 +467,32 @@ function field_restoreState(saved)
                     end
                 end
             end
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: field_createBlockLabels()
+-- ============================================================
+function field_createBlockLabels()
+    for slot = 1, 2 do
+        for _, blocco in ipairs({"destro", "centro", "sinistro"}) do
+            local l = IEF_FIELD_BLOCK_LABELS_POS[slot][blocco]
+
+            local obj = spawnObject({
+                type     = "3DText",
+                position = l.pos,
+                rotation = l.rot,
+                scale    = { x = 2, y = 2, z = 2 },
+            })
+            obj.setValue(l.testo)
+            obj.setLock(true)
+            obj.addTag("ZoneCardsNumbers")
+            Wait.frames(function()
+                obj.TextTool.setFontSize(200)   -- prova con questo valore, poi regola
+            end, 1)
+
+            table.insert(IEF_FIELD_BLOCK_LABELS, obj)
         end
     end
 end

@@ -1,0 +1,15 @@
+-- ============================================================
+-- WARFORGE IEF — Loader principale ruleset
+-- v1.0.0
+-- ============================================================
+
+require("rulesets.imperifeudi.0_main.loader")
+require("rulesets.imperifeudi.1_sitting.loader")
+require("rulesets.imperifeudi.2_field.loader")
+require("rulesets.imperifeudi.3_deploy.loader")
+require("rulesets.imperifeudi.4_charge.loader")
+require("rulesets.imperifeudi.5_initiative.loader")
+require("rulesets.imperifeudi.6_move.loader")
+require("rulesets.imperifeudi.7_shoot.loader")
+require("rulesets.imperifeudi.8_melee.loader")
+require("rulesets.imperifeudi.9_recovery.loader")
