@@ -1,0 +1,70 @@
+-- ============================================================
+-- FUNZIONE: field_readyArmy1(player, value, id)
+-- ============================================================
+function field_readyArmy1(player, value, id)
+    TURN.completed.Army1 = true
+    engine_handleAction({ type = ACTION.ARMY1_CLICK })
+    return true
+end
+-- ============================================================
+-- FUNZIONE: field_readyArmy2(player, value, id)
+-- ============================================================
+function field_readyArmy2(player, value, id)
+    TURN.completed.Army2 = true
+    engine_handleAction({ type = ACTION.ARMY2_CLICK })
+    return true
+end
+-- ============================================================
+-- FUNZIONE: field_rollFieldElement(player, value, id)
+-- ============================================================
+function field_rollFieldElement(player, value, id)
+    local slot = main_SlotByColor(player.color)
+    engine_diceCameraZoom(player, slot)
+    return false
+end
+-- ============================================================
+-- FUNZIONE: field_rollBlockZoom(player, value, id)
+-- ============================================================
+function field_rollBlockZoom(player, value, id)
+    local slot = main_SlotByColor(player.color)
+    engine_diceCameraZoom(player, slot)
+    return false
+end
+-- ============================================================
+-- FUNZIONE: field_done_army1()
+-- ============================================================
+function field_done_army1(player, value, id)
+    TURN.completed.Army1 = true
+    warningToColor("Gli Elementi 3d per Army1 sono stati creati sul tavolo", player, "Yellow")
+    Wait.time(function()
+        engine_handleAction({ type = ACTION.ARMY1_CLICK }) 
+        return true
+    end, 3)
+end
+-- ============================================================
+-- FUNZIONE: field_done_army2()
+-- ============================================================
+function field_done_army2(player, value, id)
+    TURN.completed.Army2 = true
+    warningToColor("Gli Elementi 3d per Army2 sono stati creati sul tavolo", player, "Yellow")
+    Wait.time(function()
+        engine_handleAction({ type = ACTION.ARMY2_CLICK }) 
+        return true
+    end, 3)
+end
+-- ============================================================
+-- FUNZIONE: field_readyPositioning1(player, value, id)
+-- ============================================================
+function field_readyPositioning1(player, value, id)
+    TURN.completed.Army1 = true
+    engine_handleAction({ type = ACTION.ARMY1_CLICK })
+    return true
+end
+-- ============================================================
+-- FUNZIONE: field_readyPositioning2(player, value, id)
+-- ============================================================
+function field_readyPositioning2(player, value, id)
+    TURN.completed.Army2 = true
+    engine_handleAction({ type = ACTION.ARMY2_CLICK })
+    return true
+end
