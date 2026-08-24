@@ -1,0 +1,145 @@
+diceUrls = {
+    [1] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/1d6.png",
+    [2] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-L/uarefs/heads/main/dice/2d6.png",
+    [3] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/3d6.png",
+    [4] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/4d6.png",
+    [5] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/5d6.png",
+    [6] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/6d6.png"
+}
+
+-- ============================================================
+-- FIELD STATE
+-- Stato runtime della fase FIELD
+-- ============================================================
+
+  orientamentoArmy1 = "Fanteria"    -- hardcoded, arriverà da armyData.orientamento
+  orientamentoArmy2 = "Bilanciato"  -- hardcoded, arriverà da armyData.orientamento
+
+  -- ============================================================
+-- FIELD_STATE — struttura completa, unica fonte di verità.
+-- before_field la resetta chiamando field_defaultState(),
+-- non riscrivendola a mano.
+-- ============================================================
+function field_defaultState()
+    return {
+        diceResult     = nil,
+        numElements    = nil,
+        army1Elements  = 0,
+        army2Elements  = 0,
+        orientamento1  = nil,
+        orientamento2  = nil,
+        tieBreaker     = false,
+        tbResult1      = nil,
+        tbResult2      = nil,
+        rolls1         = {},
+        rolls2         = {},
+        cards          = { [1] = {}, [2] = {} },
+        varianti       = { [1] = {}, [2] = {} },
+        blockPlaced    = { [1] = 0, [2] = 0 },
+        blockCards     = {
+            [1] = { destro = {}, centro = {}, sinistro = {} },
+            [2] = { destro = {}, centro = {}, sinistro = {} },
+        },
+        fiumeUsato = false,
+        handVisibleCount = { [1] = 0, [2] = 0 },
+    }
+end
+
+FIELD_STATE = FIELD_STATE or field_defaultState()
+
+IEF_TERRAIN_BAG = "a87f74"
+
+IEF_FIELD_CARD_BAG  = {
+     [1] = {
+        ["Aperto"]           = "510107",
+        ["Rotto"]            = "b6d392",
+        ["Difficile"]        = "283aa7",
+        ["Intransitabile"]   = "590a4b",
+        ["Fiume"]            = "065eef",
+        ["Cover"]            = "64d1b9"
+     },
+     [2] = {
+        ["Aperto"]           = "e41e39",
+        ["Rotto"]            = "fa1829",
+        ["Difficile"]        = "7ec7ca",
+        ["Intransitabile"]   = "4162bd",
+        ["Fiume"]            = "7638de",
+        ["Cover"]            = "fbdca9"
+     }   
+}
+
+IEF_FIELD_CARD_TEMPLATE = {}
+
+FIELD_ELEMENTS_BY_ORIENTAMENTO = {
+    ["Fanteria"]  = 4,
+    ["Bilanciato"] = 3,
+    ["Cavalleria"] = 2
+}
+
+IEF_FIELD_CARD_POS = {
+    [1] = {
+        { x = -77.51, y = 1.00, z = -53.29 },
+        { x = -70.74, y = 1.00, z = -53.29 },
+        { x = -64.02, y = 1.00, z = -53.29 },
+        { x = -57.58, y = 1.00, z = -53.29 },
+    },
+    [2] = {
+        { x = 77.51, y = 1.00, z = 53.29 },
+        { x = 70.74, y = 1.00, z = 53.29 },
+        { x = 64.02, y = 1.00, z = 53.29 },
+        { x = 57.58, y = 1.00, z = 53.29 },
+    },
+}
+
+IEF_FIELD_CARD_ROT = {
+    [1] = { x = 0, y = 180, z = 0 },
+    [2] = { x = 0, y = 0,   z = 0 },
+}
+
+army1_elements = {}
+army2_elements = {}
+
+IEF_FIELD_BLOCK_CENTER = {
+    [1] = {
+        destro   = { x =  44.537, y = 1.21, z = -22.268 },
+        centro   = { x =   0,     y = 1.21, z = -22.268 },
+        sinistro = { x = -44.537, y = 1.21, z = -22.268 },
+    },
+    [2] = {
+        destro   = { x = -44.537, y = 1.21, z = 22.268 },
+        centro   = { x =   0,     y = 1.21, z = 22.268 },
+        sinistro = { x =  44.537, y = 1.21, z = 22.268 },
+    },
+}
+
+IEF_FIELD_BLOCK_CARD_GAP = 4
+
+IEF_FIELD_BLOCK_LABELS_POS = {
+    [2] = {
+        destro   = { pos = { x = -44.48, y = 1.21, z =  5.55 }, rot = { x = 90, y = 180, z = 0 }, testo = "2 - 3 - 4 - 5" },
+        centro   = { pos = { x =   0.14, y = 1.21, z =  5.53 }, rot = { x = 90, y = 180, z = 0 }, testo = "6 - 7 - 8" },
+        sinistro = { pos = { x =  43.54, y = 1.21, z =  5.55 }, rot = { x = 90, y = 180, z = 0 }, testo = "9 - 10 - 11 - 12" },
+    },
+    [1] = {
+        destro   = { pos = { x =  44.48, y = 1.21, z = -5.55 }, rot = { x = 90, y = 0, z = 0 }, testo = "2 - 3 - 4 - 5" },
+        centro   = { pos = { x =  -0.14, y = 1.21, z = -5.53 }, rot = { x = 90, y = 0, z = 0 }, testo = "6 - 7 - 8" },
+        sinistro = { pos = { x = -43.54, y = 1.21, z = -5.55 }, rot = { x = 90, y = 0, z = 0 }, testo = "9 - 10 - 11 - 12" },
+    },
+}
+
+IEF_FIELD_BLOCK_LABELS = {}
+
+-- ============================================================
+-- FUNZIONE: field_tipoToCategoria(tipo)
+-- Converte il nome tipo (usato da field_sommaToTipo, es. "Rotto")
+-- nella chiave categoria del JSON varianti (es. "ROTTO").
+-- ============================================================
+IEF_FIELD_TIPO_TO_CATEGORIA = {
+    ["Aperto"]         = "APERTO",
+    ["Rotto"]          = "ROTTO",
+    ["Difficile"]      = "DIFFICILE",
+    ["Intransitabile"] = "INTRANSITABILE",
+    ["Fiume"]          = "FIUME",
+    ["Cover"]          = "COVER"
+}
+
