@@ -25,7 +25,7 @@ function main_updateCenterPanel()
 
     -- Nomi e colori eserciti 
     pcall(function() 
-        local n1 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army1.nome or "Armyx 1")
+        local n1 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army1.nome or "Army 1")
         local n2 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army2.nome or "Army 2")
 
         UI.setAttribute("army1", "text",  n1)
@@ -235,6 +235,9 @@ function main_restart()
     main_resetPlayers()
     restoreDiceUiState()
     main_updateCenterPanel()
+    FIELD_STATE = field_defaultState()
+    field_handPreviewReset(1)
+    field_handPreviewReset(2)
     field_clearTerrainCards()
     callHandler("deployment_resetRuntimeOnly")
     callHandler("deployment_clearSpawnedModels") 
@@ -755,60 +758,6 @@ end
 -- FUNZIONE: aggiornaSchedeUnita() — compatibilità
 -- ============================================================
 function main_aggiornaSchedeUnita()
-end
-
--- ============================================================
--- FUNZIONE: ief_data_load()
--- Carica i 7 JSON base in parallelo, poi chiama ief_data_onLoaded()
--- Le armies e i scenari vengono caricati on-demand.
--- ============================================================
-function main_data_load()
-
-    files = {
-        { key = "unitTypes",    file = "unit_types.json",      wrap = "unit_types"    },
-        { key = "morale",       file = "morale.json",          wrap = nil             },
-        { key = "weapons",      file = "weapons.json",         wrap = nil             },
-        { key = "capabilities", file = "capabilities.json",    wrap = nil             },
-        { key = "terrain",      file = "terrain.json",         wrap = nil             },
-        { key = "movement",     file = "movement.json",        wrap = nil             },
-        { key = "melee",        file = "melee_modifiers.json", wrap = nil             }
-    }
-
-    local loaded = 0
-    local total  = #files
-    local errors = 0
-
-    for _, f in ipairs(files) do
-        local url  = IEF_JSON_BASE_URL .. f.file
-        local fkey = f.key
-        local wrap = f.wrap
-
-        WebRequest.get(url, function(request)
-            if request.is_error then
-                printToAll("[IEF_DATA] Errore: " .. fkey .. " — " .. tostring(request.error), {r=1,g=0.3,b=0.3})
-                errors = errors + 1
-                loaded = loaded + 1
-            else
-                local ok, decoded = pcall(JSON.decode, request.text)
-                if not ok or not decoded then
-                    printToAll("[IEF_DATA] JSON decode fallito: " .. fkey, {r=1,g=0.3,b=0.3})
-                    errors = errors + 1
-                else
-                    -- Alcuni JSON hanno un wrapper root (es. unit_types.json → .unit_types)
-                    if wrap and decoded[wrap] then
-                        IEF_DATA[fkey] = decoded[wrap]
-                    else
-                        IEF_DATA[fkey] = decoded
-                    end
-                end
-                loaded = loaded + 1
-            end
-
-            if loaded == total then
-                main_data_onLoaded(errors)
-            end
-        end)
-    end
 end
 -- ============================================================
 -- FUNZIONE: ief_data_onLoaded(errors)
@@ -1805,7 +1754,7 @@ function main_riposizionaPulsanteFormazione(unitKey, basiObjs)
         end
     end
 
-    main_createBaseButtons(nuovaBase)
+    main_createBaseButtons(nuovaBase, TURN.phase, unitKey)
     IEF_UNIT_BUTTON_BASE[unitKey] = nuovoGuid
 
     -- Se il pannello era aperto su una base diversa da quella nuova, chiudi il vecchio prima di spostare il riferimento
@@ -1893,29 +1842,23 @@ end
 -- FUNZIONE: main_createBaseButtons(obj)
 -- Crea i pulsanti 3D (Formazione + Muovi) sulla base indicata.
 -- ============================================================
-function main_createBaseButtons(obj)
+function main_createBaseButtons(obj, phase, unit)
+
     obj.clearButtons()
+    local azioni = {
+        [PHASE.DEPLOY_SPAWN] = form,
+        [PHASE.MOVE]         = form, move,
+        [PHASE.CHARGE]       = charge,
+        [PHASE.SHOOT]        = shoot,
+        [PHASE.MELEE]        = melee,
+        [PHASE.RECOVERY]     = recovery,
+    }
 
-    obj.createButton({
-        click_function = "main_formationOpenFromButton",
-        function_owner = Global,
-        label = "FORM",
-        position = {1, 0.1, -1.8},
-        rotation = {0, 180, 0},
-        width = 500, 
-        height = 400, 
-        font_size = 100,
-    })
+    local f = azioni[phase]
+    if f then f(obj) else print("caso non gestito: " .. tostring(phase)) return end
 
-    obj.createButton({
-        click_function = "main_movementOpenFromButton",
-        function_owner = Global,
-        label = "MOVE",
-        position = {0, 0.1, -1.8},
-        rotation = {0, 180, 0},
-        width = 500, height = 400, font_size = 100,
-    })
 end
+
 -- ============================================================
 -- FUNZIONE: main_getChildOffsets()
 -- ============================================================
@@ -1964,4 +1907,19 @@ function main_getChildOffsets()
             i, x, z, y
         ))
     end
+end
+-- ============================================================
+-- FUNZIONE: form()
+-- ============================================================
+function form(obj)
+        obj.createButton({
+        click_function = "main_formationOpenFromButton",
+        function_owner = Global,
+        label = "FORMAZIONE",
+        position = {1, 0.1, -1.8},
+        rotation = {0, 180, 0},
+        width = 500, 
+        height = 400, 
+        font_size = 100,
+    })
 end

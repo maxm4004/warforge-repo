@@ -246,6 +246,7 @@ function getRulesetUiXml()
             </HorizontalLayout>
         </VerticalLayout>
     </Panel>
+    <!--
         <Panel id="panelDices"
         rectAlignment="UpperCenter"
         width="450" height="100"
@@ -256,6 +257,7 @@ function getRulesetUiXml()
                 <Image id="diceArmy2" image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/1d6.png" preserveAspect="1"/>
             </HorizontalLayout>
     </Panel>
+    -->
     <Panel id="iconWinnerArmy1" rectAlignment="UpperCenter" width="50" height="30" 
     offsetXY="-195 -233" color="rgba(0,0,0,0)" active="false">
         <Image outline="#000000" outlineSize="0.6" image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/images/crown.png" preserveAspect="1"/>

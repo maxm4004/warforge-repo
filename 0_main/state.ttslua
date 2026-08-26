@@ -74,7 +74,7 @@ ArmyHomePos = {
 }
 
 ArmyYaw = {
-  ["ArmyRollDices"]  =  { [1] = 30, [2] = 210 },
+  ["ArmyRollDices"]  =  { [1] = 0, [2] = 180 },
     ["ArmyCards"]    =  { [1] = 0, [2]  = 180 },
     ["ArmyBlock"]    =  { [1] = 0, [2] = 180 },
     ["ArmyHome"]     =  { [1] = 0, [2] = 180 },
@@ -99,46 +99,3 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
     ["ArmyBlock"]    = { position = ArmyBlockPos,     pitch = 60, yaw = ArmyYaw, distance = 60 },
     ["ArmyHome"]      = { position = ArmyHomePos,      pitch = 40, yaw = ArmyYaw, distance = 80 },
 }
-
--- ============================================================
--- FUNZIONE: engine_diceCamera(player, position, pitch, yaw, distance)
--- ============================================================
-function engine_diceCamera(player, position, pitch, yaw, distance)
-    if not player then print("Player on presente") return end
-    player.lookAt({ position = position, pitch = pitch, yaw = yaw, distance = distance })
-end
-
--- ============================================================
--- FUNZIONE: debug_cameraData2(color, slot, subSlot, cameraName)
--- subSlot è opzionale: serve solo per "Army1Cards" (una posizione
--- per elemento), per le zone a punto fisso passa nil o 1.
--- ============================================================
-function engine_cameraByNamme(player, subSlot, cameraName)
-
-    local slot = main_SlotByColor(player.color)
-    local camera = IEF_CAMERA_ZONE[cameraName]
-    if not camera then
-        print("[CAMERA] Zona non trovata: " .. tostring(cameraName))
-        return
-    end
-
-    local posSlot = camera.position[slot]
-    local position = (subSlot and posSlot[subSlot]) or posSlot
-
-    local yaw = camera.yaw[cameraName]
-    engine_diceCamera(player, position, camera.pitch, yaw[slot], camera.distance)
- end
--- ============================================================
--- FUNZIONE: engine_diceCameraResetAll()
--- Riporta la camera di ENTRAMBI i giocatori alla vista home
--- del proprio slot (equivalente a "spacebar" per tutti insieme).
--- ============================================================
-function engine_cameraResetAll()
- 
-    Wait.time(function ()
-        engine_cameraByNamme(Player["Red"], nil, CAMERA_ZONE.ARMY_HOME)
-    end, 2)
-    Wait.time(function ()
-        engine_cameraByNamme(Player["Green"], nil, CAMERA_ZONE.ARMY_HOME)
-    end, 2)    
-end

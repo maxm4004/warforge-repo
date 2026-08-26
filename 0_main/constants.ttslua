@@ -31,7 +31,6 @@ BUTTONS = {
     BTN_SINGLE = "BTN_SINGLE"
 }
 
--- Nodi fase reali IEF — corrispondono ESATTAMENTE alle chiavi in ENGINE.phases
 PHASE = {
     SITTING          = "SITTING",
     FIELD            = "FIELD",

@@ -48,7 +48,7 @@ function getEngineUiXml()
         <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="false">
             <Image image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/logo/logo01.png" preserveAspect="1"/>
         </Panel>
-        <Panel rectAlignment="LowerCenter" width="800" height="30" color="rgba(0,0,0,0)" offsetXY="0 700">
+        <Panel rectAlignment="LowerCenter" width="1100" height="30" color="rgba(0,0,0,0)" offsetXY="0 700">
             <Text id="playerGameMessage" text="" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
             outlineSize="1" alignment="MiddleCenter"/>
         </Panel>
@@ -84,16 +84,45 @@ function getEngineUiXml()
     ]]
     return panels
 end
+-- ============================================================
+-- FUNZIONE: getHandPreviewXml(slot)
+-- Costruisce l'XML del pannello mano per lo slot dato, con
+-- tante Image quante sono gli elementi assegnati a quel player
+-- (max 4). La larghezza iniziale riflette il numero di carte
+-- già visibili in quel momento (handVisibleCount), poi viene
+-- aggiornata dinamicamente da field_handPreviewUpdateWidth ad
+-- ogni show/hide successivo.
+-- ============================================================
+function getHandPreviewXml(slot)
 
+    local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
+    local colore = slot == 1 and "Red" or "Green"
+
+    local images = ""
+    for i = 1, totale do
+        images = images .. string.format(
+            '<Image id="hand_slot_%d_%d" image="" width="200" height="300" active="false" preserveAspect="true" />',
+            slot, i
+        )
+    end
+
+    return string.format(
+        '<Panel id="handPreview%d" rectAlignment="LowerCenter" width="%d" height="300" offsetXY="0 0" color="rgba(0,0,0,0)" visibility="%s" active="false">' ..
+        '<HorizontalLayout spacing="10" childAlignment="MiddleCenter">%s</HorizontalLayout>' ..
+        '</Panel>',
+        slot, 0, colore, images
+    )
+end
 -- ============================================================
 -- FUNZIONE: buildUI()
 -- ============================================================
 function buildUI()
     local enginePanels = getEngineUiXml()
     local rulesetXml   = callHandler("getRulesetUiXml") or ""
+    local handPreview  = getHandPreviewXml(1) .. getHandPreviewXml(2)
     local header = [[<XmlLayout xmlns="XmlLayout"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="XmlLayout ../../../Configuration/XmlLayout.xsd">]]
     local bottom = "</XmlLayout>"
-    UI.setXml(header .. rulesetXml .. enginePanels .. bottom)
+    UI.setXml(header .. rulesetXml .. enginePanels .. handPreview .. bottom)
 end

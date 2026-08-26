@@ -1,52 +1,3 @@
-diceUrls = {
-    [1] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/1d6.png",
-    [2] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-L/uarefs/heads/main/dice/2d6.png",
-    [3] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/3d6.png",
-    [4] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/4d6.png",
-    [5] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/5d6.png",
-    [6] = "https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/6d6.png"
-}
-
--- ============================================================
--- FIELD STATE
--- Stato runtime della fase FIELD
--- ============================================================
-
-  orientamentoArmy1 = "Fanteria"    -- hardcoded, arriverà da armyData.orientamento
-  orientamentoArmy2 = "Bilanciato"  -- hardcoded, arriverà da armyData.orientamento
-
-  -- ============================================================
--- FIELD_STATE — struttura completa, unica fonte di verità.
--- before_field la resetta chiamando field_defaultState(),
--- non riscrivendola a mano.
--- ============================================================
-function field_defaultState()
-    return {
-        diceResult     = nil,
-        numElements    = nil,
-        army1Elements  = 0,
-        army2Elements  = 0,
-        orientamento1  = nil,
-        orientamento2  = nil,
-        tieBreaker     = false,
-        tbResult1      = nil,
-        tbResult2      = nil,
-        rolls1         = {},
-        rolls2         = {},
-        cards          = { [1] = {}, [2] = {} },
-        varianti       = { [1] = {}, [2] = {} },
-        blockPlaced    = { [1] = 0, [2] = 0 },
-        blockCards     = {
-            [1] = { destro = {}, centro = {}, sinistro = {} },
-            [2] = { destro = {}, centro = {}, sinistro = {} },
-        },
-        fiumeUsato = false,
-        handVisibleCount = { [1] = 0, [2] = 0 },
-    }
-end
-
-FIELD_STATE = FIELD_STATE or field_defaultState()
-
 IEF_TERRAIN_BAG = "a87f74"
 
 IEF_FIELD_CARD_BAG  = {
@@ -69,12 +20,6 @@ IEF_FIELD_CARD_BAG  = {
 }
 
 IEF_FIELD_CARD_TEMPLATE = {}
-
-FIELD_ELEMENTS_BY_ORIENTAMENTO = {
-    ["Fanteria"]  = 4,
-    ["Bilanciato"] = 3,
-    ["Cavalleria"] = 2
-}
 
 IEF_FIELD_CARD_POS = {
     [1] = {

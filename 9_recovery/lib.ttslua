@@ -1,2 +1,15 @@
--- rulesets/imperifeudi/9_recovery/lib.ttslua
--- Logica pura fase recovery — stub vuoto
+-- ============================================================
+-- FUNZIONE: recovery()
+-- ============================================================
+function recovery(obj)
+        obj.createButton({
+        click_function = "",
+        function_owner = Global,
+        label = "RECUPERO",
+        position = {1, 0.1, -1.8},
+        rotation = {0, 180, 0},
+        width = 500, 
+        height = 400, 
+        font_size = 100,
+    })
+end

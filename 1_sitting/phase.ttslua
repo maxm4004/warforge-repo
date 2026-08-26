@@ -4,8 +4,8 @@
 function sitting_phase()
     return {
         SITTING = {
-            title = "SCELTA COLORE",
-            desc  = "Entrambi i giocatori giocheranno con l'esercito associato al colore scelto",
+            title = "SCEGLI IL TUO ESERCITO",
+            desc  = "",
             before = "before_sitting",
             after  = "after_sitting",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },

@@ -15,6 +15,7 @@ IEF_DATA = IEF_DATA or {
     armyCodes    = {},
     enemyAliases = {},
     armies       = {},
+    fieldTerrainVariants = {},    
 }
 
 IEF_JSON_BASE_URL = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/json/"
@@ -30,6 +31,7 @@ IEF_URL_TERRAIN       = IEF_JSON_BASE_URL .. "terrain.json"
 IEF_URL_ARMY_CODES    = IEF_JSON_BASE_URL .. "army_codes.json"
 IEF_URL_ENEMY_ALIASES = IEF_JSON_BASE_URL .. "enemy_aliases.json"
 IEF_URL_BUTTONBAR     = IEF_JSON_BASE_URL .. "buttonbar.json"
+IEF_URL_FIELD_TERRAIN_VARIANTS = IEF_JSON_BASE_URL .. "field_terrain_variants.json"
 
 -- ============================================================
 -- FUNZIONE: main_data_load()
@@ -39,7 +41,7 @@ IEF_URL_BUTTONBAR     = IEF_JSON_BASE_URL .. "buttonbar.json"
 function main_data_load()
     local files = {
         { url = IEF_URL_UNIT_TYPES,    key = "unitTypes",    field = "unit_types"    },
-        { url = IEF_URL_WEAPONS,       key = "weapons",      field = "nil"       },
+        { url = IEF_URL_WEAPONS,       key = "weapons",      field = "nil"           },
         { url = IEF_URL_MORALE,        key = "morale",       field = nil             },
         { url = IEF_URL_MELEE,         key = "melee",        field = nil             },
         { url = IEF_URL_MOVEMENT,      key = "movement",     field = "movement"      },
@@ -47,6 +49,7 @@ function main_data_load()
         { url = IEF_URL_TERRAIN,       key = "terrain",      field = "terrain_types" },
         { url = IEF_URL_ARMY_CODES,    key = "armyCodes",    field = "army_codes"    },
         { url = IEF_URL_ENEMY_ALIASES, key = "enemyAliases", field = "enemy_aliases" },
+        { url = IEF_URL_FIELD_TERRAIN_VARIANTS, key = "fieldTerrainVariants", field = "terrain_variants" },
     }
 
     local total   = #files
@@ -60,9 +63,9 @@ function main_data_load()
             printToAll("[IEF_DATA] Attenzione: " .. failed .. " file non caricati", {r=1,g=0.6,b=0})
         end
 
-        printToAll("[IEF_DATA] Base dati IEF pronta — " ..
-            main_count(IEF_DATA.unitTypes) .. " tipi unità, " ..
-            main_count(IEF_DATA.weapons)   .. " armi", {r=0.4,g=0.9,b=0.4})
+       -- printToAll("[IEF_DATA] Base dati IEF pronta — " ..
+       --     main_count(IEF_DATA.unitTypes) .. " tipi unità, " ..
+       --     main_count(IEF_DATA.weapons)   .. " armi", {r=0.4,g=0.9,b=0.4})
 
         callHandler("ief_data_ready")
     end
@@ -104,6 +107,12 @@ function main_data_load()
                 else
                     IEF_DATA[file.key] = data
                 end
+            end
+
+            if file.field and data[file.field] then
+                IEF_DATA[file.key] = data[file.field]
+            else
+                IEF_DATA[file.key] = data
             end
 
             loaded = loaded + 1

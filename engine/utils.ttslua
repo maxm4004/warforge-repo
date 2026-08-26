@@ -43,7 +43,7 @@ end
 -- ============================================================
 -- FUNZIONE: warningToColor()
 -- ============================================================
-function warningToColor(warning, player, color)
+function warningToColor(warning, player, color, second)
     if player then
         UI.setAttribute("playerGameMessage", "Color", color)
         UI.setAttribute("playerGameMessage", "text", warning)
@@ -53,7 +53,7 @@ function warningToColor(warning, player, color)
 
     Wait.time(function()
         UI.setAttribute("playerGameMessage", "active", "false")
-    end, 5)
+    end, not second and 5 or second)
 end
 -- ============================================================
 -- FUNZIONE: warningToColor()

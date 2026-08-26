@@ -19,15 +19,10 @@ end
 -- ============================================================
 function field_rollFieldElement(player, value, id)
     local slot = main_SlotByColor(player.color)
-    local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
-    local width = totale * 202
-    local panelId = "handPreview" .. slot
-    UI.setAttribute(panelId, "width", width)
-    print(width)
-    field_handPreviewCover(slot, totale)
+    field_handPreviewCard(slot)
     engine_diceCameraZoom(player, slot)
     return false
-end
+end 
 -- ============================================================
 -- FUNZIONE: field_rollBlockZoom(player, value, id)
 -- ============================================================

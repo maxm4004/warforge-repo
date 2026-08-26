@@ -1,11 +1,4 @@
 -- ============================================================
--- 6_move/lib.ttslua
--- Movimento (avanti/perno). Pannello 3D agganciato alla base
--- capitana, stato indicizzato per unitKey (main_getUnitKey).
--- Nessun riferimento al pannello 2D — rimosso.
--- ============================================================
-
--- ============================================================
 -- FUNZIONE: move_getGroupAxis(basiObjs)
 -- Ricalcola fwdXZ/right dalle posizioni/rotazioni attuali,
 -- riordina basiObjs lungo l'asse "right". Usata da move_perno_apply
@@ -289,4 +282,18 @@ end
 function move_btnClose(player, value, id)
     local unitKey = id:match("^btn_(.+)_Close$")
     if unitKey then move_close(unitKey) end
+end
+-- ============================================================
+-- FUNZIONE: move_close(unitKey)
+-- Chiude il pannello 3D e pulisce lo stato dell'unità.
+-- ============================================================
+function move(obj)
+    obj.createButton({
+        click_function = "main_movementOpenFromButton",
+        function_owner = Global,
+        label = "MOVIMENTO",
+        position = {0, 0.1, -1.8},
+        rotation = {0, 180, 0},
+        width = 500, height = 400, font_size = 100,
+    })
 end

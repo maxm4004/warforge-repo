@@ -140,7 +140,7 @@ function main_restoreState(save_state)
                         local baseDaUsare = guidSalvato and getObjectFromGUID(guidSalvato) or obj
 
                         if baseDaUsare then
-                            main_createBaseButtons(baseDaUsare)
+                            main_createBaseButtons(baseDaUsare, TURN.phase, unitKey)
                             IEF_UNIT_BUTTON_BASE[unitKey] = baseDaUsare.getGUID()
                         end
                     end

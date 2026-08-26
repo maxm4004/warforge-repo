@@ -113,7 +113,6 @@ function field_doRollFieldElement(player, slot)
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         if not risultati[1] or not risultati[2] then return end
-
         local faseCorrente = ENGINE.phase
         local somma = risultati[1] + risultati[2]
 
@@ -132,7 +131,6 @@ function field_doRollFieldElement(player, slot)
             end
 
             table.insert(rolls, somma)
-
             local categoria = field_tipoToCategoria(tipo)
             local variante = field_scegliVariante(categoria)
             FIELD_STATE.varianti[slot][#rolls] = variante
@@ -143,7 +141,7 @@ function field_doRollFieldElement(player, slot)
             warningToColor("Con un risultato di " .. somma .. " ottieni l'elemento di terreno '".. tipo:upper() .."'", player, "Yellow", 8)
 
             if #rolls >= totale then
-                UI.setAttribute(btnId, "text", "Completato")
+                UI.setAttribute(btnId, "text", "Tiri Dado Esauriti")
                 UI.setAttribute(btnId, "Color", "Grey")
                 UI.setAttribute(btnId, "textColor", "Black")
                 UI.setAttribute(btnId, "interactable", "false")
@@ -154,10 +152,9 @@ function field_doRollFieldElement(player, slot)
                     engine_handleAction({ type = action })
                 end
             else
-                UI.setAttribute(btnId, "text", "OTTIENI TERRENO " .. (#rolls + 1) .. "/" .. totale)
+                UI.setAttribute(btnId, "text", "Assegna Terreno " .. (#rolls + 1) .. "/" .. totale)
                 UI.setAttribute(btnId, "textColor", "White")
             end
-
             engine_diceCameraReturn(player, slot, faseCorrente)
         end, 2)
 
@@ -268,6 +265,7 @@ end
 -- ============================================================
 
 function field_placeCardInBlock(player, slot, index, blocco, somma, faseOrigine)
+
     faseOrigine = faseOrigine or ENGINE.phase
     local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
     local btnId  = slot == 1 and BUTTONS.BTN_ARMY1 or BUTTONS.BTN_ARMY2
@@ -306,8 +304,9 @@ function field_placeCardInBlock(player, slot, index, blocco, somma, faseOrigine)
         printToAll(msg, {r=0.6,g=0.9,b=0.6})
 
         if index >= totale then
-            UI.setAttribute(btnId, "text", "Completato")
-            UI.setAttribute(btnId, "textColor", "White")
+            UI.setAttribute(btnId, "text", "Assegnazione Completata")
+            UI.setAttribute(btnId, "Color", "Grey")
+            UI.setAttribute(btnId, "textColor", "Black")
             UI.setAttribute(btnId, "interactable", "false")
 
             if slot == 1 then TURN.completed.Army1 = true else TURN.completed.Army2 = true end
@@ -320,7 +319,6 @@ function field_placeCardInBlock(player, slot, index, blocco, somma, faseOrigine)
             UI.setAttribute(btnId, "text", "Tiro " .. (index + 1) .. "/" .. totale)
             UI.setAttribute(btnId, "textColor", "White")
         end
-
         engine_diceCameraReturn(player, slot, faseOrigine)
     end, 2)
 end
@@ -333,6 +331,7 @@ end
 --  - sempre: se il blocco pescato è già a 2 carte e c'è un'alternativa libera, ritira
 -- ============================================================
 function field_doRollBlock(player, slot)
+
     local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
     local placed = FIELD_STATE.blockPlaced[slot]
     local index  = placed + 1
@@ -342,37 +341,21 @@ function field_doRollBlock(player, slot)
         printToColor("[FIELD] Hai già piazzato tutti i tuoi elementi", player.color, {r=0.7,g=0.7,b=0.7})
         return
     end
-    
-    if totale == 3 and index == 3 then
-        local blocco = nil
-        for _, b in ipairs({"destro", "centro", "sinistro"}) do
-            if #FIELD_STATE.blockCards[slot][b] == 0 then blocco = b break end
-        end
-        field_placeCardInBlock(player, slot, index, blocco, nil, faseOrigine)
-        return
-    end
 
     IEF_DICE_ROLL_TRY[slot] = { dadi = 2, soglia = nil }
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        if not risultati[1] and not risultati[2] then return end
         local somma  = risultati[1] + risultati[2]
         local blocco = field_sommaToBlocco(somma)
-
         if #FIELD_STATE.blockCards[slot][blocco] >= 2 then
             local liberi = field_blocchiLiberi(slot)
             if #liberi > 0 then
-                printToAll("[FIELD] Slot " .. slot .. " tira " .. somma .. " → blocco " .. blocco .. " pieno, si ritira", {r=0.9,g=0.6,b=0.2})
-                field_doRollBlock(player, slot)
+                    warningToColor("Il blocco '" .. blocco:upper() .. "' ha raggiunto il numero massimo di elementi consentiti, ritira", player, "Orange", 8)
+                    engine_diceClearLastRoll(slot)
                 return
             end
         end
-
-        if index == 2 and #FIELD_STATE.blockCards[slot][blocco] > 0 then
-            printToAll("[FIELD] Slot " .. slot .. " tira " .. somma .. " → blocco " .. blocco .. " già usato, si ritira", {r=0.9,g=0.6,b=0.2})
-            field_doRollBlock(player, slot)
-            return
-        end
-
         field_placeCardInBlock(player, slot, index, blocco, somma, faseOrigine)
     end)
 end
@@ -571,33 +554,28 @@ function field_scegliVariante(categoria)
     return varianti[math.random(1, #varianti)]
 end
 -- ============================================================
--- FUNZIONE: field_handPreviewUpdateWidth(slot, count)
--- Ricalcola la larghezza del pannello mano. Se 'count' è
--- passato esplicitamente lo usa, altrimenti legge
--- FIELD_STATE.handVisibleCount[slot].
--- ============================================================
-function field_handPreviewUpdateWidth(slot, count)
-   -- count = count or FIELD_STATE.handVisibleCount[slot] or 0
-   -- local width = count * 202
-   -- UI.setAttribute("handPreview" .. slot, "width", tostring(width))
-end
--- ============================================================
 -- FUNZIONE: field_handPreviewCover(slot, elements)
+-- Mostra nel pannello mano il contenuto reale di
+-- FIELD_STATE.varianti[slot] (tutte Cover all'inizio fase,
+-- via field_initVarianti). Non sceglie/scrive nulla, riflette
+-- solo i dati già presenti.
 -- ============================================================
 function field_handPreviewCover(slot, elements)
-       
+
     local panelId = "handPreview" .. slot
     UI.setAttribute(panelId, "active", "true")
-    local categoria = field_tipoToCategoria("Cover")
-    local variante = field_scegliVariante(categoria)
-     FIELD_STATE.varianti[slot][1] = variante
 
-    for i = 1, elements, 1 do
-        local slotId  = "hand_slot_" .. slot .. "_" .. i
-        UI.setAttribute(slotId, "image", variante.immagine_url)
-        UI.setAttribute(slotId, "active", "true")
-        field_handPreviewUpdateWidth(slot, i)
+    for i = 1, elements do
+        local slotId = "hand_slot_" .. slot .. "_" .. i
+        local variante = FIELD_STATE.varianti[slot][i]
+        if variante and variante.immagine_url then
+            UI.setAttribute(slotId, "image", variante.immagine_url)
+            UI.setAttribute(slotId, "active", "true")
+        else
+            print("[FIELD] Variante mancante per slot=" .. slot .. " index=" .. i)
+        end
     end
+
     FIELD_STATE.handVisibleCount[slot] = elements
 end
 -- ============================================================
@@ -607,6 +585,7 @@ end
 -- da tirare con una variante "Cover" (dorso generico).
 -- ============================================================
 function field_handPreviewShow(slot, index, variante)
+  
     local panelId = "handPreview" .. slot
     local slotId  = "hand_slot_" .. slot .. "_" .. index
 
@@ -614,17 +593,15 @@ function field_handPreviewShow(slot, index, variante)
         print("[FIELD] Variante senza immagine_url, slot=" .. slot .. " index=" .. index)
         return
     end
-
-    --UI.setAttribute(panelId, "active", "true")
+  
+    UI.setAttribute(panelId, "active", "true")
     UI.setAttribute(slotId, "image", variante.immagine_url)
-    --UI.setAttribute(slotId, "active", "true")
-
-    -- if index == 1 then
-    --     local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
-    --     FIELD_STATE.handVisibleCount[slot] = totale or 0
-    -- end
-
-    -- field_handPreviewUpdateWidth(slot, index)
+    UI.setAttribute(slotId, "active", "true")
+      
+    if index == 1 then
+        local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
+        FIELD_STATE.handVisibleCount[slot] = totale or 0
+    end
 end
 -- ============================================================
 -- FUNZIONE: field_handPreviewHide(slot, index)
@@ -634,9 +611,7 @@ end
 -- ============================================================
 function field_handPreviewHide(slot, index)
     UI.setAttribute("hand_slot_" .. slot .. "_" .. index, "active", "false")
-
     FIELD_STATE.handVisibleCount[slot] = math.max(0, (FIELD_STATE.handVisibleCount[slot] or 1) - 1)
-    field_handPreviewUpdateWidth(slot, index)
 end
 -- ============================================================
 -- FUNZIONE: field_handPreviewReset(slot)
@@ -650,3 +625,27 @@ function field_handPreviewReset(slot)
     UI.setAttribute("handPreview" .. slot, "active", "false")
     FIELD_STATE.handVisibleCount[slot] = 0
 end
+-- ============================================================
+-- FUNZIONE: field_handPreviewCard(slot)
+-- ============================================================
+function field_handPreviewCard(slot)
+    local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
+    local width = totale * 202
+    local panelId = "handPreview" .. slot
+    UI.setAttribute(panelId, "width", width)
+    field_handPreviewCover(slot, totale)
+end
+-- ============================================================
+-- FUNZIONE: field_initVarianti(slot)
+-- Inizializza FIELD_STATE.varianti[slot] con 4 entry "Cover",
+-- da sovrascrivere una alla volta ad ogni tiro reale.
+-- ============================================================
+function field_initVarianti(slot)
+    local cover = field_scegliVariante("COVER")
+
+    FIELD_STATE.varianti[slot] = {}
+    for i = 1, 4 do
+        FIELD_STATE.varianti[slot][i] = cover
+    end
+end
+

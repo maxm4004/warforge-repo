@@ -237,7 +237,7 @@ end
 -- ============================================================
 -- FUNZIONE: engine_diceReadResults(dadi, sogliaSuccesso, onComplete)
 -- ============================================================
-function engine_diceReadResults(dadi, sogliaSuccesso, onComplete)
+function engine_diceReadResults(slot, dadi, sogliaSuccesso, onComplete)
     Wait.frames(function()
         Wait.condition(
             function()
@@ -252,7 +252,8 @@ function engine_diceReadResults(dadi, sogliaSuccesso, onComplete)
                 for _, v in ipairs(risultati) do
                     table.insert(testo, tostring(v))
                 end
-                warning("Dadi: " .. table.concat(testo, ", "), "Yellow")
+                
+                warningToColor("Dadi: " .. table.concat(testo, ", "), Player[main_ColorByArmySlot("Army"..slot)], "Yellow", 3)
 
                 local successi = nil
                 if sogliaSuccesso then
@@ -477,7 +478,7 @@ function engine_diceThrowFromBag(slot, opts, callback)
     -- Aspetta che tutti i dadi siano stati lanciati (ultimo a (numDadi-1)*stagger)
     -- prima di leggere i risultati, altrimenti rolledDice arriverebbe vuota/incompleta
     Wait.time(function()
-        engine_diceReadResults(rolledDice, sogliaSuccesso, callback)
+        engine_diceReadResults(slot, rolledDice, sogliaSuccesso, callback)
     end, numDadi * stagger + 0.5)
 end
 -- ============================================================
@@ -496,8 +497,8 @@ end
 -- FUNZIONE: engine_diceRoll_start(player, value, id)
 -- ============================================================
 function engine_diceRoll_start(player)
-    local slot = main_SlotByColor(player.color)
 
+    local slot = main_SlotByColor(player.color)
     if not slot then warning("Impossibile usare questo button, scegliere prima un colore", "Yellow") return end
   
     if ENGINE.phase == "INITIATIVE_ROLL" then
@@ -507,12 +508,8 @@ function engine_diceRoll_start(player)
         engine_diceThrowFromBag(slot, nil, function(risultati, successi)
             DICE_CONTEST[key] = risultati[1]
             engine_diceCameraReturn(player, slot)
-    
-
             local bothRolled = DICE_CONTEST.rolledNumberArmy1 ~= nil and DICE_CONTEST.rolledNumberArmy2 ~= nil
-
             callHandler("dice_check")
-
             if bothRolled and DICE_CONTEST.winner == nil then
                 engine_diceClearLastRoll(1)
                 engine_diceClearLastRoll(2)
@@ -525,21 +522,20 @@ function engine_diceRoll_start(player)
         return
     end
 
+    engine_diceClearLastRoll(slot)
+
     if ENGINE.phase == "FIELD_ROLL" then
-            engine_diceClearLastRoll(slot)
-            field_doRollFieldElement(player, slot)
-            return
-        end
+        field_doRollFieldElement(player, slot)
+        return
+    end
 
     if ENGINE.phase == "FIELD_BLOCK" then
-         engine_diceClearLastRoll(slot)
         field_doRollBlock(player, slot)
         return
-    end      
+    end    
 
-        engine_diceClearLastRoll(slot)
-        engine_diceThrowFromBag(slot, nil, function(risultati, successi)
-        engine_diceCameraReturn(player, slot)
+    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+    engine_diceCameraReturn(player, slot)
     end)
 end
 -- ============================================================
@@ -554,7 +550,7 @@ end
 -- FUNZIONE: engine_diceCameraZoom(player, slot, duration)
 -- ============================================================
 function engine_diceCameraZoom(player, slot)
-   if ENGINE.phase == "FIELD_ROLL" or ENGINE.phase == "FIELD_BLOCK" then
+   if ENGINE.phase == "FIELD" or ENGINE.phase == "FIELD_ROLL" or ENGINE.phase == "FIELD_BLOCK" then
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)              
     end
 end
@@ -569,6 +565,7 @@ end
 -- alla vista home (se era l'ultimo elemento).
 -- ============================================================
 function engine_diceCameraReturn(player, slot, faseOrigine)
+
     faseOrigine = faseOrigine or ENGINE.phase
 
     if faseOrigine == "FIELD_ROLL" then
@@ -576,16 +573,14 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
         local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
         local isLast = currentElement >= totale
 
-        engine_cameraByNamme(player, currentElement, CAMERA_ZONE.ARMY_CARDS)
         Wait.time(function()
             if isLast then
                 engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
-            else
-                engine_diceCameraZoom(player, slot)
             end
         end, 2)
+    end
 
-    elseif faseOrigine == "FIELD_BLOCK" then
+    if faseOrigine == "FIELD_BLOCK" then
         local currentElement = FIELD_STATE.blockPlaced[slot]
         local totale = slot == 1 and FIELD_STATE.army1Elements or FIELD_STATE.army2Elements
         local isLast = currentElement >= totale
@@ -599,4 +594,5 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
             end
         end, 2)
     end
+
 end

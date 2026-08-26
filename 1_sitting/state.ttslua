@@ -1,0 +1,40 @@
+-- ============================================================
+-- FIELD_STATE — struttura completa, unica fonte di verità.
+-- before_field la resetta chiamando field_defaultState(),
+-- non riscrivendola a mano.
+-- ============================================================
+function field_defaultState()
+    return {
+        diceResult     = nil,
+        numElements    = nil,
+        army1Elements  = 0,
+        army2Elements  = 0,
+        orientamento1  = nil,
+        orientamento2  = nil,
+        tieBreaker     = false,
+        tbResult1      = nil,
+        tbResult2      = nil,
+        rolls1         = {},
+        rolls2         = {},
+        cards          = { [1] = {}, [2] = {} },
+        varianti       = { [1] = {}, [2] = {} },
+        blockPlaced    = { [1] = 0, [2] = 0 },
+        blockCards     = {
+            [1] = { destro = {}, centro = {}, sinistro = {} },
+            [2] = { destro = {}, centro = {}, sinistro = {} },
+        },
+        fiumeUsato = false,
+        handVisibleCount = { [1] = 0, [2] = 0 },
+    }
+end
+
+FIELD_STATE = FIELD_STATE or field_defaultState()
+
+orientamentoArmy1 = "Fanteria"    -- hardcoded, arriverà da armyData.orientamento
+orientamentoArmy2 = "Bilanciato"  -- hardcoded, arriverà da armyData.orientamento
+
+FIELD_ELEMENTS_BY_ORIENTAMENTO = {
+    ["Fanteria"]  = 4,
+    ["Bilanciato"] = 3,
+    ["Cavalleria"] = 2
+}
