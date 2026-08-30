@@ -6,10 +6,9 @@
 -- Coda cariche dichiarate, una lista indipendente per esercito.
 -- Ogni elemento: { attackerKey, targetKey, step, response, flankCharge }
 -- step: "check" | "move" | "awaiting_response" | "stopfire" | "resolved"
+-- Nessun indice sequenziale: ogni elemento è risolvibile in
+-- qualsiasi ordine tramite le liste Attacco/Difesa (righe cliccabili).
 IEF_CHARGE_QUEUE = IEF_CHARGE_QUEUE or { [1] = {}, [2] = {} }
-
--- Indice dell'elemento attualmente in risoluzione per ciascun esercito
-IEF_CHARGE_INDEX = IEF_CHARGE_INDEX or { [1] = 1, [2] = 1 }
 
 -- Lock globale: una sola risposta-nemico alla volta sul tavolo.
 -- nil = nessuna risposta in sospeso, altrimenti { slot, index }

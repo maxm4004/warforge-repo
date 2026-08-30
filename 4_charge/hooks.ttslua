@@ -4,12 +4,16 @@
 function before_charge_declare(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
-    
-    charge_refreshDeclaredList()
+
     charge_close(1)
     charge_close(2)
 
     UI.setAttribute("confirm_panel_charge", "active", "false")
+
+    -- Le liste Attacco/Difesa sono generate dinamicamente da
+    -- IEF_CHARGE_QUEUE (appena azzerata sopra): ricostruendo la UI
+    -- risultano vuote/nascoste da sole, nessun UI.setAttribute manuale.
+    callHandler("buildUI")
 end
 
 -- ============================================================
@@ -22,12 +26,15 @@ end
 -- ============================================================
 -- FUNZIONE: before_charge_resolve(phaseName, phase)
 -- Arbitra i conflitti (charge_resolveConflicts) ora che tutte
--- le dichiarazioni di entrambi gli eserciti sono note.
+-- le dichiarazioni di entrambi gli eserciti sono note, poi
+-- ricostruisce la UI: le liste Attacco/Difesa (generate
+-- dinamicamente da IEF_CHARGE_QUEUE) compaiono già popolate.
 -- ============================================================
 function before_charge_resolve(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
     charge_resolveConflicts()
+    callHandler("buildUI")
 end
 
 -- ============================================================
@@ -36,4 +43,3 @@ end
 function after_charge_resolve(phaseName, phase)
 
 end
-

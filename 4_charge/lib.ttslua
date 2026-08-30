@@ -578,9 +578,6 @@ end
 -- prima sotto-fase di CHARGE_RESOLVE).
 -- ============================================================
 function charge_declareConfirm(player, value, id, buttonConfig)
-
-        print("[DEBUG] charge_declareConfirm chiamata, player=" .. tostring(player and player.color))
-
     local slot = main_getArmyByColor(player)
     local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
     if not session or not session.targetKey then
@@ -588,14 +585,10 @@ function charge_declareConfirm(player, value, id, buttonConfig)
         return
     end
 
-
-        print("[DEBUG] session=" .. tostring(session) .. " targetKey=" .. tostring(session and session.targetKey))
-
-
     if charge_alreadyDeclared(slot, session.attackerKey) then
         printToColor("[CARICA] Questa unità ha già dichiarato una carica questo turno", player.color, {r=1,g=0.6,b=0})
-        --charge_close(slot)
-        --UI.setAttribute("confirm_panel_charge", "active", "false")
+        charge_close(slot)
+        UI.setAttribute("confirm_panel_charge", "active", "false")
         return
     end
 
@@ -611,10 +604,9 @@ function charge_declareConfirm(player, value, id, buttonConfig)
     })
 
     printToColor(string.format("[CARICA] Dichiarata: %s -> %s", session.attackerKey, session.targetKey), player.color, {r=0.3,g=1,b=0.3})
-    UI.setAttribute("charge_declared_list_text", "text", "CARICA: %s -> %s", session.attackerKey, session.targetKey)
     UI.setAttribute("confirm_panel_charge", "active", "false")
     charge_close(slot)
-    charge_refreshDeclaredList()
+    callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
 -- ============================================================
@@ -639,6 +631,154 @@ function charge_hasArmaDaTiro(armi)
     end
     return false
 end
+-- ============================================================
+-- FUNZIONE: charge_cameraToPoint(player, slot, position)
+-- Sposta la telecamera del giocatore su un punto qualsiasi del
+-- tavolo (punto medio attaccante/bersaglio di una carica). Riusa
+-- engine_diceCamera (engine/lib.ttslua), che accetta una
+-- posizione libera, non solo le zone camera fisse.
+-- ============================================================
+function charge_cameraToPoint(player, slot, position)
+    local yaw = (slot == 1) and 0 or 180
+    engine_diceCamera(player, position, 40, yaw, 15)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_findQueueEntry(slot, attackerKey)
+-- Trova l'elemento di IEF_CHARGE_QUEUE[slot] con quell'attackerKey.
+-- ============================================================
+function charge_findQueueEntry(slot, attackerKey)
+    local coda = IEF_CHARGE_QUEUE[slot] or {}
+    for _, e in ipairs(coda) do
+        if e.attackerKey == attackerKey then return e end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: charge_getAttackListPanelXml(slot)
+-- Genera il pannello "LE TUE CARICHE" COMPLETO (non solo le
+-- righe): una riga per OGNI carica in IEF_CHARGE_QUEUE[slot],
+-- nessun limite fisso. Lista PERSISTENTE: mostra lo stato (step)
+-- aggiornato di ciascuna carica, non si accorcia mai da sola.
+-- L'id di ogni riga contiene l'attackerKey direttamente (non un
+-- numero di riga mappato a parte): "charge_attack_row_<slot>_<attackerKey>".
+-- ============================================================
+function charge_getAttackListPanelXml(slot)
+    local coda = IEF_CHARGE_QUEUE[slot] or {}
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
+    local attivo = (#coda > 0) and "true" or "false"
+
+    local rows = ""
+    for i, e in ipairs(coda) do
+        local y = 80 - (i - 1) * 22
+        rows = rows .. string.format(
+            '<Button id="charge_attack_row_%d_%s" text="%s -&gt; %s (%s)" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="Green" alignment="MiddleLeft" position="0 %d 0" width="280" height="20" onClick="charge_attackRowClick"/>',
+            slot, e.attackerKey, e.attackerKey, e.targetKey, e.step, y
+        )
+    end
+
+    return string.format(
+        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="40 -340" visibility="%s" active="%s">' ..
+        '<Text text="LE TUE CARICHE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
+        '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
+        '%s' ..
+        '</Panel>',
+        slot, colore, attivo, rows
+    )
+end
+
+-- ============================================================
+-- FUNZIONE: charge_getDefenseListPanelXml(slot)
+-- Genera il pannello "CARICHE SUBITE" COMPLETO: una riga per ogni
+-- carica dichiarata dall'esercito AVVERSARIO (IEF_CHARGE_QUEUE
+-- dell'altro slot), nessun limite fisso. Lista che DOVREBBE
+-- consumarsi quando la reazione è usata — non ancora implementato
+-- (punto 4, rimandato): per ora mostra semplicemente ogni carica
+-- subita finché non è comunque risolta.
+-- ============================================================
+function charge_getDefenseListPanelXml(slot)
+    local otherSlot = (slot == 1) and 2 or 1
+    local coda = IEF_CHARGE_QUEUE[otherSlot] or {}
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
+    local attivo = (#coda > 0) and "true" or "false"
+
+    local rows = ""
+    for i, e in ipairs(coda) do
+        local y = 95 - (i - 1) * 22
+        rows = rows .. string.format(
+            '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="White" alignment="MiddleLeft" position="0 %d 0" width="280" height="20" onClick="charge_defenseRowClick"/>',
+            slot, e.attackerKey, e.attackerKey, e.targetKey, y
+        )
+    end
+
+    return string.format(
+        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="320" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="350 -340" visibility="%s" active="%s">' ..
+        '<Text text="CARICHE SUBITE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
+        '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
+        '%s' ..
+        '</Panel>',
+        slot, colore, attivo, rows
+    )
+end
+
+-- ============================================================
+-- FUNZIONE: charge_attackRowClick(player, value, id)
+-- onClick di una riga del pannello "LE TUE CARICHE": naviga la
+-- telecamera sul punto della carica e avanza di uno step
+-- (check->move->resolved), poi ricostruisce l'intera UI globale
+-- (callHandler("buildUI")) così la lista riflette il nuovo stato
+-- — stesso schema già in uso per il numero di carte in 2_field.
+-- ============================================================
+function charge_attackRowClick(player, value, id)
+    local slotStr, attackerKey = id:match("^charge_attack_row_(%d)_(.+)$")
+    if not slotStr then return end
+    local slot = tonumber(slotStr)
+
+    local elemento = charge_findQueueEntry(slot, attackerKey)
+    if not elemento then return end
+
+    local myBases = charge_getUnitBases(elemento.attackerKey)
+    local targetBases = charge_getUnitBases(elemento.targetKey)
+    if myBases[1] and targetBases[1] then
+        local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
+        charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
+    end
+
+    print(elemento.step)
+
+    if elemento.step == "check" then
+        charge_resolveCheckStep(player, elemento, slot)
+    elseif elemento.step == "move" then
+        charge_resolveMoveStep(player, elemento, slot)
+    end
+end
+-- ============================================================
+-- FUNZIONE: charge_defenseRowClick(player, value, id)
+-- onClick di una riga del pannello "CARICHE SUBITE": per ora solo
+-- naviga la telecamera sul punto della carica — la gestione della
+-- reazione vera (contro-carica/evasione/Tiro d'Arresto) è
+-- rimandata (punto 4).
+-- ============================================================
+function charge_defenseRowClick(player, value, id)
+    local slotStr, attackerKey = id:match("^charge_defense_row_(%d)_(.+)$")
+    if not slotStr then return end
+    local slot = tonumber(slotStr)
+    local otherSlot = (slot == 1) and 2 or 1
+
+    local elemento = charge_findQueueEntry(otherSlot, attackerKey)
+    if not elemento then return end
+
+    local myBases = charge_getUnitBases(elemento.attackerKey)
+    local targetBases = charge_getUnitBases(elemento.targetKey)
+    if myBases[1] and targetBases[1] then
+        local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
+        charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
+    end
+
+    -- TODO: gestione reazione (contro-carica/evasione/Tiro d'Arresto) — punto 4
+end
+
 -- ============================================================
 -- FUNZIONE: charge_resolveConflicts()
 -- Arbitraggio dei conflitti tra cariche dichiarate, da entrambi
@@ -706,37 +846,28 @@ function charge_resolveConflicts()
         end
         IEF_CHARGE_QUEUE[slot] = nuova
     end
-
-    IEF_CHARGE_INDEX = { [1] = 1, [2] = 1 }
 end
 -- ============================================================
--- FUNZIONE: charge_resolveCheckStep(player, slot)
--- Step "check" della risoluzione (CHARGE_RESOLVE): applica le
--- limitazioni che richiedono un test di morale (regolamento,
--- "LIMITAZIONI DI CARICA"):
+-- FUNZIONE: charge_resolveCheckStep(player, elemento, slot)
+-- Step "check" della risoluzione: applica le limitazioni che
+-- richiedono un test di morale (regolamento, "LIMITAZIONI DI
+-- CARICA"):
 --   - CL che carica sul fronte un bersaglio che non sia CL/FL/ART
 --   - FP/FM con arma da tiro (escluso Giavellotto) che carica
 --     chiunque tranne FL/ART
 -- Se il test fallisce, la carica si ferma qui (step="resolved",
--- nessun movimento, indice avanzato al prossimo elemento). Se
--- supera o non serve nessun test, passa allo step "move"
--- (movimento di carica — prossimo pezzo).
+-- nessun movimento). Se supera o non serve nessun test, passa
+-- allo step "move".
 --
 -- NOTA: i modificatori del test morale (Generale nel raggio,
 -- basi perse, unità disordinata, ecc.) non sono ancora calcolati
--- qui — passati a 0. Da completare quando saranno tracciati
--- questi stati sull'unità.
+-- qui — passati a 0.
 --
 -- NOTA: qui non si applica l'obbligo di carica per
 -- KN/CP-IMPETO/FP-FM-IMPETO (riguarda la dichiarazione, non la
 -- risoluzione) — resta da fare a parte.
 -- ============================================================
-function charge_resolveCheckStep(player, slot)
-    local coda = IEF_CHARGE_QUEUE[slot]
-    local idx  = IEF_CHARGE_INDEX[slot]
-    local elemento = coda and coda[idx]
-    if not elemento then return end
-
+function charge_resolveCheckStep(player, elemento, slot)
     local myBases = charge_getUnitBases(elemento.attackerKey)
     local myMeta  = myBases[1] and charge_getUnitMeta(myBases[1])
     local myTipo  = myMeta and myMeta.unitType
@@ -757,22 +888,23 @@ function charge_resolveCheckStep(player, slot)
 
     if not richiedeTest then
         elemento.step = "move"
-        callHandler("updateCenterPanel")
+        charge_resolveMoveStep(player, elemento, slot)
         return
     end
 
     main_testMorale(elemento.attackerKey, player, "per_caricare", 0, function(esito, somma, soglia, effetto)
         if esito == "SUPERATO" then
             elemento.step = "move"
+            charge_resolveMoveStep(player, elemento, slot)
         else
             elemento.step = "resolved"
-            IEF_CHARGE_INDEX[slot] = idx + 1
             printToColor(string.format("[CARICA] %s: carica annullata (test morale fallito)", elemento.attackerKey), player.color, {r=1,g=0.4,b=0.2})
             if not charge_queueHasPending() then
                 engine_handleAction({ type = ACTION.CONFIRM })
             end
+            callHandler("buildUI")
+            callHandler("updateCenterPanel")
         end
-        callHandler("updateCenterPanel")
     end)
 end
 
@@ -839,7 +971,7 @@ function charge_isFlankCharge(basiPreMovimento, targetBases)
 end
 
 -- ============================================================
--- FUNZIONE: charge_resolveMoveStep(player, slot)
+-- FUNZIONE: charge_resolveMoveStep(player, elemento, slot)
 -- Step "move" della risoluzione: esegue il movimento rettilineo
 -- finale fino al bersaglio (il perno è già stato applicato
 -- fisicamente durante la dichiarazione, non va rifatto qui).
@@ -847,12 +979,7 @@ end
 -- Il check carica sul fianco (charge_isFlankCharge) va fatto
 -- PRIMA di muovere.
 -- ============================================================
-function charge_resolveMoveStep(player, slot)
-    local coda = IEF_CHARGE_QUEUE[slot]
-    local idx  = IEF_CHARGE_INDEX[slot]
-    local elemento = coda and coda[idx]
-    if not elemento then return end
-
+function charge_resolveMoveStep(player, elemento, slot)
     local myBases = charge_getUnitBases(elemento.attackerKey)
     if #myBases == 0 then
         printToColor("[CARICA] Impossibile leggere le basi dell'unità caricante", player.color, {r=1,g=0.6,b=0})
@@ -868,7 +995,6 @@ function charge_resolveMoveStep(player, slot)
     end
 
     elemento.step = "resolved"
-    IEF_CHARGE_INDEX[slot] = idx + 1
 
     local fiancoTxt = elemento.flankCharge and " (SUL FIANCO)" or ""
     printToColor(string.format("[CARICA] %s ha caricato %s%s", elemento.attackerKey, elemento.targetKey, fiancoTxt), player.color, {r=0.3,g=1,b=0.3})
@@ -878,54 +1004,4 @@ function charge_resolveMoveStep(player, slot)
     end
 
     callHandler("updateCenterPanel")
-end
-
-
-
--- ============================================================
--- FUNZIONE: charge_resolveStep(player)
--- Dispatcher dello step corrente per l'elemento in risoluzione
--- di IEF_CHARGE_QUEUE[slot][IEF_CHARGE_INDEX[slot]]. Richiamato
--- dai pulsanti "Risolvi Carica" di CHARGE_RESOLVE.
--- ============================================================
-function charge_resolveStep(player)
-    local slot = main_getArmyByColor(player)
-    if not slot then return end
-
-    local coda = IEF_CHARGE_QUEUE[slot]
-    local idx  = IEF_CHARGE_INDEX[slot]
-    local elemento = coda and coda[idx]
-
-    if not elemento then
-        printToColor("[CARICA] Nessuna carica da risolvere per questo esercito", player.color, {r=1,g=0.6,b=0})
-    else
-        if elemento.step == "check" then
-            charge_resolveCheckStep(player, slot)
-        elseif elemento.step == "move" then
-            charge_resolveMoveStep(player, slot)
-        else
-            printToColor("[CARICA] Step non gestito: " .. tostring(elemento.step), player.color, {r=1,g=0.6,b=0})
-        end
-    end    
-end
-
--- ============================================================
--- FUNZIONE: charge_refreshDeclaredList()
--- Ricostruisce SOLO il testo del pannello condiviso "CARICHE
--- DICHIARATE" a partire da IEF_CHARGE_QUEUE (entrambi gli
--- eserciti). L'attivazione (active) del pannello è responsabilità
--- del renderer 2BtnClickChargeList, non di questa funzione.
--- ============================================================
-function charge_refreshDeclaredList()
-    local lines = {}
-    for slot = 1, 2 do
-        local coda = IEF_CHARGE_QUEUE[slot] or {}
-        for i = 1, #coda do
-            local c = coda[i]
-            table.insert(lines, string.format("[Army%d] %s -> %s (%s)", slot, c.attackerKey, c.targetKey, c.step))
-        end
-    end
-
-    local text = (#lines > 0) and table.concat(lines, "\n") or "Nessuna carica dichiarata"
-    UI.setAttribute("charge_declared_list_text", "text", text)
 end

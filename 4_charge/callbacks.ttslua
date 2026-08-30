@@ -1,5 +1,3 @@
--- rulesets/imperifeudi/4_charge/callbacks.ttslua
-
 -- ============================================================
 -- FUNZIONE: charge_declare_btn_army1(player, value, id, buttonConfig)
 -- Conferma "Dichiarazioni Completate" per Army1.
@@ -15,27 +13,5 @@ end
 -- ============================================================
 function charge_declare_btn_army2(player, value, id, buttonConfig)
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
-    return true
-end
-
--- ============================================================
--- FUNZIONE: charge_resolve_btn_army1(player, value, id, buttonConfig)
--- Risolve il prossimo step dell'elemento in coda per Army1
--- (IEF_CHARGE_QUEUE[1][IEF_CHARGE_INDEX[1]]).
--- ============================================================
-function charge_resolve_btn_army1(player, value, id, buttonConfig)
-    charge_resolveStep(player)
-    TURN.completed.Army1 = true
-    return true
-end
-
--- ============================================================
--- FUNZIONE: charge_resolve_btn_army2(player, value, id, buttonConfig)
--- Risolve il prossimo step dell'elemento in coda per Army2
--- (IEF_CHARGE_QUEUE[2][IEF_CHARGE_INDEX[2]]).
--- ============================================================
-function charge_resolve_btn_army2(player, value, id, buttonConfig)
-    charge_resolveStep(player)
-    TURN.completed.Army2 = true
     return true
 end
