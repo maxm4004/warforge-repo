@@ -1,0 +1,1006 @@
+-- ============================================================
+-- FUNZIONE: charge_getFrontLine(basiObjs)
+-- Isola il rango di fronte (basi con proiezione massima lungo
+-- fwdXZ, non le basi estreme di TUTTE le file). Stesso principio
+-- di move_getFrontLine (6_move/lib.ttslua), ma ritorna anche gli
+-- OGGETTI base d'angolo (sinistro/destro del fronte), non solo
+-- le posizioni — servono come pivot fisico per charge_applyPivot.
+--
+-- Ritorna: fwdXZ, right, frontLeftBase, frontRightBase
+-- ============================================================
+function charge_getFrontLine(basiObjs)
+    local fwd   = basiObjs[1].getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+    local right = Vector(-fwdXZ.z, 0, fwdXZ.x)
+
+    local maxProj = -math.huge
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        local proj = p.x * fwdXZ.x + p.z * fwdXZ.z
+        if proj > maxProj then maxProj = proj end
+    end
+
+    local EPS = 0.5
+    local frontRank = {}
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        local proj = p.x * fwdXZ.x + p.z * fwdXZ.z
+        if math.abs(proj - maxProj) < EPS then
+            table.insert(frontRank, obj)
+        end
+    end
+
+    table.sort(frontRank, function(a, b)
+        local pa, pb = a.getPosition(), b.getPosition()
+        return (pa.x*right.x + pa.z*right.z) < (pb.x*right.x + pb.z*right.z)
+    end)
+
+    return fwdXZ, right, frontRank[1], frontRank[#frontRank]
+end
+
+-- ============================================================
+-- FUNZIONE: charge_queueHasPending()
+-- Vero se almeno un elemento della coda cariche (uno dei due
+-- eserciti) non è ancora risolto (step ~= "resolved").
+-- ============================================================
+function charge_queueHasPending()
+    for slot = 1, 2 do
+        local coda = IEF_CHARGE_QUEUE[slot] or {}
+        for i = 1, #coda do
+            if coda[i].step ~= "resolved" then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: charge_getUnitMeta(obj)
+-- Wrapper su main_getUnitMeta (motore condiviso in 0_main/lib.ttslua).
+-- ============================================================
+function charge_getUnitMeta(obj)
+    return main_getUnitMeta(obj)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_getUnitBases(unitKey)
+-- Wrapper su main_getUnitBases (motore condiviso in 0_main/lib.ttslua).
+-- ============================================================
+function charge_getUnitBases(unitKey)
+    return main_getUnitBases(unitKey)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_alreadyDeclared(slot, unitKey)
+-- Vero se unitKey ha già una carica in coda questo turno
+-- (un'unità può dichiarare una sola carica a turno).
+-- ============================================================
+function charge_alreadyDeclared(slot, unitKey)
+    local coda = IEF_CHARGE_QUEUE[slot] or {}
+    for i = 1, #coda do
+        if coda[i].attackerKey == unitKey then return true end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: charge_baseTouchesCorridor(nemico, startLeft, fwdXZ, right, rangeUnits, corridorWidth)
+-- Vero se il bounding box FISICO REALE della base nemica
+-- (nemico.getBounds(), non un'approssimazione da unit_types.json)
+-- tocca il corridoio di carica — stesso principio di
+-- shoot_isToccata (7_shoot/lib.ttslua): si controllano i 4
+-- angoli del bounding box, non il solo centro.
+-- ============================================================
+function charge_baseTouchesCorridor(nemico, startLeft, fwdXZ, right, rangeUnits, corridorWidth)
+    if not nemico or not nemico.getBounds then return false end
+    local bounds = nemico.getBounds()
+    if not bounds or not bounds.size then return false end
+
+    local pos  = nemico.getPosition()
+    local xmin = pos.x - bounds.size.x / 2
+    local xmax = pos.x + bounds.size.x / 2
+    local zmin = pos.z - bounds.size.z / 2
+    local zmax = pos.z + bounds.size.z / 2
+
+    local corners = {
+        {x = xmin, z = zmin}, {x = xmin, z = zmax},
+        {x = xmax, z = zmin}, {x = xmax, z = zmax},
+    }
+
+    for _, c in ipairs(corners) do
+        local relX = c.x - startLeft.x
+        local relZ = c.z - startLeft.z
+        local localZ = relX * fwdXZ.x + relZ * fwdXZ.z
+        local localX = relX * right.x + relZ * right.z
+        if localZ >= 0 and localZ <= rangeUnits and localX >= 0 and localX <= corridorWidth then
+            return true
+        end
+    end
+    return false
+end
+-- ============================================================
+-- FUNZIONE: charge_findLineTarget(myKey, slot)
+-- ============================================================
+function charge_findLineTarget(myKey, slot)
+
+    local myBases = charge_getUnitBases(myKey)
+    if #myBases == 0 then
+        return nil, "Impossibile leggere le basi dell'unità caricante"
+    end
+
+    local myMeta = charge_getUnitMeta(myBases[1])
+    local myTipo = myMeta and myMeta.unitType
+    if not myTipo then
+        return nil, "GMNotes mancanti sull'unità caricante"
+    end
+
+    local unitTypeData = main_getUnitType(myTipo)
+    local moveInches = unitTypeData and unitTypeData.move_inches or 0
+    local INCH_TO_TTS = 1.885
+    local CM_TO_TTS = 0.7423
+    local baseHalfWidth = (unitTypeData and unitTypeData.base_width_cm or 4) * CM_TO_TTS / 2 - 0.06
+    local baseHalfDepth = (unitTypeData and unitTypeData.base_depth_cm or 3) * CM_TO_TTS / 2 - 0.06
+
+    -- Tolleranza laterale extra sui lati del corridoio (stesso
+    -- valore tarato in debug_chargeRectangle, 0_main/debug.ttslua).
+    local SIDE_TOLERANCE = 0.05 * INCH_TO_TTS
+    baseHalfWidth = baseHalfWidth + SIDE_TOLERANCE
+
+    local fwdXZ, right, frontLeft, frontRight = charge_getFrontLine(myBases)
+    local p1, p2 = frontLeft.getPosition(), frontRight.getPosition()
+
+    -- Corridoio IDENTICO a debug_chargeRectangle (0_main/debug.ttslua):
+    -- parte dal bordo fisico reale della base (p1/p2 +
+    -- baseHalfWidth/baseHalfDepth), profondità = move_inches.
+    local rangeUnits = moveInches * INCH_TO_TTS
+    local y = 1.20
+
+    local startLeft  = Vector(p1.x - right.x*baseHalfWidth + fwdXZ.x*baseHalfDepth, y, p1.z - right.z*baseHalfWidth + fwdXZ.z*baseHalfDepth)
+    local startRight = Vector(p2.x + right.x*baseHalfWidth + fwdXZ.x*baseHalfDepth, y, p2.z + right.z*baseHalfWidth + fwdXZ.z*baseHalfDepth)
+    local endLeft    = Vector(startLeft.x  + fwdXZ.x*rangeUnits, y, startLeft.z  + fwdXZ.z*rangeUnits)
+    local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, y, startRight.z + fwdXZ.z*rangeUnits)
+    local corridorWidth = Vector(startRight.x - startLeft.x, 0, startRight.z - startLeft.z):magnitude()
+
+    -- Disegno del corridoio (linee rosse) — unificato qui, non più
+    -- in una funzione a parte (charge_drawCorridor, rimossa: stesso
+    -- calcolo duplicato in due posti rischiava di disallinearsi).
+    frontLeft.setVectorLines({
+        {points = {frontLeft.positionToLocal(startLeft),  frontLeft.positionToLocal(endLeft)},  color={1,0.2,0.2}, thickness=0.03},
+        {points = {frontLeft.positionToLocal(startRight), frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
+        {points = {frontLeft.positionToLocal(endLeft),    frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
+    })
+
+    local enemyTag = "Army" .. (slot == 1 and 2 or 1)
+    local seenKeys = {}
+    local best = nil
+
+    -- Un bersaglio può ricevere una sola carica dichiarata per
+    -- turno: unità già scelte come targetKey in IEF_CHARGE_QUEUE
+    -- (di entrambi gli eserciti) sono escluse dai candidati.
+    local targetiGiaPresi = {}
+    for s = 1, 2 do
+        local coda = IEF_CHARGE_QUEUE[s] or {}
+        for i = 1, #coda do
+            targetiGiaPresi[coda[i].targetKey] = true
+        end
+    end
+
+    for _, o in ipairs(getAllObjects()) do
+        if o.hasTag(enemyTag) then
+            local ek = main_getUnitKey(o)
+            if ek and not seenKeys[ek] then
+                seenKeys[ek] = true
+
+                local enemyBases = charge_getUnitBases(ek)
+                local enemyMeta  = enemyBases[1] and charge_getUnitMeta(enemyBases[1])
+                local enemyTipo  = enemyMeta and enemyMeta.unitType
+
+                local legalTarget = true
+                if myTipo == "FL" and enemyTipo ~= "FL" and enemyTipo ~= "ART" and enemyTipo ~= "EL" then
+                    legalTarget = false
+                end
+                
+                if targetiGiaPresi[ek] then
+                    legalTarget = false
+                end
+
+                if legalTarget then
+                    for _, eb in ipairs(enemyBases) do
+                        if eb.getBounds then
+                            local bounds = eb.getBounds()
+                            if bounds and bounds.size then
+                                local ep = eb.getPosition()
+                                local xmin = ep.x - bounds.size.x / 2
+                                local xmax = ep.x + bounds.size.x / 2
+                                local zmin = ep.z - bounds.size.z / 2
+                                local zmax = ep.z + bounds.size.z / 2
+
+                                local corners = {
+                                    {x=xmin,z=zmin}, {x=xmin,z=zmax},
+                                    {x=xmax,z=zmin}, {x=xmax,z=zmax},
+                                }
+
+                                -- Bordo VICINO reale = minimo localZ tra i 4
+                                -- angoli del bounding box (non il centro:
+                                -- fermarsi al centro fa sconfinare l'attaccante
+                                -- dentro il nemico).
+                                local anyInside = false
+                                local nearestLocalZ = nil
+                                for _, c in ipairs(corners) do
+                                    local relX = c.x - startLeft.x
+                                    local relZ = c.z - startLeft.z
+                                    local localZ = relX * fwdXZ.x + relZ * fwdXZ.z
+                                    local localX = relX * right.x + relZ * right.z
+                                    if localZ >= 0 and localZ <= rangeUnits and localX >= 0 and localX <= corridorWidth then
+                                        anyInside = true
+                                    end
+                                    if not nearestLocalZ or localZ < nearestLocalZ then
+                                        nearestLocalZ = localZ
+                                    end
+                                end
+
+                                if anyInside then
+                                    print(string.format("[CARICA]   %-28s bordoVicino localZ=%6.2f (%.1f\")",
+                                        eb.getName(), nearestLocalZ, nearestLocalZ / INCH_TO_TTS))
+
+                                    if not best or nearestLocalZ < best.localZ then
+                                        best = { targetKey = ek, localZ = nearestLocalZ, distInches = nearestLocalZ / INCH_TO_TTS }
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if not best then
+        return nil, "Nessun bersaglio raggiungibile in linea retta", nil, frontLeft
+    end
+
+    return best.targetKey, 0, best.distInches, frontLeft
+end
+-- ============================================================
+-- FUNZIONE: charge_buildDeclarePanel3DXml(unitKey, x, z, colore, labelText)
+-- Pannello 3D dichiarazione carica: Perno Sx/Dx + Check Carica +
+-- Annulla. Stesso schema di main_buildMovementPanel3DXml
+-- (0_main/lib.ttslua): agganciato via obj.UI.setXml() sulla base
+-- stessa, onClick con prefisso "Global/" (richiesto per XML
+-- attaccato a un oggetto, non alla UI globale). ID pulsanti
+-- unici per unitKey.
+-- ============================================================
+function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText)
+    return string.format([[
+        <Panel id="panelCharge_%s" active="true" color="rgba(0,0,0,0.85)" width="700" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+            <VerticalLayout spacing="10" padding="20 20 20 20" childAlignment="MiddleCenter">
+                <Text text="%s" fontStyle="Bold" font="warforge_font" fontSize="20" color="Orange" alignment="MiddleCenter" width="660" height="35"/>
+                <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
+                    <Button id="btn_%s_ChargePivotSx" text="Perno Sx"     font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotSx"/>
+                    <Button id="btn_%s_ChargePivotDx" text="Perno Dx"     font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotDx"/>
+                    <Button id="btn_%s_ChargeCheck"   text="Check Carica" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.6,0.45,0.1,1)"  textColor="White" width="150" height="30" onClick="Global/charge_btnCheck"/>
+                </HorizontalLayout>
+                <Button id="btn_%s_ChargeAbort" text="Annulla" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/charge_btnAbort"/>
+            </VerticalLayout>
+        </Panel>
+    ]], unitKey, x, y, z, colore, labelText, unitKey, unitKey, unitKey, unitKey)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_redraw(slot)
+-- Ricostruisce il pannello 3D di dichiarazione con il testo
+-- pollici-di-perno aggiornato. Stesso principio di move_redraw
+-- (6_move/lib.ttslua).
+-- ============================================================
+function charge_redraw(slot)
+    
+    local session = IEF_CHARGE_DECLARE_SESSION[slot]
+    if not session or not session.panel3DObj then return end
+    if session.panel3DObj.isDestroyed() then return end
+
+    local _, _, _, newHost = charge_findLineTarget(session.attackerKey, slot)
+    if newHost then
+        if session.lineHost and session.lineHost ~= newHost then
+            session.lineHost.setVectorLines({})
+        end
+        session.lineHost = newHost
+    end
+
+    local fronte = main_detectFormation(session.myBases)
+    local x, y, z = main_calcolaPosizionePannello(fronte, #session.myBases)
+
+    local labelText = string.format("%s - Carica: Perno %.1f&quot;/2.0&quot;", session.attackerKey, session.pivotUsed)
+    session.panel3DObj.UI.setXml(charge_buildDeclarePanel3DXml(session.attackerKey, x, y, z, session.activePlayer.color, labelText))
+end
+
+-- ============================================================
+-- FUNZIONE: charge_close(slot)
+-- Chiude il pannello 3D e pulisce la sessione di dichiarazione.
+-- Stesso principio di move_close (6_move/lib.ttslua).
+-- ============================================================
+function charge_close(slot)
+    local session = IEF_CHARGE_DECLARE_SESSION[slot]
+    if not session then return end
+
+    if session.lineHost then
+        session.lineHost.setVectorLines({})
+    end
+
+    if session.panel3DObj and not session.panel3DObj.isDestroyed() then
+        session.panel3DObj.UI.setXml("")
+    end
+
+    IEF_CHARGE_DECLARE_SESSION[slot] = nil
+end
+
+-- ============================================================
+-- FUNZIONE: charge_declareOpenFromButton(obj, player_color, alt_click)
+-- click_function del pulsante 3D "CARICA". TTS passa sempre
+-- (obj, player_color, alt_click) — nessun parametro custom
+-- possibile in createButton(). Apre il pannello 3D interattivo
+-- (Perno Sx/Dx + Check Carica), agganciato alla base stessa.
+-- Nessuna selezione nativa richiesta al giocatore.
+-- ============================================================
+function charge_declareOpenFromButton(obj, player_color, alt_click)
+    local player = Player[player_color]
+    if not player then return end
+
+    if ENGINE.phase ~= PHASE.CHARGE_DECLARE then
+        printToColor("[CARICA] Non è la fase di dichiarazione carica", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local slot = main_getArmyByColor(player)
+    if not slot then
+        printToColor("[CARICA] Giocatore non riconosciuto", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myTag = "Army" .. slot
+    if not obj.hasTag(myTag) then
+        printToColor("[CARICA] Questo pulsante non appartiene a una tua unità", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myKey = main_getUnitKey(obj)
+    if not myKey then
+        printToColor("[CARICA] Impossibile identificare l'unità caricante", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    if charge_alreadyDeclared(slot, myKey) then
+        printToColor("[CARICA] Questa unità ha già dichiarato una carica questo turno", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myMeta = charge_getUnitMeta(obj)
+    local myTipo = myMeta and myMeta.unitType
+    if myTipo == "ART" then
+        printToColor("[CARICA] L'Artiglieria non può mai dichiarare cariche", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myBases = charge_getUnitBases(myKey)
+    if #myBases == 0 then
+        printToColor("[CARICA] Impossibile leggere le basi dell'unità", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local startPos, startRot = {}, {}
+    for i, b in ipairs(myBases) do
+        startPos[i] = b.getPosition()
+        startRot[i] = b.getRotation()
+    end
+
+    IEF_CHARGE_DECLARE_SESSION[slot] = {
+        attackerKey  = myKey,
+        myBases      = myBases,
+        startPos     = startPos,
+        startRot     = startRot,
+        pivotUsed    = 0,
+        targetKey    = nil,
+        distInches   = nil,
+        panel3DObj   = obj,
+        activePlayer = player,
+    }
+
+    UI.setAttribute("confirm_panel_charge", "active", "false")
+    charge_redraw(slot)
+end
+-- ============================================================
+-- FUNZIONE: charge_pivotApply(player, direzione)
+-- direzione: "left" | "right". Applica 1" di perno (o il residuo
+-- se minore), fino al budget massimo di 2" per la carica intera.
+-- Stessa matrice di rotazione di move_perno_apply, ma pivotBase
+-- = angolo di fronte reale (charge_getFrontLine).
+-- ============================================================
+function charge_pivotApply(player, direzione)
+    local slot = main_getArmyByColor(player)
+    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    if not session then return end
+
+    local residuo = 2 - session.pivotUsed
+    if residuo <= 0.001 then
+        printToColor("[CARICA] Perno massimo (2\") già usato", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myBases = session.myBases
+    if #myBases < 2 then
+        printToColor("[CARICA] Unità a base singola: perno non applicabile", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local distanzaInch = math.min(1, residuo)
+
+    local fwdXZ, right, frontLeft, frontRight = charge_getFrontLine(myBases)
+    local p1, p2 = frontLeft.getPosition(), frontRight.getPosition()
+    local radius = Vector(p2.x - p1.x, 0, p2.z - p1.z):magnitude()
+    if radius <= 0.01 then return end
+
+    local dirSegno = (direzione == "left") and -1 or 1
+    local angoloSigned = dirSegno * (distanzaInch * INCH_TO_TTS) / radius
+
+    local pivotBase = (direzione == "left") and frontLeft or frontRight
+    charge_applyPivot(myBases, pivotBase, angoloSigned)
+
+    session.pivotUsed = session.pivotUsed + distanzaInch
+    charge_redraw(slot)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_btnPivotSx(player, value, id)
+-- onClick 3D (prefisso "Global/") del pulsante "Perno Sx".
+-- TTS passa (player, value, id) per XML attaccato a un oggetto.
+-- ============================================================
+function charge_btnPivotSx(player, value, id)
+    if not player then return end
+    charge_pivotApply(player, "left")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_btnPivotDx(player, value, id)
+-- onClick 3D del pulsante "Perno Dx".
+-- ============================================================
+function charge_btnPivotDx(player, value, id)
+    if not player then return end
+    charge_pivotApply(player, "right")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_checkTarget(player)
+-- ============================================================
+function charge_checkTarget(player)
+    local slot = main_getArmyByColor(player)
+    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    if not session then return end
+
+    local targetKey, a, distInches, newHost = charge_findLineTarget(session.attackerKey, slot)
+
+    if newHost then
+        if session.lineHost and session.lineHost ~= newHost then
+            session.lineHost.setVectorLines({})
+        end
+        session.lineHost = newHost
+    end
+
+    if not targetKey then
+        printToColor("[CARICA] KO — " .. tostring(a), player.color, {r=1,g=0.5,b=0.2})
+        return
+    end
+
+    session.targetKey  = targetKey
+    session.distInches = distInches
+
+    local msg = string.format("Carica: %s -> %s  (%.1f\" residui)", session.attackerKey, targetKey, distInches)
+    UI.setAttribute("confirm_panel_charge_text", "text", msg)
+    UI.setAttribute("confirm_panel_charge", "visibility", player.color)
+    UI.setAttribute("confirm_panel_charge", "active", "true")
+    printToColor("[CARICA] OK — bersaglio raggiungibile", player.color, {r=0.3,g=1,b=0.3})
+end
+
+-- ============================================================
+-- FUNZIONE: charge_btnCheck(player, value, id)
+-- onClick 3D del pulsante "Check Carica".
+-- ============================================================
+function charge_btnCheck(player, value, id)
+    if not player then return end
+    charge_checkTarget(player)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_declareRestorePosition(session)
+-- Riporta le basi dell'unità alla posizione/rotazione salvate
+-- all'apertura del pannello (prima di qualsiasi perno).
+-- ============================================================
+function charge_declareRestorePosition(session)
+    if not session then return end
+    for i, b in ipairs(session.myBases) do
+        if session.startPos[i] then b.setPosition(session.startPos[i]) end
+        if session.startRot[i] then b.setRotation(session.startRot[i]) end
+    end
+end
+-- ============================================================
+-- FUNZIONE: charge_declareAbort(player)
+-- Annulla tutto (compresi i perni), ripristina la posizione di
+-- partenza, chiude il pannello 3D e il popup di conferma.
+-- ============================================================
+function charge_declareAbort(player)
+    local slot = main_getArmyByColor(player)
+    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    if session then
+        charge_declareRestorePosition(session)
+        charge_close(slot)
+    end
+    UI.setAttribute("confirm_panel_charge", "active", "false")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_btnAbort(player, value, id)
+-- onClick 3D del pulsante "Annulla".
+-- ============================================================
+function charge_btnAbort(player, value, id)
+    if not player then return end
+    charge_declareAbort(player)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_declareCancel(player, value, id, buttonConfig)
+-- onClick del pulsante "CANCEL" nel popup 2D confirm_panel_charge.
+-- Annulla tutto (compresi i perni già fatti) e ripristina la
+-- posizione di partenza — il pannello 3D resta aperto per
+-- riprovare (nuovi perni/check).
+-- ============================================================
+function charge_declareCancel(player, value, id, buttonConfig)
+    local slot = main_getArmyByColor(player)
+    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    if session then
+        charge_declareRestorePosition(session)
+        session.pivotUsed  = 0
+        session.targetKey  = nil
+        session.distInches = nil
+        charge_redraw(slot)
+    end
+    UI.setAttribute("confirm_panel_charge", "active", "false")
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: charge_declareConfirm(player, value, id, buttonConfig)
+-- onClick del pulsante "CHARGE" nel popup 2D confirm_panel_charge.
+-- Accoda SOLO l'intenzione (attaccante, bersaglio, distanza, perno
+-- già fatto) in IEF_CHARGE_QUEUE con step="check" — nessun test
+-- morale, nessun movimento rettilineo qui. Il perno è già stato
+-- applicato fisicamente durante la dichiarazione (interattivo);
+-- il movimento rettilineo finale e il test morale si spostano
+-- dopo l'arbitraggio dei conflitti (charge_resolveConflicts,
+-- prima sotto-fase di CHARGE_RESOLVE).
+-- ============================================================
+function charge_declareConfirm(player, value, id, buttonConfig)
+
+    local slot = main_getArmyByColor(player)
+    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    if not session or not session.targetKey then
+        UI.setAttribute("confirm_panel_charge", "active", "false")
+        return
+    end
+
+
+        print("[DEBUG] session=" .. tostring(session) .. " targetKey=" .. tostring(session and session.targetKey))
+
+
+    if charge_alreadyDeclared(slot, session.attackerKey) then
+        printToColor("[CARICA] Questa unità ha già dichiarato una carica questo turno", player.color, {r=1,g=0.6,b=0})
+        --charge_close(slot)
+        --UI.setAttribute("confirm_panel_charge", "active", "false")
+        return
+    end
+
+    table.insert(IEF_CHARGE_QUEUE[slot], {
+        attackerKey  = session.attackerKey,
+        targetKey    = session.targetKey,
+        step         = "dichiarazione",
+        response     = nil,
+        flankCharge  = false,
+        controCarica = false,
+        pivotInches  = session.pivotUsed,
+        distInches   = session.distInches,
+    })
+
+    printToColor(string.format("[CARICA] Dichiarata: %s -> %s", session.attackerKey, session.targetKey), player.color, {r=0.3,g=1,b=0.3})
+    UI.setAttribute("confirm_panel_charge", "active", "false")
+    charge_close(slot)
+    callHandler("buildUI")
+    callHandler("updateCenterPanel")
+end
+-- ============================================================
+-- FUNZIONE: charge_hasArmaDaTiro(armi)
+-- Vero se la lista di armi contiene almeno un'arma da tiro
+-- (range_inches > 0 in weapons.json), ESCLUSO il Giavellotto —
+-- il regolamento lo esclude esplicitamente da questa limitazione
+-- (FP/FM con armi da tiro devono superare un test per caricare).
+-- ============================================================
+function charge_hasArmaDaTiro(armi)
+    if not armi then return false end
+    local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
+    if not weaponsDict then return false end
+
+    for _, nomeArma in ipairs(armi) do
+        if nomeArma ~= "GIAVELLOTTO" then
+            local w = weaponsDict[nomeArma]
+            if w and w.range_inches and w.range_inches > 0 then
+                return true
+            end
+        end
+    end
+    return false
+end
+-- ============================================================
+-- FUNZIONE: charge_cameraToPoint(player, slot, position)
+-- Sposta la telecamera del giocatore su un punto qualsiasi del
+-- tavolo (punto medio attaccante/bersaglio di una carica). Riusa
+-- engine_diceCamera (engine/lib.ttslua), che accetta una
+-- posizione libera, non solo le zone camera fisse.
+-- ============================================================
+function charge_cameraToPoint(player, slot, position)
+    local yaw = (slot == 1) and 0 or 180
+    engine_diceCamera(player, position, 40, yaw, 15)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_findQueueEntry(slot, attackerKey)
+-- Trova l'elemento di IEF_CHARGE_QUEUE[slot] con quell'attackerKey.
+-- ============================================================
+function charge_findQueueEntry(slot, attackerKey)
+    local coda = IEF_CHARGE_QUEUE[slot] or {}
+    for _, e in ipairs(coda) do
+        if e.attackerKey == attackerKey then return e end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: charge_getAttackListPanelXml(slot)
+-- Genera il pannello "LE TUE CARICHE" COMPLETO (non solo le
+-- righe): una riga per OGNI carica in IEF_CHARGE_QUEUE[slot],
+-- nessun limite fisso. Lista PERSISTENTE: mostra lo stato (step)
+-- aggiornato di ciascuna carica, non si accorcia mai da sola.
+-- L'id di ogni riga contiene l'attackerKey direttamente (non un
+-- numero di riga mappato a parte): "charge_attack_row_<slot>_<attackerKey>".
+-- ============================================================
+function charge_getAttackListPanelXml(slot)
+    local coda = IEF_CHARGE_QUEUE[slot] or {}
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
+    local attivo = (#coda > 0) and "true" or "false"
+
+    local rows = ""
+    for i, e in ipairs(coda) do
+        local y = 80 - (i - 1) * 22
+        rows = rows .. string.format(
+            '<Button id="charge_attack_row_%d_%s" text="%s -&gt; %s (%s)" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="Green" alignment="MiddleLeft" position="0 %d 0" width="280" height="20" onClick="charge_attackRowClick"/>',
+            slot, e.attackerKey, e.attackerKey, e.targetKey, e.step, y
+        )
+    end
+
+    return string.format(
+        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="40 -340" visibility="%s" active="%s">' ..
+        '<Text text="LE TUE CARICHE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
+        '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
+        '%s' ..
+        '</Panel>',
+        slot, colore, attivo, rows
+    )
+end
+
+-- ============================================================
+-- FUNZIONE: charge_getDefenseListPanelXml(slot)
+-- Genera il pannello "CARICHE SUBITE" COMPLETO: una riga per ogni
+-- carica dichiarata dall'esercito AVVERSARIO (IEF_CHARGE_QUEUE
+-- dell'altro slot), nessun limite fisso. Lista che DOVREBBE
+-- consumarsi quando la reazione è usata — non ancora implementato
+-- (punto 4, rimandato): per ora mostra semplicemente ogni carica
+-- subita finché non è comunque risolta.
+-- ============================================================
+function charge_getDefenseListPanelXml(slot)
+    local otherSlot = (slot == 1) and 2 or 1
+    local coda = IEF_CHARGE_QUEUE[otherSlot] or {}
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
+    local attivo = (#coda > 0) and "true" or "false"
+
+    local rows = ""
+    for i, e in ipairs(coda) do
+        local y = 95 - (i - 1) * 22
+        rows = rows .. string.format(
+            '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="Orange" alignment="MiddleLeft" position="0 %d 0" width="280" height="20" onClick="charge_defenseRowClick"/>',
+            slot, e.attackerKey, e.attackerKey, e.targetKey, y
+        )
+    end
+
+    return string.format(
+        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="320" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="350 -340" visibility="%s" active="%s">' ..
+        '<Text text="CARICHE SUBITE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
+        '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
+        '%s' ..
+        '</Panel>',
+        slot, colore, attivo, rows
+    )
+end
+
+-- ============================================================
+-- FUNZIONE: charge_attackRowClick(player, value, id)
+-- onClick di una riga del pannello "LE TUE CARICHE": naviga la
+-- telecamera sul punto della carica e avanza di uno step
+-- (check->move->resolved), poi ricostruisce l'intera UI globale
+-- (callHandler("buildUI")) così la lista riflette il nuovo stato
+-- — stesso schema già in uso per il numero di carte in 2_field.
+-- ============================================================
+function charge_attackRowClick(player, value, id)
+    local slotStr, attackerKey = id:match("^charge_attack_row_(%d)_(.+)$")
+    if not slotStr then return end
+    local slot = tonumber(slotStr)
+
+    local elemento = charge_findQueueEntry(slot, attackerKey)
+    if not elemento then return end
+
+    local myBases = charge_getUnitBases(elemento.attackerKey)
+    local targetBases = charge_getUnitBases(elemento.targetKey)
+    if myBases[1] and targetBases[1] then
+        local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
+        charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
+    end
+
+    callHandler("buildUI")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_defenseRowClick(player, value, id)
+-- onClick di una riga del pannello "CARICHE SUBITE": per ora solo
+-- naviga la telecamera sul punto della carica — la gestione della
+-- reazione vera (contro-carica/evasione/Tiro d'Arresto) è
+-- rimandata (punto 4).
+-- ============================================================
+function charge_defenseRowClick(player, value, id)
+    local slotStr, attackerKey = id:match("^charge_defense_row_(%d)_(.+)$")
+    if not slotStr then return end
+    local slot = tonumber(slotStr)
+    local otherSlot = (slot == 1) and 2 or 1
+
+    local elemento = charge_findQueueEntry(otherSlot, attackerKey)
+    if not elemento then return end
+
+    local myBases = charge_getUnitBases(elemento.attackerKey)
+    local targetBases = charge_getUnitBases(elemento.targetKey)
+    if myBases[1] and targetBases[1] then
+        local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
+        charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
+    end
+
+    -- TODO: gestione reazione (contro-carica/evasione/Tiro d'Arresto) — punto 4
+end
+
+-- ============================================================
+-- FUNZIONE: charge_resolveConflicts()
+-- Arbitraggio dei conflitti tra cariche dichiarate, da entrambi
+-- gli eserciti — gira una volta sola all'ingresso di CHARGE_RESOLVE
+-- (before_charge_resolve), quando tutte le dichiarazioni sono note.
+--
+-- 1) Coppie reciproche (A carica B, B carica A): contro-carica
+--    per definizione — entrambe sopravvivono, marcate controCarica=true.
+-- 2) Unità con doppio ruolo NON reciproco (attaccante di qualcuno
+--    E bersaglio di qualcun altro): sopravvive solo la relazione a
+--    distanza minore, l'altra viene scartata del tutto — nessuna
+--    propagazione lungo eventuali catene più lunghe.
+-- ============================================================
+function charge_resolveConflicts()
+    local byAttacker, byTarget = {}, {}
+    for slot = 1, 2 do
+        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
+            byAttacker[e.attackerKey] = e
+            byTarget[e.targetKey] = e
+        end
+    end
+
+    for slot = 1, 2 do
+        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
+            local reverse = byAttacker[e.targetKey]
+            if reverse and reverse.targetKey == e.attackerKey then
+                e.controCarica = true
+            end
+        end
+    end
+
+    local unitKeys = {}
+    for slot = 1, 2 do
+        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
+            unitKeys[e.attackerKey] = true
+            unitKeys[e.targetKey] = true
+        end
+    end
+
+    local daRimuovere = {}
+    for uk in pairs(unitKeys) do
+        local asAttacker = byAttacker[uk]
+        local asTarget    = byTarget[uk]
+
+        if asAttacker and asTarget and not asAttacker.controCarica then
+            local distComeAttaccante = asAttacker.distInches or 0
+            local distComeBersaglio  = asTarget.distInches or 0
+
+            if distComeBersaglio < distComeAttaccante then
+                daRimuovere[asAttacker] = true
+            else
+                daRimuovere[asTarget] = true
+            end
+        end
+    end
+
+    for slot = 1, 2 do
+        local nuova = {}
+        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
+            if daRimuovere[e] then
+                printToAll(string.format("[CARICA] %s -> %s scartata (conflitto di prossimità)", e.attackerKey, e.targetKey), {r=1,g=0.6,b=0.2})
+            else
+                table.insert(nuova, e)
+            end
+        end
+        IEF_CHARGE_QUEUE[slot] = nuova
+    end
+end
+-- ============================================================
+-- FUNZIONE: charge_resolveCheckStep(player, elemento, slot)
+-- Step "check" della risoluzione: applica le limitazioni che
+-- richiedono un test di morale (regolamento, "LIMITAZIONI DI
+-- CARICA"):
+--   - CL che carica sul fronte un bersaglio che non sia CL/FL/ART
+--   - FP/FM con arma da tiro (escluso Giavellotto) che carica
+--     chiunque tranne FL/ART
+-- Se il test fallisce, la carica si ferma qui (step="resolved",
+-- nessun movimento). Se supera o non serve nessun test, passa
+-- allo step "move".
+--
+-- NOTA: i modificatori del test morale (Generale nel raggio,
+-- basi perse, unità disordinata, ecc.) non sono ancora calcolati
+-- qui — passati a 0.
+--
+-- NOTA: qui non si applica l'obbligo di carica per
+-- KN/CP-IMPETO/FP-FM-IMPETO (riguarda la dichiarazione, non la
+-- risoluzione) — resta da fare a parte.
+-- ============================================================
+function charge_resolveCheckStep(player, elemento, slot)
+    local myBases = charge_getUnitBases(elemento.attackerKey)
+    local myMeta  = myBases[1] and charge_getUnitMeta(myBases[1])
+    local myTipo  = myMeta and myMeta.unitType
+    local myArmi  = myMeta and myMeta.armi or {}
+
+    local targetBases = charge_getUnitBases(elemento.targetKey)
+    local targetMeta  = targetBases[1] and charge_getUnitMeta(targetBases[1])
+    local targetTipo  = targetMeta and targetMeta.unitType
+
+    local richiedeTest = false
+
+    if myTipo == "CL" and not (targetTipo == "CL" or targetTipo == "FL" or targetTipo == "ART") then
+        richiedeTest = true
+    elseif (myTipo == "FP" or myTipo == "FM") and charge_hasArmaDaTiro(myArmi)
+           and not (targetTipo == "FL" or targetTipo == "ART") then
+        richiedeTest = true
+    end
+
+    if not richiedeTest then
+        elemento.step = "move"
+        callHandler("updateCenterPanel")
+        return
+    end
+
+    main_testMorale(elemento.attackerKey, player, "per_caricare", 0, function(esito, somma, soglia, effetto)
+        if esito == "SUPERATO" then
+            elemento.step = "move"
+        else
+            elemento.step = "resolved"
+            printToColor(string.format("[CARICA] %s: carica annullata (test morale fallito)", elemento.attackerKey), player.color, {r=1,g=0.4,b=0.2})
+            if not charge_queueHasPending() then
+                engine_handleAction({ type = ACTION.CONFIRM })
+            end
+        end
+        callHandler("buildUI")
+        callHandler("updateCenterPanel")
+    end)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_applyPivot(basiObjs, pivotBase, angoloSigned)
+-- ============================================================
+function charge_applyPivot(basiObjs, pivotBase, angoloSigned)
+    local pivotPos = pivotBase.getPosition()
+    local angoloGradi = math.deg(angoloSigned)
+
+    for _, obj in ipairs(basiObjs) do
+        if obj ~= pivotBase then
+            local p = obj.getPosition()
+            local rel = Vector(p.x - pivotPos.x, 0, p.z - pivotPos.z)
+            local rx = rel.x * math.cos(angoloSigned) - rel.z * math.sin(angoloSigned)
+            local rz = rel.x * math.sin(angoloSigned) + rel.z * math.cos(angoloSigned)
+            local newPos = Vector(pivotPos.x + rx, p.y, pivotPos.z + rz)
+            obj.setPosition(newPos)
+        end
+        local rot = obj.getRotation()
+        obj.setRotation(Vector(rot.x, rot.y - angoloGradi, rot.z))
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_applyStraightMove(basiObjs, distInches)
+-- Muove tutte le basi in linea retta lungo la direzione attuale
+-- (fronte della prima base). Stesso modello di move_avanti_apply
+-- (6_move/lib.ttslua), senza dipendere da IEF_MOVE_UNITS/IEF_MOVE_BUDGET.
+-- ============================================================
+function charge_applyStraightMove(basiObjs, distInches)
+    if #basiObjs == 0 then return end
+    local fwd = basiObjs[1].getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+    local deltaUnits = distInches * INCH_TO_TTS
+
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        obj.setPosition(Vector(p.x + fwdXZ.x*deltaUnits, p.y, p.z + fwdXZ.z*deltaUnits))
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_isFlankCharge(myBases, targetBases)
+-- ============================================================
+function charge_isFlankCharge(basiPreMovimento, targetBases)
+    if #basiPreMovimento == 0 or #targetBases == 0 then return false end
+
+    local tFwdXZ, tRight, tFrontLeft, tFrontRight = charge_getFrontLine(targetBases)
+    local tp1, tp2 = tFrontLeft.getPosition(), tFrontRight.getPosition()
+    local tCenter = Vector((tp1.x + tp2.x) / 2, 0, (tp1.z + tp2.z) / 2)
+
+    local basiDietro = 0
+    for _, ab in ipairs(basiPreMovimento) do
+        local ap = ab.getPosition()
+        local rel = Vector(ap.x - tCenter.x, 0, ap.z - tCenter.z)
+        local localZ = rel.x * tFwdXZ.x + rel.z * tFwdXZ.z
+        if localZ < 0 then
+            basiDietro = basiDietro + 1
+        end
+    end
+
+    return basiDietro >= 2
+end
+
+-- ============================================================
+-- FUNZIONE: charge_resolveMoveStep(player, elemento, slot)
+-- Step "move" della risoluzione: esegue il movimento rettilineo
+-- finale fino al bersaglio (il perno è già stato applicato
+-- fisicamente durante la dichiarazione, non va rifatto qui).
+--
+-- Il check carica sul fianco (charge_isFlankCharge) va fatto
+-- PRIMA di muovere.
+-- ============================================================
+function charge_resolveMoveStep(player, elemento, slot)
+    local myBases = charge_getUnitBases(elemento.attackerKey)
+    if #myBases == 0 then
+        printToColor("[CARICA] Impossibile leggere le basi dell'unità caricante", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local targetBases = charge_getUnitBases(elemento.targetKey)
+    elemento.flankCharge = charge_isFlankCharge(myBases, targetBases)
+
+    local distInches = elemento.distInches or 0
+    if distInches > 0.01 then
+        charge_applyStraightMove(myBases, distInches)
+    end
+
+    elemento.step = "resolved"
+
+    local fiancoTxt = elemento.flankCharge and " (SUL FIANCO)" or ""
+    printToColor(string.format("[CARICA] %s ha caricato %s%s", elemento.attackerKey, elemento.targetKey, fiancoTxt), player.color, {r=0.3,g=1,b=0.3})
+
+    if not charge_queueHasPending() then
+        engine_handleAction({ type = ACTION.CONFIRM })
+    end
+
+    callHandler("updateCenterPanel")
+end
