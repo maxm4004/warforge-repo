@@ -34,13 +34,12 @@ end
 -- Mostra BTN_ARMY1, BTN_ARMY2 e il panel dadi.
 -- ============================================================
 RENDERERS["2BtnClickAndRoll"] = function(phase)
-
-    print("RENDERER: 2BtnClickAndRoll")
     UI.setAttribute("panelBtnUp",   "active", "true")
     UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
     UI.setAttribute("panelBtnDown", "active", "false")
     UI.setAttribute("panelDices",   "active", "false")
     UI.setAttribute("panelDices",   "offsetXY", "0 -276")
+    UI.setAttribute("charge_declared_list", "active", "false")
 end
 
 -- ============================================================
@@ -53,6 +52,7 @@ RENDERERS["3BtnClick"] = function(phase)
     UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
     UI.setAttribute("panelBtnDown", "active", "false")
     UI.setAttribute("panelDices",   "active", "false")
+    UI.setAttribute("charge_declared_list", "active", "false")
 
     local bothDone = ENGINE.state
                   and ENGINE.state.Army1Done
@@ -75,6 +75,7 @@ RENDERERS["2BtnFireOrCancel"] = function(phase)
     UI.setAttribute("panelBtnDown", "active", "false")
     UI.setAttribute("panelDices",   "active", "true")
     UI.setAttribute("panelDices",   "offsetXY", "0 -276")
+    UI.setAttribute("charge_declared_list", "active", "false")
 end
 
 -- ============================================================
@@ -89,6 +90,7 @@ RENDERERS["1BtnClickAndRoll"] = function(phase)
     UI.setAttribute("panelFieldDice",   "active", "true")
     UI.setAttribute("panelFieldDice", "offsetXY", "0 -276")
     UI.setAttribute("panelDices", "active", "false")
+    UI.setAttribute("charge_declared_list", "active", "false")
 end
 -- ============================================================
 -- RENDERER: tiebreaker
@@ -101,6 +103,7 @@ RENDERERS["tiebreaker"] = function(phase)
     UI.setAttribute("panelBtnUp", "offsetXY", "0 -223")
     UI.setAttribute("panelFieldDice", "active", "false")
     UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("charge_declared_list", "active", "false")            
 end
 -- ============================================================
 -- RENDERER: fieldConfirm
@@ -113,7 +116,8 @@ RENDERERS["fieldConfirm"] = function(phase)
     UI.setAttribute("panelBtnDown",   "active", "false")
     UI.setAttribute("panelDices",     "active", "false")
     UI.setAttribute("panelFieldDice", "active", "false")
-
+    UI.setAttribute("charge_declared_list", "active", "false")
+    
     if TURN and TURN.completed and TURN.completed.Army1 then
         UI.setAttribute("BTN_ARMY1", "color", COLOR.NOARMY)
     end
@@ -122,4 +126,13 @@ RENDERERS["fieldConfirm"] = function(phase)
         UI.setAttribute("BTN_ARMY2", "color", COLOR.NOARMY)
     end
 end
-
+-- ============================================================
+-- RENDERER: 2BtnClickChargeList
+-- ============================================================
+RENDERERS["2BtnClickChargeList"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
+    UI.setAttribute("panelDices",   "active", "false")
+    UI.setAttribute("charge_declared_list", "active", "true")
+end

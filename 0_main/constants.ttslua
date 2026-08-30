@@ -9,13 +9,15 @@ ACTION = {
 }
 
 COND = {
-    BOTH_PLAYERS_SELECTED = "both_players_selected",
-    CONFIRM_READY         = "confirm_ready",
-    CONFIRM_IMMEDIATE     = "confirm_immediate",
-    AUTO_ADVANCE          = "auto_advance",
-    REQUIREMENT_MET       = "requirement_met",
-    WINNER                = "winner",
-    ASSIGNMENT            = "assignment"
+    BOTH_PLAYERS_SELECTED  = "both_players_selected",
+    CONFIRM_READY          = "confirm_ready",
+    CONFIRM_IMMEDIATE      = "confirm_immediate",
+    AUTO_ADVANCE           = "auto_advance",
+    REQUIREMENT_MET        = "requirement_met",
+    WINNER                 = "winner",
+    ASSIGNMENT             = "assignment",
+    CHARGE_QUEUE_EMPTY     = "charge_queue_empty",
+    CHARGE_QUEUE_NOT_EMPTY = "charge_queue_not_empty"
 }
 
 COLOR = {
@@ -40,7 +42,8 @@ PHASE = {
     FIELD_POSITIONING_TERRAIN = "FIELD_POSITIONING_TERRAIN",
     DEPLOY_SPAWN     = "DEPLOY_SPAWN",
     DEPLOY_POSITION  = "DEPLOY_POSITION",
-    CHARGE           = "CHARGE",
+    CHARGE_DECLARE   = "CHARGE_DECLARE",
+    CHARGE_RESOLVE   = "CHARGE_RESOLVE",
     INITIATIVE_ROLL  = "INITIATIVE_ROLL",
     INITIATIVE_CHOICE = "INITIATIVE_CHOICE",
     MOVE             = "MOVE",
@@ -48,3 +51,6 @@ PHASE = {
     MELEE            = "MELEE",
     RECOVERY         = "RECOVERY",
 }
+
+    CM_TO_TTS = 88.71 / 119.5 
+    INCH_TO_TTS = 0.730 * 2.54 

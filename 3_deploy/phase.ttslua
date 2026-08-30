@@ -32,7 +32,7 @@ function deploy_phase()
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Posiziona Esercito", textColor="White", color="Green", callback="deploy_position_btn_army2" },
             },
             transitions = {
-                { to="CHARGE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+                { to="CHARGE_DECLARE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         }
     }

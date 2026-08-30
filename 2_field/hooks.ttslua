@@ -66,9 +66,9 @@ function before_field_block(phaseName, phase)
     }
 
     Wait.time(function()
-        UI.setAttribute(BUTTONS.BTN_ARMY1, "text", "Assegna Carta 1/" .. (FIELD_STATE.army1Elements or 0))
+        UI.setAttribute(BUTTONS.BTN_ARMY1, "text", "Tira per Carta 1/" .. (FIELD_STATE.army1Elements or 0))
         UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
-        UI.setAttribute(BUTTONS.BTN_ARMY2, "text", "Assegna Carta 1/" .. (FIELD_STATE.army2Elements or 0))
+        UI.setAttribute(BUTTONS.BTN_ARMY2, "text", "Tira per Carta 1/" .. (FIELD_STATE.army2Elements or 0))
         UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
     end, 1)
 

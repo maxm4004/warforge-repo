@@ -61,3 +61,4 @@ registerHandler("shoot_range_and_target",   function(p,v,i,b)      return shoot_
 registerHandler("melee_attack",              function(p,v,i,b)      return melee_attack(p,v,i,b)            end)
 
 registerHandler("main_parseNickname",     function(nickname) return main_parseNickname(nickname) end)
+registerHandler("main_refreshAllBaseButtons",     function() return main_refreshAllBaseButtons() end)

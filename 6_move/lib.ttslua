@@ -98,33 +98,34 @@ function move_redraw(unitKey)
         state.lineHost.setVectorLines({})
     end
 
-    local INCH_TO_TTS = 1.885
     local rangeUnits  = math.max(moveResiduo, 0) * INCH_TO_TTS
 
-    local CM_TO_TTS = 0.7423
     local unitTypeData = main_getUnitType(tipo)
     local halfWidth = (unitTypeData and unitTypeData.base_width_cm or 4) * CM_TO_TTS / 2 - 0.06
     local halfDepth = (unitTypeData and unitTypeData.base_depth_cm or 3) * CM_TO_TTS / 2 - 0.06
 
-    local pos = mover.getPosition()
+    local SIDE_TOLERANCE = 0.05 * INCH_TO_TTS
+    halfWidth = halfWidth + SIDE_TOLERANCE
 
-    local startLeft  = Vector(pos1.x - right.x*halfWidth + fwdXZ.x*halfDepth, pos.y+0.3, pos1.z - right.z*halfWidth + fwdXZ.z*halfDepth)
-    local startRight = Vector(pos2.x + right.x*halfWidth + fwdXZ.x*halfDepth, pos.y+0.3, pos2.z + right.z*halfWidth + fwdXZ.z*halfDepth)
-    local endLeft    = Vector(startLeft.x  + fwdXZ.x*rangeUnits, pos.y+0.3, startLeft.z  + fwdXZ.z*rangeUnits)
-    local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, pos.y+0.3, startRight.z + fwdXZ.z*rangeUnits)
+    local y1 = 1.20
+
+    local startLeft  = Vector(pos1.x - right.x*halfWidth + fwdXZ.x*halfDepth, y1, pos1.z - right.z*halfWidth + fwdXZ.z*halfDepth)
+    local startRight = Vector(pos2.x + right.x*halfWidth + fwdXZ.x*halfDepth, y1, pos2.z + right.z*halfWidth + fwdXZ.z*halfDepth)
+    local endLeft    = Vector(startLeft.x  + fwdXZ.x*rangeUnits, y1, startLeft.z  + fwdXZ.z*rangeUnits)
+    local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, y1, startRight.z + fwdXZ.z*rangeUnits)
 
     mover.setVectorLines({
-        {points = {mover.positionToLocal(startLeft),  mover.positionToLocal(endLeft)},  color={0.2,0.6,1}, thickness=0.1},
-        {points = {mover.positionToLocal(startRight), mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.1},
-        {points = {mover.positionToLocal(endLeft),    mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.1},
+        {points = {mover.positionToLocal(startLeft),  mover.positionToLocal(endLeft)},  color={0.2,0.6,1}, thickness=0.03},
+        {points = {mover.positionToLocal(startRight), mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.03},
+        {points = {mover.positionToLocal(endLeft),    mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.03},
     })
     state.lineHost = mover
 
     local fronte = main_detectFormation(basiObjs)
-    local x, z = main_calcolaPosizionePannello(fronte, #basiObjs)
+    local x, y, z = main_calcolaPosizionePannello(fronte, #basiObjs)
     local panel3D = state.panel3DObj
     local labelText = string.format("%s - Movimento: %.0f&quot;   Perno: %.0f&quot;", unitKey, moveResiduo, pivotResiduo)
-    panel3D.UI.setXml(main_buildMovementPanel3DXml(unitKey, x, z, state.activePlayer.color, labelText))
+    panel3D.UI.setXml(main_buildMovementPanel3DXml(unitKey, x, y, z, state.activePlayer.color, labelText))
 
     local function canDo(manovra)
         return tipo and main_canManeuver(manovra, tipo)
@@ -150,7 +151,76 @@ function move_redraw(unitKey)
         setBtn("btn_" .. unitKey .. "_PivotDx", pivotOk)
     end, 5)
 end
+-- ============================================================
+-- FUNZIONE: move_snapshot(unitKey)
+-- Fotografa posizione/rotazione di tutte le basi + i budget
+-- residui — usato per Annulla Ultimo/Annulla Tutto. Indicizzato
+-- per posizione nell'array state.basiObjs (stabile per tutta la
+-- sessione), non per GUID.
+-- ============================================================
+function move_snapshot(unitKey)
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state or not state.basiObjs then return nil end
 
+    local pos, rot = {}, {}
+    for i, b in ipairs(state.basiObjs) do
+        pos[i] = b.getPosition()
+        rot[i] = b.getRotation()
+    end
+
+    return {
+        pos = pos, rot = rot,
+        budget      = IEF_MOVE_BUDGET[unitKey],
+        pivotBudget = IEF_PIVOT_BUDGET[unitKey],
+    }
+end
+
+-- ============================================================
+-- FUNZIONE: move_restoreSnapshot(unitKey, snap)
+-- Riapplica una fotografia presa da move_snapshot.
+-- ============================================================
+function move_restoreSnapshot(unitKey, snap)
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state or not state.basiObjs or not snap then return end
+
+    for i, b in ipairs(state.basiObjs) do
+        if snap.pos[i] then b.setPosition(snap.pos[i]) end
+        if snap.rot[i] then b.setRotation(snap.rot[i]) end
+    end
+
+    IEF_MOVE_BUDGET[unitKey]  = snap.budget
+    IEF_PIVOT_BUDGET[unitKey] = snap.pivotBudget
+end
+
+-- ============================================================
+-- FUNZIONE: move_undoLast(unitKey)
+-- Annulla solo l'ultima azione (ultimo Avanti o Perno), non tutte.
+-- ============================================================
+function move_undoLast(unitKey)
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state or not state.history or #state.history == 0 then return end
+
+    local snap = table.remove(state.history)
+    move_restoreSnapshot(unitKey, snap)
+    move_redraw(unitKey)
+end
+
+-- ============================================================
+-- FUNZIONE: move_undoAll(unitKey)
+-- Annulla tutte le azioni: torna alla posizione/rotazione/budget
+-- dell'apertura del pannello.
+-- ============================================================
+function move_undoAll(unitKey)
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state then return end
+
+    move_restoreSnapshot(unitKey, {
+        pos = state.startPos, rot = state.startRot,
+        budget = state.startBudget, pivotBudget = state.startPivotBudget,
+    })
+    state.history = {}
+    move_redraw(unitKey)
+end
 -- ============================================================
 -- FUNZIONE: move_avanti_apply(unitKey, distanzaInch)
 -- ============================================================
@@ -162,10 +232,12 @@ function move_avanti_apply(unitKey, distanzaInch)
     local residuo = IEF_MOVE_BUDGET[unitKey] or 0
     if residuo <= 0 and not IEF_MOVE_TEST_MODE then return false end
     if distanzaInch > residuo and not IEF_MOVE_TEST_MODE then distanzaInch = residuo end
-
+    
+    state.history = state.history or {}
+    table.insert(state.history, move_snapshot(unitKey))
+    
     local fwd   = basiObjs[1].getTransformForward()
     local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-    local INCH_TO_TTS = 1.885
     local deltaUnits  = distanzaInch * INCH_TO_TTS
 
     for _, obj in ipairs(basiObjs) do
@@ -196,6 +268,9 @@ function move_perno_apply(unitKey, direction)
 
     move_getGroupAxis(basiObjs)
 
+    state.history = state.history or {}
+    table.insert(state.history, move_snapshot(unitKey))
+
     local pivotBase, farBase
     if direction == "left" then
         pivotBase, farBase = basiObjs[1], basiObjs[#basiObjs]
@@ -208,7 +283,6 @@ function move_perno_apply(unitKey, direction)
     local radius = (Vector(farPos.x - pivotPos.x, 0, farPos.z - pivotPos.z)):magnitude()
     if radius <= 0 then return false end
 
-    local INCH_TO_TTS = 1.885
     local dirSegno = (direction == "left") and -1 or 1
     local angoloSigned = dirSegno * (distanzaInch * INCH_TO_TTS) / radius
     local angoloGradi  = math.deg(angoloSigned)
@@ -254,46 +328,65 @@ function move_close(unitKey)
 end
 
 -- ============================================================
--- Wrapper pulsanti UI 3D — TTS passa (player, value, id);
--- l'unitKey si estrae dall'id del pulsante (unico per unità).
+-- FUNZIONE: move_btnMove1(player, value, id)
 -- ============================================================
 function move_btnMove1(player, value, id)
     local unitKey = id:match("^btn_(.+)_Move1$")
     if unitKey then move_avanti_apply(unitKey, 1) end
 end
+-- ============================================================
+-- FUNZIONE: move_btnMove2(player, value, id)
+-- ============================================================
 function move_btnMove2(player, value, id)
     local unitKey = id:match("^btn_(.+)_Move2$")
     if unitKey then move_avanti_apply(unitKey, 2) end
 end
+-- ============================================================
+-- FUNZIONE: move_btnMoveMax(player, value, id)
+-- ============================================================
+
 function move_btnMoveMax(player, value, id)
     local unitKey = id:match("^btn_(.+)_MoveMax$")
     if not unitKey then return end
     local residuo = IEF_MOVE_BUDGET[unitKey] or 0
     move_avanti_apply(unitKey, residuo)
 end
+-- ============================================================
+-- FUNZIONE: move_btnPivotSx(player, value, id)
+-- ============================================================
 function move_btnPivotSx(player, value, id)
     local unitKey = id:match("^btn_(.+)_PivotSx$")
     if unitKey then move_perno_apply(unitKey, "left") end
 end
+-- ============================================================
+-- FUNZIONE: move_btnPivotDx(player, value, id)
+-- ============================================================
 function move_btnPivotDx(player, value, id)
     local unitKey = id:match("^btn_(.+)_PivotDx$")
     if unitKey then move_perno_apply(unitKey, "right") end
 end
+-- ============================================================
+-- FUNZIONE: move_btnClose(player, value, id)
+-- ============================================================
 function move_btnClose(player, value, id)
     local unitKey = id:match("^btn_(.+)_Close$")
     if unitKey then move_close(unitKey) end
 end
 -- ============================================================
--- FUNZIONE: move_close(unitKey)
--- Chiude il pannello 3D e pulisce lo stato dell'unità.
+-- FUNZIONE: move_btnUndoLast(player, value, id)
 -- ============================================================
-function move(obj)
-    obj.createButton({
-        click_function = "main_movementOpenFromButton",
-        function_owner = Global,
-        label = "MOVIMENTO",
-        position = {0, 0.1, -1.8},
-        rotation = {0, 180, 0},
-        width = 500, height = 400, font_size = 100,
-    })
+function move_btnUndoLast(player, value, id)
+    print("qqqqqqq")
+    local unitKey = id:match("^btn_(.+)_UndoLast$")
+    if unitKey then move_undoLast(unitKey) end
 end
+
+-- ============================================================
+-- FUNZIONE: move_btnUndoAll(player, value, id)
+-- onClick 3D del pulsante "Annulla Tutto".
+-- ============================================================
+function move_btnUndoAll(player, value, id)
+    local unitKey = id:match("^btn_(.+)_UndoAll$")
+    if unitKey then move_undoAll(unitKey) end
+end
+

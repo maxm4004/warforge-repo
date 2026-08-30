@@ -15,7 +15,7 @@ function recovery_phase()
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Recupero Completato", textColor="White", color="Green", callback="recovery_btn_army2" },
             },
             transitions = {
-                { to="CHARGE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+                { to="CHARGE_DECLARE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         }
     }

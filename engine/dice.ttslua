@@ -502,12 +502,13 @@ function engine_diceRoll_start(player)
     if not slot then warning("Impossibile usare questo button, scegliere prima un colore", "Yellow") return end
   
     if ENGINE.phase == "INITIATIVE_ROLL" then
+        local faseOrigine = ENGINE.phase
         local key = slot == 1 and "rolledNumberArmy1" or "rolledNumberArmy2"
         if DICE_CONTEST[key] ~= nil then return end
 
         engine_diceThrowFromBag(slot, nil, function(risultati, successi)
             DICE_CONTEST[key] = risultati[1]
-            engine_diceCameraReturn(player, slot)
+            engine_diceCameraReturn(player, slot, faseOrigine)
             local bothRolled = DICE_CONTEST.rolledNumberArmy1 ~= nil and DICE_CONTEST.rolledNumberArmy2 ~= nil
             callHandler("dice_check")
             if bothRolled and DICE_CONTEST.winner == nil then
@@ -547,22 +548,20 @@ function engine_diceRoll_clear(player)
     engine_diceClearLastRoll(slot)
 end
 -- ============================================================
--- FUNZIONE: engine_diceCameraZoom(player, slot, duration)
+-- FUNZIONE: engine_diceCameraZoom(player, slot)
 -- ============================================================
 function engine_diceCameraZoom(player, slot)
-   if ENGINE.phase == "FIELD" or ENGINE.phase == "FIELD_ROLL" or ENGINE.phase == "FIELD_BLOCK" then
+   
+    if ENGINE.phase == "FIELD" or 
+            ENGINE.phase == "FIELD_ROLL" or 
+                    ENGINE.phase == "FIELD_BLOCK" or 
+                            ENGINE.phase == "INITIATIVE_ROLL" or
+                                    ENGINE.phase == "CHARGE_RESOLVE" then
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)              
-    end
+   end
 end
 -- ============================================================
--- FUNZIONE: engine_diceCameraReturn(player, slot)
--- ============================================================
-
--- ============================================================
--- FUNZIONE: engine_diceCameraReturn(player, slot)
--- Dopo ogni tiro: camera sulla card appena piazzata, poi dopo
--- 2s torna sui dadi (se ci sono altri tiri da fare) oppure va
--- alla vista home (se era l'ultimo elemento).
+-- FUNZIONE: engine_diceCameraReturn(player, slot, faseOrigine)
 -- ============================================================
 function engine_diceCameraReturn(player, slot, faseOrigine)
 
@@ -593,6 +592,13 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
                 engine_diceCameraZoom(player, slot)
             end
         end, 2)
+    end
+
+    if faseOrigine == "INITIATIVE_ROLL" or
+            faseOrigine == "CHARGE_RESOLVE" then
+                Wait.time(function()
+                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+                end, 2)
     end
 
 end

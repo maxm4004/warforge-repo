@@ -37,7 +37,7 @@ function field_phase()
             },
             FIELD_BLOCK = {
                 title = "CAMPO DI BATTAGLIA",
-                desc  = "ASSEGNA AD OGNI CARTA UNA ZONA SUL TAVOLO",
+                desc  = "ASSOCIA AD OGNI CARTA UNA ZONA SUL TAVOLO",
                 before = "before_field_block",
                 after  = "after_field_block",
                 allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
@@ -45,8 +45,8 @@ function field_phase()
                 enforceOwnership = true,
                 inputMode = "OWNER",
                 buttons = {
-                    BTN_ARMY1 = { action="ARMY1_CLICK", label="Assegna Zona", textColor="White", color="Red",   callback="field_rollBlockZoom" },
-                    BTN_ARMY2 = { action="ARMY2_CLICK", label="Assegna Zona", textColor="White", color="Green", callback="field_rollBlockZoom" },
+                    BTN_ARMY1 = { action="ARMY1_CLICK", label="Associa Carta a Zona", textColor="White", color="Red",   callback="field_rollBlockZoom" },
+                    BTN_ARMY2 = { action="ARMY2_CLICK", label="Associa Carta a Zona", textColor="White", color="Green", callback="field_rollBlockZoom" },
                 },
                 transitions = {
                     { to="FIELD_DONE", conditions={ COND.BOTH_PLAYERS_SELECTED } }

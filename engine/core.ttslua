@@ -214,6 +214,7 @@ function engine_enterPhase(newPhaseName, oldPhaseName)
 
     if phase.before then
         callHandler(phase.before, newPhaseName, phase)
+        callHandler("main_refreshAllBaseButtons")
     end
 end
 

@@ -495,36 +495,6 @@ function debug_clearBadgeUI(guid)
     base.UI.setXml("")
 end
 
--- ============================================================
--- DEBUG: testa il pannello 3D Movimento con x/z fisse, senza
--- passare dal calcolo automatico main_calcolaPosizionePannello.
--- ============================================================
-function debug_testMovementPanel(guid, x, z)
-    local obj = getObjectFromGUID(guid)
-    if not obj then print("GUID non trovato") return end
-
-    local unitKey = main_getUnitKey(obj)
-    local labelText = string.format("%s - TEST x=%.1f z=%.1f", unitKey, x, z)
-
-    obj.UI.setXml(main_buildMovementPanel3DXml(unitKey, x, z, "Red", labelText))
-end
-
--- ============================================================
--- DEBUG
--- ============================================================
-function debug_testFormationPanel(guid, x, z)
-
-    print("debug_testFormationPanel")
-
-    local obj = getObjectFromGUID(guid)
-    if not obj then print("GUID non trovato") return end
-
-    local unitKey = main_getUnitKey(obj)
-    local labelText = string.format("%s - TEST x=%.1f z=%.1f", unitKey, x, z)
-
-    obj.UI.setXml(main_buildFormationPanel3DXml(unitKey, x, z, "Red", labelText))
-end
-
 function debug_cameraData(color, pitch, yaw, distance)
 
     local player = Player[color]
@@ -536,6 +506,8 @@ function debug_cameraData(color, pitch, yaw, distance)
     player.lookAt({position = {x = pos.x, y = pos.y, z = pos.z}, pitch = pitch, yaw = yaw, distance = distance })
     print("x = ".. string.format(pos.x, "%f.2").. "y = " .. string.format(pos.y, "%2.f").. "z = " .. string.format(pos.z, "%2.f"))
     print("pitch: ".. pitch, " distance: " .. distance)
+
+    --/execute debug_cameraData("Red", pitch, yaw, distance)
 end
 
 
@@ -576,6 +548,83 @@ function debug_fieldCardsDump()
                 local n = lista and #lista or 0
                 print("slot " .. slot .. " / " .. blocco .. " → " .. n .. " carte")
             end
+        end
+    end
+end
+-- ============================================================
+-- FUNZIONE: debug_chargeRectangle(guid)
+-- Disegna sul tavolo (linee rosse) il rettangolo di carica usato
+-- da charge_findLineTarget (fronte x move_inches, davanti alla
+-- base indicata) e stampa, per ogni base nemica sul tavolo, le
+-- coordinate locali (avanti/laterale, in TTS units e pollici) e
+-- se cade dentro o fuori dal rettangolo.
+--
+-- Uso da console:
+--   /execute debug_chargeRectangle("GUID_BASE_ATTACCANTE")
+-- ============================================================
+function debug_chargeRectangle()
+    
+    local obj = getObjectFromGUID("06d0e8")
+    if not obj then
+        print("[DEBUG CARICA] GUID non trovato: " .. tostring("06d0e8"))
+        return
+    end
+
+local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+    if not slot then
+        print("[DEBUG CARICA] Base senza tag Army1/Army2")
+        return
+    end
+
+    local myKey = main_getUnitKey(obj)
+    local myBases = charge_getUnitBases(myKey)
+    if #myBases == 0 then
+        print("[DEBUG CARICA] Nessuna base trovata per " .. tostring(myKey))
+        return
+    end
+
+    local myMeta = charge_getUnitMeta(myBases[1])
+    local myTipo = myMeta and myMeta.unitType
+    local unitTypeData = myTipo and main_getUnitType(myTipo)
+    local moveInches = unitTypeData and unitTypeData.move_inches or 0
+    local baseHalfWidth = (unitTypeData and unitTypeData.base_width_cm or 4) * CM_TO_TTS / 2 - 0.06
+    local baseHalfDepth = (unitTypeData and unitTypeData.base_depth_cm or 3) * CM_TO_TTS / 2 - 0.06
+
+    local SIDE_TOLERANCE = 0.05 * INCH_TO_TTS
+    baseHalfWidth = baseHalfWidth + SIDE_TOLERANCE
+
+    local fwdXZ, right, frontLeft, frontRight = charge_getFrontLine(myBases)
+    local p1, p2 = frontLeft.getPosition(), frontRight.getPosition()
+    local rangeUnits = moveInches * INCH_TO_TTS
+
+    local y = 1.20
+
+    local startLeft  = Vector(p1.x - right.x*baseHalfWidth + fwdXZ.x*baseHalfDepth, y, p1.z - right.z*baseHalfWidth + fwdXZ.z*baseHalfDepth)
+    local startRight = Vector(p2.x + right.x*baseHalfWidth + fwdXZ.x*baseHalfDepth, y, p2.z + right.z*baseHalfWidth + fwdXZ.z*baseHalfDepth)
+    local endLeft    = Vector(startLeft.x  + fwdXZ.x*rangeUnits, y, startLeft.z  + fwdXZ.z*rangeUnits)
+    local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, y, startRight.z + fwdXZ.z*rangeUnits)
+
+    frontLeft.setVectorLines({
+        {points = {frontLeft.positionToLocal(startLeft),  frontLeft.positionToLocal(endLeft)},  color={1,0.2,0.2}, thickness=0.03},
+        {points = {frontLeft.positionToLocal(startRight), frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
+        {points = {frontLeft.positionToLocal(endLeft),    frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
+    })
+
+    local corridorWidth = Vector(startRight.x - startLeft.x, 0, startRight.z - startLeft.z):magnitude()
+
+    local enemyTag = "Army" .. (slot == 1 and 2 or 1)
+    local count = 0
+    for _, o in ipairs(getAllObjects()) do
+        if o.hasTag(enemyTag) then
+            local ep = o.getPosition()
+            local rel = Vector(ep.x - startLeft.x, 0, ep.z - startLeft.z)
+            local localZ = rel.x * fwdXZ.x + rel.z * fwdXZ.z
+            local localX = rel.x * right.x + rel.z * right.z
+            local dentro = charge_baseTouchesCorridor(o, startLeft, fwdXZ, right, rangeUnits, corridorWidth)
+            count = count + 1
+            if dentro then
+                    print(string.format("[DEBUG CARICA]   %-28s localZ=%6.2f (%.1f\") localX=%6.2f (%.1f\")", o.getName(), localZ, localZ / INCH_TO_TTS, localX, localX / INCH_TO_TTS))
+            end    
         end
     end
 end

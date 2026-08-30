@@ -28,9 +28,6 @@ end
 function deploy_position_btn_army1(player, value, id)
     TURN.completed.Army1 = true
     local esito = deployment_validateDeploy(player)
-
-    print(esito)
-
     if esito then
             deployment_destroyArmy1HiddenZones()
     end
@@ -43,7 +40,6 @@ end
 function deploy_position_btn_army2(player, value, id)
     TURN.completed.Army2 = true
     local esito = deployment_validateDeploy(player)
-        print(esito)
     if esito then
             deployment_destroyArmy2HiddenZones()
     end

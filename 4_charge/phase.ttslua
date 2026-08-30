@@ -1,21 +1,39 @@
 -- 4_charge/phase.ttslua
 function charge_phase()
     return {
-        CHARGE = {
-            title = "FASE 1: DICHIARAZIONI CARICHE",
-            desc  = "Dichiarazioni di carica e risposte alla carica",
-            before = "before_charge",
-            after  = "after_charge",
+        CHARGE_DECLARE = {
+            title = "FASE 1: DICHIARAZIONI DI CARICA",
+            desc  = "Dichiara le cariche delle tue unità",
+            before = "before_charge_declare",
+            after  = "after_charge_declare",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
+            render = "2BtnClickChargeList",
+            enforceOwnership = true,
+            inputMode = "OWNER",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Dichiarazioni Completate", textColor="White", color="Red",   callback="charge_declare_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Dichiarazioni Completate", textColor="White", color="Green", callback="charge_declare_btn_army2" },
+            },
+            transitions = {
+                { to="CHARGE_RESOLVE",  conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_QUEUE_NOT_EMPTY } },
+                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_QUEUE_EMPTY } },
+            }
+        },
+        CHARGE_RESOLVE = {
+            title = "FASE 1: RISOLUZIONE CARICHE",
+            desc  = "Risolvi le cariche dichiarate",
+            before = "before_charge_resolve",
+            after  = "after_charge_resolve",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
             render = "2BtnClick",
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Avanti", textColor="White", color="Red",   callback="charge_btn_army1" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Avanti", textColor="White", color="Green", callback="charge_btn_army2" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Risolvi Carica", textColor="White", color="Red",   callback="charge_resolve_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Risolvi Carica", textColor="White", color="Green", callback="charge_resolve_btn_army2" },
             },
             transitions = {
-                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+                { to="INITIATIVE_ROLL", conditions={ COND.CHARGE_QUEUE_EMPTY } }
             }
         }
     }

@@ -616,18 +616,3 @@ function melee_aggiornaPanel(mischia, contattoAtk, overlapAtk, postAtk,
  
     UI.setAttribute("melee_panel", "active", "true")
 end
--- ============================================================
--- FUNZIONE: melee()
--- ============================================================
-function melee(obj)
-        obj.createButton({
-        click_function = "",
-        function_owner = Global,
-        label = "MISCHIA",
-        position = {1, 0.1, -1.8},
-        rotation = {0, 180, 0},
-        width = 500, 
-        height = 400, 
-        font_size = 100,
-    })
-end

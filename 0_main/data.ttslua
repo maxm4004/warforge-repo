@@ -62,11 +62,6 @@ function main_data_load()
         if failed > 0 then
             printToAll("[IEF_DATA] Attenzione: " .. failed .. " file non caricati", {r=1,g=0.6,b=0})
         end
-
-       -- printToAll("[IEF_DATA] Base dati IEF pronta — " ..
-       --     main_count(IEF_DATA.unitTypes) .. " tipi unità, " ..
-       --     main_count(IEF_DATA.weapons)   .. " armi", {r=0.4,g=0.9,b=0.4})
-
         callHandler("ief_data_ready")
     end
 

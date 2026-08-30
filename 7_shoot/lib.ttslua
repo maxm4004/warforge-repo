@@ -81,8 +81,6 @@ function shoot_range_and_target(player, value, id, buttonConfig)
         return false
     end
 
-    -- IEF usa pollici — converti in unità TTS (INCH_TO_TTS = 1.885)
-    local INCH_TO_TTS = 1.885
     local rangeUnits  = weapon.range_inches and (weapon.range_inches * INCH_TO_TTS)
                         or weapon.rangeUnits
                         or (weapon.range and (weapon.range * INCH_TO_TTS))
@@ -410,7 +408,7 @@ local angolo   = math.rad(angoloGradi)
         local dist           = (target.getPosition() - pos):magnitude()
         local distBordoBordo = dist - offsetShooter - offsetTarget
 
-        local INCH_TO_TTS_msg = 1.885
+        local INCH_TO_TTS_msg = INCH_TO_TTS
         local distInch = distBordoBordo / INCH_TO_TTS_msg
         local rangeInch = state and state.rangeUnits and (state.rangeUnits / INCH_TO_TTS_msg) or (rangeUnits / INCH_TO_TTS_msg)
         local msg = string.format("[TIRO] Bersaglio: %s dist: %.1f" .. " gittata: %.0f" .. " (basi pronte: %d/%d)", targetUnit and (targetUnit.tipo .. "_" .. targetUnit.unita_num) or target.getName(), distInch, rangeInch, basiPronte, #basiObjs)
@@ -432,7 +430,7 @@ local angolo   = math.rad(angoloGradi)
         IEF_SHOOTING.activeLines = parabolaLines
         
     else
-        printToColor(string.format("[TIRO] Nessun bersaglio entro gittata (%.0f\")", rangeUnits / 1.885), player.color, {r=0.7,g=0.7,b=0.7})
+        printToColor(string.format("[TIRO] Nessun bersaglio entro gittata (%.0f\")", rangeUnits / INCH_TO_TTS), player.color, {r=0.7,g=0.7,b=0.7})
         IEF_SHOOTING.activeLines = nil
 
         UI.setAttribute("confirm_panel_shoot", "active", "true")
@@ -1063,19 +1061,4 @@ function shoot_findNearestEnemy(shooter, shooterSlot, rangeUnits)
     end
 
     return nearest, minDist
-end
--- ============================================================
--- FUNZIONE: form()
--- ============================================================
-function shoot(obj)
-        obj.createButton({
-        click_function = "",
-        function_owner = Global,
-        label = "TIRO",
-        position = {1, 0.1, -1.8},
-        rotation = {0, 180, 0},
-        width = 500, 
-        height = 400, 
-        font_size = 100,
-    })
 end

@@ -67,7 +67,7 @@ function getEngineUiXml()
         rectAlignment="UpperCenter"
         width="150" height="50"
         color="rgba(0,0,0,0.35)"
-        offsetXY="0 -350"
+        offsetXY="0 -390"
         active="false">
             <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter">               
                 <Button id="btn_measure_cancel_panel"

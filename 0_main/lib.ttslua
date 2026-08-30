@@ -111,9 +111,9 @@ function main_aggiornaLinee()
     local Y_LINEE    = 1.22
     local LX = 66.806
     local LZ = 44.536
-    local CM_TO_TTS  = LX / 90.0   -- 66.70 / 90 = 0.741
+    --local CM_TO_TTS  = LX / 90.0   -- 66.70 / 90 = 0.741
     local DEPLOY_TTS = 30.48 * CM_TO_TTS   -- 12 pollici in TTS = 22.59
-    local LAT_TTS = 6 * 1.885  -- 6 pollici in TTS = 11.31
+    local LAT_TTS = 6 * INCH_TO_TTS  -- 6 pollici in TTS = 11.31
     local LX_SPAWN   = 84.00
 
 
@@ -1359,7 +1359,6 @@ function main_ricostruisciFormazione(basiObjs, fronte)
 
     local baseInfoAnchor = main_parseNickname(refObj.getName())
     local unitTypeDataAnchor = baseInfoAnchor and main_getUnitType(baseInfoAnchor.unitType)
-    local CM_TO_TTS = 0.7423
     local HGAP = 0.25
     local VGAP = 0.1
     local width = (unitTypeDataAnchor and unitTypeDataAnchor.base_width_cm or 4) * CM_TO_TTS + HGAP
@@ -1509,8 +1508,7 @@ function main_cambioFronte90Core(unitKey, direction)
     local right     = Vector(-fwdXZ.z, 0, fwdXZ.x)
 
     local unitTypeDataAnchor = main_getUnitType(baseInfo.unitType)
-    local CM_TO_TTS = 0.7423
-    local HGAP = 0.25
+       local HGAP = 0.25
     local VGAP = 0.1
     local width = (unitTypeDataAnchor and unitTypeDataAnchor.base_width_cm or 4) * CM_TO_TTS + HGAP
     local depth = (unitTypeDataAnchor and unitTypeDataAnchor.base_depth_cm or 3) * CM_TO_TTS + VGAP
@@ -1658,11 +1656,22 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
         IEF_PIVOT_BUDGET[unitKey] = 3
     end
 
+    local startPos, startRot = {}, {}
+    for i, b in ipairs(basiObjs) do
+        startPos[i] = b.getPosition()
+        startRot[i] = b.getRotation()
+    end
+
     IEF_MOVE_UNITS[unitKey] = {
         basiObjs     = basiObjs,
         activePlayer = Player[player_color],
         panel3DObj   = obj,
         lineHost     = nil,
+        startPos     = startPos,
+        startRot     = startRot,
+        startBudget      = IEF_MOVE_BUDGET[unitKey],
+        startPivotBudget = IEF_PIVOT_BUDGET[unitKey],
+        history      = {},
     }
 
     move_redraw(unitKey)
@@ -1753,7 +1762,7 @@ function main_riposizionaPulsanteFormazione(unitKey, basiObjs)
             vecchiaBase.clearButtons()
         end
     end
-
+   
     main_createBaseButtons(nuovaBase, TURN.phase, unitKey)
     IEF_UNIT_BUTTON_BASE[unitKey] = nuovoGuid
 
@@ -1820,10 +1829,10 @@ end
 -- Pannello 3D Movimento: 5 pulsanti in riga + Chiudi. ID unici
 -- per unitKey.
 -- ============================================================
-function main_buildMovementPanel3DXml(unitKey, x, z, colore, labelText)
+function main_buildMovementPanel3DXml(unitKey, x, y, z, colore, labelText)
     return string.format([[
-        <Panel id="panelMove_%s" active="true" color="rgba(0,0,0,0.85)" width="700" height="300" offsetXY="0 300" position="%f 0 %f" rotation="-90 0 0" visibility="%s">
-            <VerticalLayout spacing="10" padding="20 20 20 20" childAlignment="MiddleCenter">
+        <Panel id="panelMove_%s" active="true" color="rgba(0,0,0,0.85)" width="700" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+             <VerticalLayout spacing="10" padding="20 20 20 20" childAlignment="MiddleCenter">
                 <Text text="%s" fontStyle="Bold" font="warforge_font" fontSize="20" color="Orange" alignment="MiddleCenter" width="660" height="35"/>
                 <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
                     <Button id="btn_%s_Move1"   text="Avanti 1&quot;" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnMove1"/>
@@ -1832,33 +1841,15 @@ function main_buildMovementPanel3DXml(unitKey, x, z, colore, labelText)
                     <Button id="btn_%s_PivotSx" text="Perno Sx"      font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnPivotSx"/>
                     <Button id="btn_%s_PivotDx" text="Perno Dx"      font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnPivotDx"/>
                 </HorizontalLayout>
+                <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
+                    <Button id="btn_%s_UndoLast" text="Annulla Ultimo" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.55,0.35,0.1,1)"  textColor="White" width="320" height="30" onClick="Global/move_btnUndoLast"/>
+                    <Button id="btn_%s_UndoAll"  text="Annulla Tutto"  font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.55,0.15,0.15,1)" textColor="White" width="320" height="30" onClick="Global/move_btnUndoAll"/>
+                </HorizontalLayout>
                 <Button id="btn_%s_Close" text="Chiudi" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/move_btnClose"/>
             </VerticalLayout>
         </Panel>
-    ]], unitKey, x, z, colore, labelText, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey)
+        ]], unitKey, x, y, z, colore, labelText, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey)
 end
-
--- ============================================================
--- FUNZIONE: main_createBaseButtons(obj)
--- Crea i pulsanti 3D (Formazione + Muovi) sulla base indicata.
--- ============================================================
-function main_createBaseButtons(obj, phase, unit)
-
-    obj.clearButtons()
-    local azioni = {
-        [PHASE.DEPLOY_SPAWN] = form,
-        [PHASE.MOVE]         = form, move,
-        [PHASE.CHARGE]       = charge,
-        [PHASE.SHOOT]        = shoot,
-        [PHASE.MELEE]        = melee,
-        [PHASE.RECOVERY]     = recovery,
-    }
-
-    local f = azioni[phase]
-    if f then f(obj) else print("caso non gestito: " .. tostring(phase)) return end
-
-end
-
 -- ============================================================
 -- FUNZIONE: main_getChildOffsets()
 -- ============================================================
@@ -1909,17 +1900,255 @@ function main_getChildOffsets()
     end
 end
 -- ============================================================
--- FUNZIONE: form()
+-- FUNZIONE: main_getUnitBases(unitKey)
+-- Tutte le basi sul tavolo che condividono lo stesso unitKey.
+-- Motore condiviso: usato da Carica, Tiro, Mischia, Recupero.
 -- ============================================================
-function form(obj)
+function main_getUnitBases(unitKey)
+    local bases = {}
+    for _, o in ipairs(getAllObjects()) do
+        if main_getUnitKey(o) == unitKey then
+            table.insert(bases, o)
+        end
+    end
+    return bases
+end
+
+-- ============================================================
+-- FUNZIONE: main_getUnitMeta(obj)
+-- Legge i metadata scritti in GMNotes da deployment_applyBaseMetadata
+-- (unitType, morale, armi, capabilities, ecc.). Ritorna nil se
+-- la base non ha metadata IEF validi.
+-- ============================================================
+function main_getUnitMeta(obj)
+    if not obj then return nil end
+    local raw = obj.getGMNotes()
+    if not raw or raw == "" then return nil end
+    local ok, meta = pcall(JSON.decode, raw)
+    if not ok or not meta then return nil end
+    return meta
+end
+
+-- ============================================================
+-- FUNZIONE: main_testMorale(unitKey, player, situazione, modificatori, callback)
+-- Motore condiviso Test di Morale (2D6 + modificatori vs soglia
+-- di morale_levels[livello].threshold). Riusa il motore dadi
+-- fisico (engine_diceThrowFromBag), stesso schema di
+-- field_doRollFieldElement in 2_field/lib.ttslua.
+--
+-- unitKey:       unità che effettua il test
+-- player:        Player che tira (per camera e messaggi)
+-- situazione:    "per_riordinare" | "per_caricare" | "altre_situazioni"
+--                (solo per il testo effetto da morale_effects)
+-- modificatori:  somma numerica già calcolata dal chiamante
+--                (main_getMoraleModifier per le chiavi applicabili)
+-- callback(esito, somma, soglia, effetto)
+--   esito: "SUPERATO" | "FALLITO" | nil (in caso di errore)
+-- ============================================================
+function main_testMorale(unitKey, player, situazione, modificatori, callback)
+
+    local slot = main_getArmyByColor(player)
+    if not slot then
+        print("[MORALE] Player non riconosciuto")
+        if callback then callback(nil, nil, nil, nil) end
+        return
+    end
+
+    local bases = main_getUnitBases(unitKey)
+    if #bases == 0 then
+        print("[MORALE] Nessuna base trovata per " .. tostring(unitKey))
+        if callback then callback(nil, nil, nil, nil) end
+        return
+    end
+
+    local meta = main_getUnitMeta(bases[1])
+    local livello = meta and meta.morale
+    local moraleData = livello and main_getMorale(livello)
+    local soglia = moraleData and moraleData.threshold
+
+    if not soglia then
+        print("[MORALE] Livello morale non valido per " .. tostring(unitKey) .. ": " .. tostring(livello))
+        if callback then callback(nil, nil, nil, nil) end
+        return
+    end
+
+    IEF_DICE_ROLL_TRY[slot] = { dadi = 2, soglia = nil }
+
+    engine_diceCameraZoom(player, slot)
+
+    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        if not risultati[1] or not risultati[2] then return end
+        local faseCorrente = ENGINE.phase
+        local somma = risultati[1] + risultati[2] + (modificatori or 0)
+
+        Wait.time(function()
+            local esito = (somma >= soglia) and "SUPERATO" or "FALLITO"
+            local effetto = main_getMoraleEffect(esito, situazione)
+
+            printToColor(string.format("[MORALE] %s: %d+%d%s = %d vs soglia %d -> %s",
+                unitKey, risultati[1], risultati[2],
+                (modificatori and modificatori ~= 0) and string.format(" (%+d)", modificatori) or "",
+                somma, soglia, esito), player.color, {r=0.9,g=0.9,b=0.3})
+
+            engine_diceCameraReturn(player, slot, faseCorrente)
+
+            if callback then callback(esito, somma, soglia, effetto) end
+        end, 2)
+    end)
+end
+
+-- ============================================================
+-- FUNZIONE: main_refreshAllBaseButtons()
+-- Richiamata ad ogni cambio fase: per ciascuna unità presente
+-- sul tavolo (identificata da unitKey), ricrea i bottoni sulla
+-- sua base "capitana" (quella salvata in IEF_UNIT_BUTTON_BASE,
+-- o la prima base trovata se non ancora assegnata).
+-- ============================================================
+function main_refreshAllBaseButtons()
+    for slot = 1, 2 do
+        local capitaneViste = {}
+        for _, obj in ipairs(getAllObjects()) do
+            local objSlot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+            if objSlot == slot and main_parseNickname(obj.getName()) then
+                local unitKey = main_getUnitKey(obj)
+                if unitKey and not capitaneViste[unitKey] then
+                    capitaneViste[unitKey] = true
+
+                    local guidSalvato = IEF_UNIT_BUTTON_BASE[unitKey]
+                    local baseDaUsare = guidSalvato and getObjectFromGUID(guidSalvato) or obj
+
+                    if baseDaUsare then
+                        main_createBaseButtons(baseDaUsare, TURN.phase, unitKey)
+                        IEF_UNIT_BUTTON_BASE[unitKey] = baseDaUsare.getGUID()
+                    end
+                end
+            end
+        end
+    end
+end
+-- ============================================================
+-- FUNZIONE: main_createBaseButtons(obj)
+-- Crea i pulsanti 3D (Formazione + Muovi) sulla base indicata.
+-- ============================================================
+function main_createBaseButtons(obj, phase, unit)
+
+    obj.clearButtons()
+
+    local azioni = {
+        [PHASE.DEPLOY_SPAWN]     = {form},
+        [PHASE.DEPLOY_POSITION]  = {form},
+        [PHASE.MOVE]             = {form, move},
+        [PHASE.CHARGE_DECLARE]   = {form, move, charge},
+        [PHASE.SHOOT]            = {shoot},
+        [PHASE.MELEE]            = {melee},
+        [PHASE.RECOVERY]         = {recovery}
+    }
+
+    local pos = {x = 1.2, y = 0.1, z = -1.6}
+    local rot = {x = 0, y = 180, z = 0}
+    local  w  = 400
+    local h = 250
+
+    local funzioni = azioni[phase]
+    if not funzioni then return end
+
+    for _, f in ipairs(funzioni) do   
+        f(obj, unit, pos, rot, w, h)
+        pos.x = pos.x - 0.8
+    end
+
+end
+-- ============================================================
+-- FUNZIONE: move(obj, unit, pos, rot, w, h)
+-- ============================================================
+function move(obj, unit, pos, rot, w, h)
+    obj.createButton({
+        click_function = "main_movementOpenFromButton",
+        function_owner = Global,
+        label = "MOVIMENTO",
+        position = pos,
+        rotation = rot,
+        width = w, 
+        height = h, 
+        font_size = 60,
+    })
+end
+-- ============================================================
+-- FUNZIONE: form(obj, unit, pos, rot, w, h)
+-- ============================================================
+function form(obj, unit, pos, rot, w, h)
         obj.createButton({
         click_function = "main_formationOpenFromButton",
         function_owner = Global,
         label = "FORMAZIONE",
-        position = {1, 0.1, -1.8},
-        rotation = {0, 180, 0},
+        position = pos,
+        rotation = rot,
+        width = w, 
+        height = h, 
+        font_size = 60,
+    })
+end
+-- ============================================================
+-- FUNZIONE: charge(obj)
+-- Crea il pulsante 3D "CARICA" sulla base capitana, usato in
+-- CHARGE_DECLARE per dichiarare una carica. Click non ancora
+-- collegato: solo scheletro.
+-- ============================================================
+function charge(obj, unit, pos, rot, w, h)
+    obj.createButton({
+        click_function = "charge_declareOpenFromButton",
+        function_owner = Global,
+        label = "CARICA",
+        position = pos,
+        rotation = rot,
+        width = w, 
+        height = h, 
+        font_size = 60,
+    })
+end
+-- ============================================================
+-- FUNZIONE: form()
+-- ============================================================
+function shoot(obj, unit, pos, rot)
+        obj.createButton({
+        click_function = "",
+        function_owner = Global,
+        label = "TIRO",
+        position = pos,
+        rotation = rot,
         width = 500, 
         height = 400, 
-        font_size = 100,
+        font_size = 60,
+    })
+end
+-- ============================================================
+-- FUNZIONE: melee()
+-- ============================================================
+function melee(obj, unit, pos, rot)
+        obj.createButton({
+        click_function = "",
+        function_owner = Global,
+        label = "MISCHIA",
+        position = pos,
+        rotation = rot,
+        width = 500, 
+        height = 400, 
+        font_size = 60,
+    })
+end
+-- ============================================================
+-- FUNZIONE: recovery()
+-- ============================================================
+function recovery(obj, unit, pos, rot)
+                
+        obj.createButton({
+        click_function = "",
+        function_owner = Global,
+        label = "RECUPERO",
+        position = pos,
+        rotation = rot,
+        width = 500,
+        height = 400,
+        font_size = 60,
     })
 end

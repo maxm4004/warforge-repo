@@ -45,4 +45,13 @@ function registerDefaultConditions()
         return true
     end)
 
+    -- Coda cariche (4_charge): nessun elemento ancora da risolvere
+     registerCondition(COND.CHARGE_QUEUE_EMPTY, function(action)
+        return not charge_queueHasPending()
+     end)
+
+    -- Coda cariche (4_charge): almeno un elemento ancora da risolvere
+    registerCondition(COND.CHARGE_QUEUE_NOT_EMPTY, function(action)
+        return charge_queueHasPending()
+    end)
 end

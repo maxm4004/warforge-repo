@@ -51,6 +51,8 @@ function main_onSave()
     ief_pivot_budget  = IEF_PIVOT_BUDGET,
     ief_unit_button_base = IEF_UNIT_BUTTON_BASE,
     field_state = callHandler("field_serializeState"),
+    ief_charge_queue = IEF_CHARGE_QUEUE,
+    ief_charge_index = IEF_CHARGE_INDEX,
 }
 
     return JSON.encode(saveData)
@@ -112,7 +114,14 @@ function main_restoreState(save_state)
     if data.ief_pivot_budget then
         IEF_PIVOT_BUDGET = data.ief_pivot_budget
     end
+    
+    if data.ief_charge_queue then
+        IEF_CHARGE_QUEUE = data.ief_charge_queue
+    end
 
+    if data.ief_charge_index then
+        IEF_CHARGE_INDEX = data.ief_charge_index
+    end
     if data.ief_unit_button_base then
         IEF_UNIT_BUTTON_BASE = data.ief_unit_button_base
     end
@@ -127,26 +136,7 @@ function main_restoreState(save_state)
     end, 2)
 
     Wait.time(function()
-        for slot = 1, 2 do
-            local capitaneViste = {}
-            for _, obj in ipairs(getAllObjects()) do
-                local objSlot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
-                if objSlot == slot and main_parseNickname(obj.getName()) then
-                    local unitKey = main_getUnitKey(obj)
-                    if unitKey and not capitaneViste[unitKey] then
-                        capitaneViste[unitKey] = true
-
-                        local guidSalvato = IEF_UNIT_BUTTON_BASE[unitKey]
-                        local baseDaUsare = guidSalvato and getObjectFromGUID(guidSalvato) or obj
-
-                        if baseDaUsare then
-                            main_createBaseButtons(baseDaUsare, TURN.phase, unitKey)
-                            IEF_UNIT_BUTTON_BASE[unitKey] = baseDaUsare.getGUID()
-                        end
-                    end
-                end
-            end
-        end
+        main_refreshAllBaseButtons()
     end, 2)
 
     return true

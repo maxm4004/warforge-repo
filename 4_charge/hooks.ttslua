@@ -1,14 +1,39 @@
--- rulesets/imperifeudi/4_charge/hooks.ttslua
 -- ============================================================
--- FUNZIONE: before_charge(phaseName, phase)  
+-- FUNZIONE: before_charge_declare(phaseName, phase)
 -- ============================================================
-function before_charge(phaseName, phase)                                                              
+function before_charge_declare(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
+    
+    charge_refreshDeclaredList()
+    charge_close(1)
+    charge_close(2)
+
+    UI.setAttribute("confirm_panel_charge", "active", "false")
 end
+
 -- ============================================================
--- FUNZIONE: after_charge(phaseName, phase)
+-- FUNZIONE: after_charge_declare(phaseName, phase)
 -- ============================================================
-function after_charge(phaseName, phase)
+function after_charge_declare(phaseName, phase)
     -- stub
 end
+
+-- ============================================================
+-- FUNZIONE: before_charge_resolve(phaseName, phase)
+-- Arbitra i conflitti (charge_resolveConflicts) ora che tutte
+-- le dichiarazioni di entrambi gli eserciti sono note.
+-- ============================================================
+function before_charge_resolve(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+    charge_resolveConflicts()
+end
+
+-- ============================================================
+-- FUNZIONE: after_charge_resolve(phaseName, phase)
+-- ============================================================
+function after_charge_resolve(phaseName, phase)
+
+end
+

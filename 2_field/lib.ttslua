@@ -152,8 +152,8 @@ function field_doRollFieldElement(player, slot)
                     engine_handleAction({ type = action })
                 end
             else
-                UI.setAttribute(btnId, "text", "Assegna Terreno " .. (#rolls + 1) .. "/" .. totale)
-                UI.setAttribute(btnId, "textColor", "White")
+               UI.setAttribute(btnId, "text", "Tira per Carta " .. (#rolls + 1) .. "/" .. totale)
+               UI.setAttribute(btnId, "textColor", "White")
             end
             engine_diceCameraReturn(player, slot, faseCorrente)
         end, 2)

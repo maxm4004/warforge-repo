@@ -23,6 +23,11 @@ function after_recovery(phaseName, phase)
     TURN.firstArmy   = nil
     TURN.completed.Army1 = false
     TURN.completed.Army2 = false
+ 
+    IEF_CHARGE_QUEUE = { [1] = {}, [2] = {} }
+    IEF_CHARGE_INDEX = { [1] = 1, [2] = 1 }
+    IEF_CHARGE_ACTIVE_RESPONSE = nil
+    IEF_CHARGE_RESPONSE_UNITS = {}
 
     printToAll("Turno " .. tostring(ENGINE.turn) .. " inizia", {r=0.4,g=0.9,b=0.4})
 end

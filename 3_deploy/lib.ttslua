@@ -297,8 +297,7 @@ function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
     local VERDE_LZ  = 50
     local SPAWN_GAP = 2
     local Y         = 0.98
-    local CM_TO_TTS = 0.7423
-    local sourcePos = baseData.posizione or { x = 0, z = 0 }
+     local sourcePos = baseData.posizione or { x = 0, z = 0 }
 
     local zOffset   = slot == 1 and -(VERDE_LZ + SPAWN_GAP) or (VERDE_LZ + SPAWN_GAP)
     local zSign = slot == 1 and -1 or 1
@@ -434,18 +433,19 @@ end
 -- ============================================================
 function deployment_applyBaseMetadata(obj, slot, armyTag, nickname, unitData, baseData)
     local metadata = {
-        ruleset  = "IEF",
-        kind     = "UNIT_BASE",
-        armySlot = slot,
-        armyTag  = armyTag,
-        nickname = nickname,
-        unitType = unitData.tipo,
-        unitName = unitData.nome_display,
-        model    = unitData.model,
-        morale   = unitData.morale,
-        armi     = unitData.armi or {},
-        baseSeq  = baseData.seq,
-        wounds   = 0
+        ruleset         = "IEF",
+        kind            = "UNIT_BASE",
+        armySlot        = slot,
+        armyTag         = armyTag,
+        nickname        = nickname,
+        unitType        = unitData.tipo,
+        unitName        = unitData.nome_display,
+        model           = unitData.model,
+        morale          = unitData.morale,
+        armi            = unitData.armi or {},
+        capabilities    = unitData.capabilities or {},
+        baseSeq         = baseData.seq,
+        wounds          = 0
     }
     obj.setGMNotes(JSON.encode(metadata))
 end
@@ -605,7 +605,6 @@ function deployment_validateDeploy(player)
         return false
     end
 
-    local INCH_TO_TTS = 1.885
     local LAT_TTS     = 6  * INCH_TO_TTS  -- 11.31 TTS
     local X_MAX       = 66.806 - LAT_TTS  -- 55.50 (con 6 pollici di margine laterale)
     local Z_NEAR      = 44.536 - (12 * INCH_TO_TTS)  -- 44.536 - 22.62 = 21.92

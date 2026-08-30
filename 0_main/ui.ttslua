@@ -447,5 +447,54 @@ function getRulesetUiXml()
           width="280" height="50"
           alignment="UpperLeft"/>
 </Panel>
+
+<Panel id="confirm_panel_charge"
+   rectAlignment="UpperCenter"
+   width="260" height="70"
+   color="rgba(0,0,0,0.35)"
+   offsetXY="0 -350"
+   active="false">
+<Text id="confirm_panel_charge_text"
+      text=""
+      fontSize="12"
+      color="White"
+      alignment="MiddleCenter"
+      position="0 16 0" width="240" height="20"/>
+<HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -100 0">
+    <Button id="btnActionCharge"
+            text="CHARGE"
+            font="warforge_font"
+            fontSize="12" fontStyle="Bold"
+            image="Sprites/Layout/Button"
+            color="rgba(0.7,0.15,0.15,1)"
+            textColor="White"
+            width="80"
+            onClick="charge_declareConfirm"/>
+
+    <Button id="btnCancelCharge"
+            text="CANCEL"
+            font="warforge_font"
+            fontSize="12" fontStyle="Bold"
+            image="Sprites/Layout/Button"
+            color="rgba(0.4,0.4,0.4,1)"
+            textColor="White"
+            width="80"
+            onClick="charge_declareCancel"/>
+</HorizontalLayout>
+</Panel>
+
+<!-- Elenco cariche dichiarate: condiviso, sempre visibile a entrambi -->
+<Panel id="charge_declared_list"
+   rectAlignment="UpperLeft"
+   width="500" height="260"
+   color="rgba(0,0,0,0.55)"
+   outline="#000000" outlineSize="1"
+   offsetXY="100 -60"
+   active="false">
+    <Text text="CARICHE DICHIARATE" fontSize="14" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="24"/>
+    <Panel width="300" height="1" position="0 96 0" color="#FFFFFF66"/>
+    <Text id="charge_declared_list_text" text="" fontSize="11" color="Yellow" alignment="UpperLeft" position="70 -10 0" width="600" height="180"/>
+</Panel>
+
     ]] 
 end    

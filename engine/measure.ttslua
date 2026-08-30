@@ -13,9 +13,6 @@
     }
 
     MEASURE_UNIT = UNIT.INCH -- default IEF
-
-    CM_TO_TTS = 88.71 / 119.5  -- 0.7423
-    INCH_TO_TTS = 0.7423 * 2.54  -- 1.885
 -- ============================================================
 -- FUNZIONE: engine_measure_getUnitObjects(obj)
 -- Dato un oggetto base, ritorna la lista di TUTTI gli oggetti
