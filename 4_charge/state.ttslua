@@ -14,6 +14,17 @@ IEF_CHARGE_QUEUE = IEF_CHARGE_QUEUE or { [1] = {}, [2] = {} }
 -- nil = nessuna risposta in sospeso, altrimenti { slot, index }
 IEF_CHARGE_ACTIVE_RESPONSE = IEF_CHARGE_ACTIVE_RESPONSE or nil
 
+-- Proposta di risposta in attesa di scelta nel popup
+-- (charge_response_panel), una per esercito:
+-- [slot] = { attackerKey, targetKey, elemento }
+IEF_CHARGE_RESPONSE_PENDING = IEF_CHARGE_RESPONSE_PENDING or {}
+
+-- Unità che hanno evaso una carica questo turno: non potranno
+-- muovere nella successiva fase di Manovra. NOTA: il flag viene
+-- impostato qui ma non è ancora letto/applicato da 6_move — da
+-- collegare quando si costruirà quel controllo.
+IEF_UNIT_NO_MOVE_NEXT_TURN = IEF_UNIT_NO_MOVE_NEXT_TURN or {}
+
 -- Pannelli 3D di risposta attivi, indicizzati per unitKey del bersaglio
 IEF_CHARGE_RESPONSE_UNITS = IEF_CHARGE_RESPONSE_UNITS or {}
 
@@ -23,3 +34,37 @@ IEF_CHARGE_RESPONSE_UNITS = IEF_CHARGE_RESPONSE_UNITS or {}
 --            startRot={guid=Vector}, pivotUsed, targetKey,
 --            distInches, panel3DObj, activePlayer }
 IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
+
+REACTION_TYPE = {
+    COC = "ControCarica",
+    EVA = "Evasione",
+    FER = "Ferma",
+    TIR = "TiroArresto",
+}
+
+CHARGE_STEP = {
+    DEC  = "Dichiarazione",
+    REA  = "Reazione",
+    CLO  = "Chiusura",
+}
+
+CHARGE_MORALE_RESULT = {
+    OK = "Superato",
+    KO = "NonSuperato"
+}
+
+UNIT_TYPES = {
+    KN =  "Cavalieri",
+    CP =  "Cavalleria Pesante",
+    FM =  "Fanteria Media",
+    CL =  "Cavalleria Leggera",
+    FL =  "Fanteria Leggera",
+    FP =  "Fanteria Pesante",
+    AR =  "Artiglieria",
+    EL =  "Elefanti",
+    GEN = "Generali e Comandanti",
+}
+
+
+
+

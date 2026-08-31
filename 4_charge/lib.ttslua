@@ -493,8 +493,6 @@ function charge_checkTarget(player)
     session.targetKey  = targetKey
     session.distInches = distInches
 
-    local msg = string.format("Carica: %s -> %s  (%.1f\" residui)", session.attackerKey, targetKey, distInches)
-    UI.setAttribute("confirm_panel_charge_text", "text", msg)
     UI.setAttribute("confirm_panel_charge", "visibility", player.color)
     UI.setAttribute("confirm_panel_charge", "active", "true")
     printToColor("[CARICA] OK — bersaglio raggiungibile", player.color, {r=0.3,g=1,b=0.3})
@@ -631,6 +629,58 @@ function charge_hasArmaDaTiro(armi)
     end
     return false
 end
+
+-- ============================================================
+-- FUNZIONE: charge_hasCapability(capabilities, nome)
+-- ============================================================
+function charge_hasCapability(capabilities, nome)
+    if not capabilities then return false end
+    for _, c in ipairs(capabilities) do
+        if c == nome then return true end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
+-- Determina le risposte legali per il bersaglio di una carica,
+-- in base al proprio tipo/capacità e al tipo dell'attaccante
+-- (regolamento, "POSSIBILI RISPOSTE ALLE CARICHE"):
+--   - KN caricato -> contro-carica obbligatoria
+--   - CP con IMPETO -> contro-carica obbligatoria
+--   - CP senza IMPETO -> contro-carica o resta ferma (scelta)
+--   - CL -> contro-carica / evasione / resta ferma (scelta)
+--   - FL caricata da non-FL/EL -> evasione obbligatoria
+--   - FL caricata da FL/EL -> stesse opzioni di CL (scelta)
+--   - FP/FM con arma da tiro -> Tiro d'Arresto o resta ferma
+--   - chiunque altro -> nessuna risposta
+--
+-- Ritorna: obbligato (stringa o nil), opzioni (lista di stringhe,
+-- vuota se obbligato è impostato — in quel caso c'è una sola
+-- scelta, non opzionale).
+-- ============================================================
+function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
+    
+    if myTipo == "KN" then
+        return "contro_carica", {}
+        
+    elseif myTipo == "CP" then
+        if charge_hasCapability(myCapabilities, "IMPETO") then
+            return "contro_carica", {}
+        end
+        return nil, { "contro_carica", "resta_ferma" }
+    elseif myTipo == "CL" then
+        return nil, { "contro_carica", "evasione", "resta_ferma" }
+    elseif myTipo == "FL" then
+        if attackerTipo == "FL" or attackerTipo == "EL" then
+            return nil, { "contro_carica", "evasione", "resta_ferma" }
+        end
+        return "evasione", {}
+    elseif (myTipo == "FP" or myTipo == "FM") and charge_hasArmaDaTiro(myArmi) then
+        return nil, { "tiro_arresto", "resta_ferma" }
+    end
+    return nil, {}
+end
 -- ============================================================
 -- FUNZIONE: charge_cameraToPoint(player, slot, position)
 -- Sposta la telecamera del giocatore su un punto qualsiasi del
@@ -679,8 +729,8 @@ function charge_getAttackListPanelXml(slot)
     end
 
     return string.format(
-        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="40 -340" visibility="%s" active="%s">' ..
-        '<Text text="LE TUE CARICHE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
+        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="80 -340" visibility="%s" active="%s">' ..
+        '<Text text="LE MIE CARICHE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
         '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
         '%s' ..
         '</Panel>',
@@ -705,15 +755,15 @@ function charge_getDefenseListPanelXml(slot)
 
     local rows = ""
     for i, e in ipairs(coda) do
-        local y = 95 - (i - 1) * 22
+        local y = 80 - (i - 1) * 22
         rows = rows .. string.format(
-            '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="White" alignment="MiddleLeft" position="0 %d 0" width="280" height="20" onClick="charge_defenseRowClick"/>',
+            '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="Red" alignment="MiddleLeft" position="0 %d 0" width="280" height="20" onClick="charge_defenseRowClick"/>',
             slot, e.attackerKey, e.attackerKey, e.targetKey, y
         )
     end
 
     return string.format(
-        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="320" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="350 -340" visibility="%s" active="%s">' ..
+        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="80 -340" visibility="%s" active="%s">' ..
         '<Text text="CARICHE SUBITE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
         '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
         '%s' ..
@@ -744,21 +794,13 @@ function charge_attackRowClick(player, value, id)
         local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
         charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
     end
-
-    print(elemento.step)
-
-    if elemento.step == "check" then
-        charge_resolveCheckStep(player, elemento, slot)
-    elseif elemento.step == "move" then
-        charge_resolveMoveStep(player, elemento, slot)
-    end
 end
 -- ============================================================
 -- FUNZIONE: charge_defenseRowClick(player, value, id)
--- onClick di una riga del pannello "CARICHE SUBITE": per ora solo
--- naviga la telecamera sul punto della carica — la gestione della
--- reazione vera (contro-carica/evasione/Tiro d'Arresto) è
--- rimandata (punto 4).
+-- onClick di una riga del pannello "CARICHE SUBITE": naviga la
+-- telecamera e apre il popup di risposta (charge_response_panel)
+-- con solo le opzioni legali attive, in base al tipo/capacità del
+-- bersaglio e al tipo dell'attaccante.
 -- ============================================================
 function charge_defenseRowClick(player, value, id)
     local slotStr, attackerKey = id:match("^charge_defense_row_(%d)_(.+)$")
@@ -769,14 +811,211 @@ function charge_defenseRowClick(player, value, id)
     local elemento = charge_findQueueEntry(otherSlot, attackerKey)
     if not elemento then return end
 
-    local myBases = charge_getUnitBases(elemento.attackerKey)
-    local targetBases = charge_getUnitBases(elemento.targetKey)
-    if myBases[1] and targetBases[1] then
-        local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
+    if elemento.step == "resolved" then
+        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+    if elemento.response then
+        printToColor("[CARICA] Hai già scelto una risposta per questa carica", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myBases = charge_getUnitBases(elemento.targetKey)
+    local attackerBases = charge_getUnitBases(elemento.attackerKey)
+    if myBases[1] and attackerBases[1] then
+        local p1, p2 = myBases[1].getPosition(), attackerBases[1].getPosition()
         charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
     end
 
-    -- TODO: gestione reazione (contro-carica/evasione/Tiro d'Arresto) — punto 4
+    local myMeta = myBases[1] and charge_getUnitMeta(myBases[1])
+    local myTipo = myMeta and myMeta.unitType
+    local myArmi = myMeta and myMeta.armi or {}
+    local myCapabilities = myMeta and myMeta.capabilities or {}
+
+    local attackerMeta = attackerBases[1] and charge_getUnitMeta(attackerBases[1])
+    local attackerTipo = attackerMeta and attackerMeta.unitType
+
+    local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
+
+    if not obbligato and #opzioni == 0 then
+        printToColor(string.format("[CARICA] %s non ha nessuna risposta disponibile", elemento.targetKey), player.color, {r=0.7,g=0.7,b=0.7})
+        return
+    end
+
+    IEF_CHARGE_RESPONSE_PENDING[slot] = { attackerKey = elemento.attackerKey, targetKey = elemento.targetKey, elemento = elemento }
+
+    local disponibili = obbligato and { obbligato } or opzioni
+    local buttonIds = {
+        contro_carica = "btnResponseCounter",
+        evasione      = "btnResponseEvade",
+        tiro_arresto  = "btnResponseStopfire",
+        resta_ferma   = "btnResponseHold",
+    }
+
+    for _, chiave in ipairs({ "contro_carica", "evasione", "tiro_arresto", "resta_ferma" }) do
+        local presente = false
+        for _, d in ipairs(disponibili) do
+            if d == chiave then presente = true end
+        end
+        UI.setAttribute(buttonIds[chiave], "active", presente and "true" or "false")
+        UI.setAttribute(buttonIds[chiave], "textColor", "white")
+    end
+
+    UI.setAttribute("charge_response_panel", "visibility", player.color)
+    UI.setAttribute("charge_response_panel", "active", "true")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_responseHold(player, value, id)
+-- "Resta Ferma": nessuna reazione, la carica dell'attaccante
+-- prosegue normalmente quando lui stesso risolve la sua riga.
+-- ============================================================
+function charge_responseHold(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
+
+    pending.elemento.response = "resta_ferma"
+
+    printToColor(string.format("[CARICA] %s resta ferma, non reagisce alla carica di %s", pending.targetKey, pending.attackerKey), player.color, {r=0.7,g=0.7,b=0.7})
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+
+end
+-- ============================================================
+-- FUNZIONE: charge_responseMorale(player, value, id)
+-- ============================================================
+function charge_responseMorale(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
+
+    pending.elemento.response = "morale"
+
+    printToColor(string.format("[CARICA] %s testa il morale", pending.targetKey, pending.attackerKey), player.color, {r=0.7,g=0.7,b=0.7})
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+
+end
+-- ============================================================
+-- FUNZIONE: charge_responseEvade(player, value, id)
+-- "Evadi": l'unità bersaglio gira di 180° e muove dritta in
+-- avanti (move_inches del proprio tipo, nessun perno). Non potrà
+-- muovere nella successiva fase di Manovra (IEF_UNIT_NO_MOVE_NEXT_TURN,
+-- non ancora applicato/letto da 6_move). La carica dell'attaccante
+-- si considera evitata: marcata risolta senza contatto.
+-- ============================================================
+function charge_responseEvade(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
+
+    local elemento = pending.elemento
+    local defenderBases = charge_getUnitBases(pending.targetKey)
+
+    if #defenderBases > 0 then
+        local defenderMeta = charge_getUnitMeta(defenderBases[1])
+        local defenderTipo = defenderMeta and defenderMeta.unitType
+        local unitTypeData = defenderTipo and main_getUnitType(defenderTipo)
+        local moveInches = unitTypeData and unitTypeData.move_inches or 0
+
+        charge_turnAround180(defenderBases)
+        charge_applyStraightMove(defenderBases, moveInches)
+    end
+
+    IEF_UNIT_NO_MOVE_NEXT_TURN[pending.targetKey] = true
+
+    elemento.response = "evasione"
+    elemento.step = "resolved"
+
+    printToColor(string.format("[CARICA] %s evade la carica di %s", pending.targetKey, pending.attackerKey), player.color, {r=0.3,g=1,b=0.3})
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+
+    if not charge_queueHasPending() then
+        engine_handleAction({ type = ACTION.CONFIRM })
+    end
+
+    callHandler("updateCenterPanel")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_responseCounter(player, value, id)
+-- "Contro-carica": attaccante e bersaglio si muovono l'uno verso
+-- l'altro fino a scontrarsi a metà strada (charge_moveToward,
+-- non lungo il proprio fronte come charge_applyStraightMove — le
+-- due unità potrebbero non essere già allineate). La carica si
+-- considera completamente risolta da questa singola azione.
+-- ============================================================
+function charge_responseCounter(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
+
+    local elemento = pending.elemento
+    local attackerBases = charge_getUnitBases(pending.attackerKey)
+    local defenderBases = charge_getUnitBases(pending.targetKey)
+
+    if #attackerBases > 0 and #defenderBases > 0 then
+        local ap = attackerBases[1].getPosition()
+        local dp = defenderBases[1].getPosition()
+        local midpoint = Vector((ap.x + dp.x) / 2, (ap.y + dp.y) / 2, (ap.z + dp.z) / 2)
+
+        local distAttacker = Vector(midpoint.x - ap.x, 0, midpoint.z - ap.z):magnitude() / INCH_TO_TTS
+        local distDefender = Vector(midpoint.x - dp.x, 0, midpoint.z - dp.z):magnitude() / INCH_TO_TTS
+
+        charge_moveToward(attackerBases, midpoint, distAttacker)
+        charge_moveToward(defenderBases, midpoint, distDefender)
+    end
+
+    elemento.response = "contro_carica"
+    elemento.step = "resolved"
+
+    printToColor(string.format("[CARICA] %s e %s si scontrano in contro-carica", pending.attackerKey, pending.targetKey), player.color, {r=0.3,g=1,b=0.3})
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+
+    if not charge_queueHasPending() then
+        engine_handleAction({ type = ACTION.CONFIRM })
+    end
+
+    callHandler("updateCenterPanel")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_responseStopfire(player, value, id)
+-- "Tiro d'Arresto": riduce di 2" la distanza residua della carica
+-- dell'attaccante (elemento.distInches), così quando l'attaccante
+-- risolve la propria riga si ferma a 2" invece di arrivare a
+-- contatto — regolamento, "Tiro d'Arresto".
+--
+-- NOTA: qui si ferma solo il movimento. La risoluzione del tiro
+-- vero e proprio (colpi, perdite, l'eventuale test morale
+-- dell'attaccante per chiudere comunque il contatto) NON è
+-- implementata: nel codice attuale non esiste ancora nessun
+-- sistema di ferite/perdite (Mischia è ancora allo stato minimo).
+-- Va costruita insieme al resto del sistema di combattimento.
+-- ============================================================
+function charge_responseStopfire(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
+
+    local elemento = pending.elemento
+    elemento.distInches = math.max(0, (elemento.distInches or 0) - 2)
+    elemento.response = "tiro_arresto"
+
+    printToColor(string.format("[CARICA] %s spara Tiro d'Arresto: %s si fermerà a 2\" di distanza", pending.targetKey, pending.attackerKey), player.color, {r=0.9,g=0.6,b=0.1})
+    printToColor("[CARICA] Risoluzione del tiro (colpi/perdite) non ancora implementata", player.color, {r=1,g=0.6,b=0.2})
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+
+    callHandler("updateCenterPanel")
 end
 
 -- ============================================================
@@ -948,6 +1187,38 @@ function charge_applyStraightMove(basiObjs, distInches)
 end
 
 -- ============================================================
+-- FUNZIONE: charge_moveToward(basiObjs, targetPoint, distInches)
+-- Muove tutte le basi di distInches pollici verso un punto
+-- qualsiasi (non necessariamente lungo il fronte attuale) —
+-- usato per la contro-carica, dove le due unità si muovono
+-- l'una verso l'altra, non lungo la propria direzione di marcia.
+-- ============================================================
+function charge_moveToward(basiObjs, targetPoint, distInches)
+    if #basiObjs == 0 then return end
+    local p0 = basiObjs[1].getPosition()
+    local dir = Vector(targetPoint.x - p0.x, 0, targetPoint.z - p0.z):normalized()
+    local deltaUnits = distInches * INCH_TO_TTS
+
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        obj.setPosition(Vector(p.x + dir.x*deltaUnits, p.y, p.z + dir.z*deltaUnits))
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_turnAround180(basiObjs)
+-- Gira ogni base di 180° sul posto (evasione: "gira di 180° e
+-- muove dritto in avanti", nessun perno/arco — a differenza del
+-- perno di carica, qui non c'è rotazione attorno a un punto).
+-- ============================================================
+function charge_turnAround180(basiObjs)
+    for _, obj in ipairs(basiObjs) do
+        local rot = obj.getRotation()
+        obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
+    end
+end
+
+-- ============================================================
 -- FUNZIONE: charge_isFlankCharge(myBases, targetBases)
 -- ============================================================
 function charge_isFlankCharge(basiPreMovimento, targetBases)
@@ -1003,5 +1274,6 @@ function charge_resolveMoveStep(player, elemento, slot)
         engine_handleAction({ type = ACTION.CONFIRM })
     end
 
+    callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
