@@ -3,9 +3,66 @@
 -- Stato FASE CARICA (CHARGE_DECLARE + CHARGE_RESOLVE)
 -- ============================================================
 
+-- ============================================================
+-- ENUM: REACTION_TYPE — le 4 risposte possibili a una carica
+-- subita (regolamento, "POSSIBILI RISPOSTE ALLE CARICHE").
+-- ============================================================
+REACTION_TYPE = {
+    COC = "ControCarica",
+    EVA = "Evasione",
+    FER = "Ferma",
+    TIR = "TiroArresto",
+}
+
+-- ============================================================
+-- ENUM: CHARGE_STEP — stato di avanzamento di un elemento in
+-- IEF_CHARGE_QUEUE.
+--   DEC = accodata, non ancora processata
+--   REA = in corso di risoluzione/movimento, o risposta del
+--         bersaglio in atto
+--   CLO = completamente risolta
+-- ============================================================
+CHARGE_STEP = {
+    DEC  = "Dichiarazione",
+    REA  = "Reazione",
+    CLO  = "Chiusura",
+}
+
+-- ============================================================
+-- ENUM: CHARGE_OUTCOME — esito finale di una carica risolta,
+-- per le liste Attacco/Difesa.
+-- ============================================================
+CHARGE_OUTCOME = {
+    OK  = "Riuscita",
+    EVI = "Evitata",       -- bersaglio ha evaso
+    ANN = "Annullata",     -- test morale fallito in dichiarazione/limitazioni
+}
+
+-- ============================================================
+-- ENUM: UNIT_TYPES — codice (chiave, come nei dati reali:
+-- GMNotes/army JSON) -> etichetta italiana per la UI. I confronti
+-- nella logica usano SEMPRE il codice breve letterale ("KN",
+-- "ART", ecc.), MAI UNIT_TYPES.KN — quello è il valore etichetta,
+-- non il codice. Uso corretto: UNIT_TYPES[myTipo] per un testo
+-- leggibile, myTipo == "KN" per un confronto.
+-- ============================================================
+UNIT_TYPES = {
+    KN  = "Cavalieri",
+    CP  = "Cavalleria Pesante",
+    FM  = "Fanteria Media",
+    CL  = "Cavalleria Leggera",
+    FL  = "Fanteria Leggera",
+    FP  = "Fanteria Pesante",
+    ART = "Artiglieria",
+    EL  = "Elefanti",
+    GEN = "Generali e Comandanti",
+}
+
 -- Coda cariche dichiarate, una lista indipendente per esercito.
--- Ogni elemento: { attackerKey, targetKey, step, response, flankCharge }
--- step: "check" | "move" | "awaiting_response" | "stopfire" | "resolved"
+-- Ogni elemento: { attackerKey, targetKey, step, response,
+--                   outcome, flankCharge, pivotInches, distInches }
+-- step: CHARGE_STEP.DEC | CHARGE_STEP.REA | CHARGE_STEP.CLO
+-- response: nil | REACTION_TYPE.COC/.EVA/.FER/.TIR
 -- Nessun indice sequenziale: ogni elemento è risolvibile in
 -- qualsiasi ordine tramite le liste Attacco/Difesa (righe cliccabili).
 IEF_CHARGE_QUEUE = IEF_CHARGE_QUEUE or { [1] = {}, [2] = {} }
@@ -34,37 +91,3 @@ IEF_CHARGE_RESPONSE_UNITS = IEF_CHARGE_RESPONSE_UNITS or {}
 --            startRot={guid=Vector}, pivotUsed, targetKey,
 --            distInches, panel3DObj, activePlayer }
 IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
-
-REACTION_TYPE = {
-    COC = "ControCarica",
-    EVA = "Evasione",
-    FER = "Ferma",
-    TIR = "TiroArresto",
-}
-
-CHARGE_STEP = {
-    DEC  = "Dichiarazione",
-    REA  = "Reazione",
-    CLO  = "Chiusura",
-}
-
-CHARGE_MORALE_RESULT = {
-    OK = "Superato",
-    KO = "NonSuperato"
-}
-
-UNIT_TYPES = {
-    KN =  "Cavalieri",
-    CP =  "Cavalleria Pesante",
-    FM =  "Fanteria Media",
-    CL =  "Cavalleria Leggera",
-    FL =  "Fanteria Leggera",
-    FP =  "Fanteria Pesante",
-    AR =  "Artiglieria",
-    EL =  "Elefanti",
-    GEN = "Generali e Comandanti",
-}
-
-
-
-

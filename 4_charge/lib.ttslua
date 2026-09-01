@@ -41,13 +41,13 @@ end
 -- ============================================================
 -- FUNZIONE: charge_queueHasPending()
 -- Vero se almeno un elemento della coda cariche (uno dei due
--- eserciti) non è ancora risolto (step ~= "resolved").
+-- eserciti) non è ancora risolto (step ~= CHARGE_STEP.CLO).
 -- ============================================================
 function charge_queueHasPending()
     for slot = 1, 2 do
         local coda = IEF_CHARGE_QUEUE[slot] or {}
         for i = 1, #coda do
-            if coda[i].step ~= "resolved" then
+            if coda[i].step ~= CHARGE_STEP.CLO then
                 return true
             end
         end
@@ -568,7 +568,7 @@ end
 -- FUNZIONE: charge_declareConfirm(player, value, id, buttonConfig)
 -- onClick del pulsante "CHARGE" nel popup 2D confirm_panel_charge.
 -- Accoda SOLO l'intenzione (attaccante, bersaglio, distanza, perno
--- già fatto) in IEF_CHARGE_QUEUE con step="check" — nessun test
+-- già fatto) in IEF_CHARGE_QUEUE con step=CHARGE_STEP.DEC — nessun test
 -- morale, nessun movimento rettilineo qui. Il perno è già stato
 -- applicato fisicamente durante la dichiarazione (interattivo);
 -- il movimento rettilineo finale e il test morale si spostano
@@ -593,8 +593,9 @@ function charge_declareConfirm(player, value, id, buttonConfig)
     table.insert(IEF_CHARGE_QUEUE[slot], {
         attackerKey  = session.attackerKey,
         targetKey    = session.targetKey,
-        step         = "check",
+        step         = CHARGE_STEP.DEC,
         response     = nil,
+        outcome      = nil,
         flankCharge  = false,
         controCarica = false,
         pivotInches  = session.pivotUsed,
@@ -662,22 +663,22 @@ end
 function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
     
     if myTipo == "KN" then
-        return "contro_carica", {}
+        return REACTION_TYPE.COC, {}
         
     elseif myTipo == "CP" then
         if charge_hasCapability(myCapabilities, "IMPETO") then
-            return "contro_carica", {}
+            return REACTION_TYPE.COC, {}
         end
-        return nil, { "contro_carica", "resta_ferma" }
+        return nil, { REACTION_TYPE.COC, REACTION_TYPE.FER }
     elseif myTipo == "CL" then
-        return nil, { "contro_carica", "evasione", "resta_ferma" }
+        return nil, { REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.FER }
     elseif myTipo == "FL" then
         if attackerTipo == "FL" or attackerTipo == "EL" then
-            return nil, { "contro_carica", "evasione", "resta_ferma" }
+            return nil, { REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.FER }
         end
-        return "evasione", {}
+        return REACTION_TYPE.EVA, {}
     elseif (myTipo == "FP" or myTipo == "FM") and charge_hasArmaDaTiro(myArmi) then
-        return nil, { "tiro_arresto", "resta_ferma" }
+        return nil, { REACTION_TYPE.TIR, REACTION_TYPE.FER }
     end
     return nil, {}
 end
@@ -811,7 +812,7 @@ function charge_defenseRowClick(player, value, id)
     local elemento = charge_findQueueEntry(otherSlot, attackerKey)
     if not elemento then return end
 
-    if elemento.step == "resolved" then
+    if elemento.step == CHARGE_STEP.CLO then
         printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
         return
     end
@@ -846,13 +847,13 @@ function charge_defenseRowClick(player, value, id)
 
     local disponibili = obbligato and { obbligato } or opzioni
     local buttonIds = {
-        contro_carica = "btnResponseCounter",
-        evasione      = "btnResponseEvade",
-        tiro_arresto  = "btnResponseStopfire",
-        resta_ferma   = "btnResponseHold",
+        [REACTION_TYPE.COC] = "btnResponseCounter",
+        [REACTION_TYPE.EVA] = "btnResponseEvade",
+        [REACTION_TYPE.TIR] = "btnResponseStopfire",
+        [REACTION_TYPE.FER] = "btnResponseHold",
     }
 
-    for _, chiave in ipairs({ "contro_carica", "evasione", "tiro_arresto", "resta_ferma" }) do
+    for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
         local presente = false
         for _, d in ipairs(disponibili) do
             if d == chiave then presente = true end
@@ -875,7 +876,7 @@ function charge_responseHold(player, value, id)
     local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
     if not pending then return end
 
-    pending.elemento.response = "resta_ferma"
+    pending.elemento.response = REACTION_TYPE.FER
 
     printToColor(string.format("[CARICA] %s resta ferma, non reagisce alla carica di %s", pending.targetKey, pending.attackerKey), player.color, {r=0.7,g=0.7,b=0.7})
 
@@ -927,8 +928,9 @@ function charge_responseEvade(player, value, id)
 
     IEF_UNIT_NO_MOVE_NEXT_TURN[pending.targetKey] = true
 
-    elemento.response = "evasione"
-    elemento.step = "resolved"
+    elemento.response = REACTION_TYPE.EVA
+    elemento.outcome  = CHARGE_OUTCOME.EVI
+    elemento.step = CHARGE_STEP.CLO
 
     printToColor(string.format("[CARICA] %s evade la carica di %s", pending.targetKey, pending.attackerKey), player.color, {r=0.3,g=1,b=0.3})
 
@@ -971,8 +973,9 @@ function charge_responseCounter(player, value, id)
         charge_moveToward(defenderBases, midpoint, distDefender)
     end
 
-    elemento.response = "contro_carica"
-    elemento.step = "resolved"
+    elemento.response = REACTION_TYPE.COC
+    elemento.outcome  = CHARGE_OUTCOME.OK
+    elemento.step = CHARGE_STEP.CLO
 
     printToColor(string.format("[CARICA] %s e %s si scontrano in contro-carica", pending.attackerKey, pending.targetKey), player.color, {r=0.3,g=1,b=0.3})
 
@@ -1007,7 +1010,7 @@ function charge_responseStopfire(player, value, id)
 
     local elemento = pending.elemento
     elemento.distInches = math.max(0, (elemento.distInches or 0) - 2)
-    elemento.response = "tiro_arresto"
+    elemento.response = REACTION_TYPE.TIR
 
     printToColor(string.format("[CARICA] %s spara Tiro d'Arresto: %s si fermerà a 2\" di distanza", pending.targetKey, pending.attackerKey), player.color, {r=0.9,g=0.6,b=0.1})
     printToColor("[CARICA] Risoluzione del tiro (colpi/perdite) non ancora implementata", player.color, {r=1,g=0.6,b=0.2})
@@ -1088,15 +1091,15 @@ function charge_resolveConflicts()
 end
 -- ============================================================
 -- FUNZIONE: charge_resolveCheckStep(player, elemento, slot)
--- Step "check" della risoluzione: applica le limitazioni che
+-- Step CHARGE_STEP.DEC della risoluzione: applica le limitazioni che
 -- richiedono un test di morale (regolamento, "LIMITAZIONI DI
 -- CARICA"):
 --   - CL che carica sul fronte un bersaglio che non sia CL/FL/ART
 --   - FP/FM con arma da tiro (escluso Giavellotto) che carica
 --     chiunque tranne FL/ART
--- Se il test fallisce, la carica si ferma qui (step="resolved",
+-- Se il test fallisce, la carica si ferma qui (step=CHARGE_STEP.CLO,
 -- nessun movimento). Se supera o non serve nessun test, passa
--- allo step "move".
+-- allo step CHARGE_STEP.REA.
 --
 -- NOTA: i modificatori del test morale (Generale nel raggio,
 -- basi perse, unità disordinata, ecc.) non sono ancora calcolati
@@ -1126,17 +1129,18 @@ function charge_resolveCheckStep(player, elemento, slot)
     end
 
     if not richiedeTest then
-        elemento.step = "move"
+        elemento.step = CHARGE_STEP.REA
         charge_resolveMoveStep(player, elemento, slot)
         return
     end
 
     main_testMorale(elemento.attackerKey, player, "per_caricare", 0, function(esito, somma, soglia, effetto)
-        if esito == "SUPERATO" then
-            elemento.step = "move"
+        if esito == MORALE_RESULT.OK then
+            elemento.step = CHARGE_STEP.REA
             charge_resolveMoveStep(player, elemento, slot)
         else
-            elemento.step = "resolved"
+            elemento.step = CHARGE_STEP.CLO
+            elemento.outcome = CHARGE_OUTCOME.ANN
             printToColor(string.format("[CARICA] %s: carica annullata (test morale fallito)", elemento.attackerKey), player.color, {r=1,g=0.4,b=0.2})
             if not charge_queueHasPending() then
                 engine_handleAction({ type = ACTION.CONFIRM })
@@ -1243,7 +1247,7 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_resolveMoveStep(player, elemento, slot)
--- Step "move" della risoluzione: esegue il movimento rettilineo
+-- Step CHARGE_STEP.REA della risoluzione: esegue il movimento rettilineo
 -- finale fino al bersaglio (il perno è già stato applicato
 -- fisicamente durante la dichiarazione, non va rifatto qui).
 --
@@ -1265,7 +1269,8 @@ function charge_resolveMoveStep(player, elemento, slot)
         charge_applyStraightMove(myBases, distInches)
     end
 
-    elemento.step = "resolved"
+    elemento.step = CHARGE_STEP.CLO
+    elemento.outcome = CHARGE_OUTCOME.OK
 
     local fiancoTxt = elemento.flankCharge and " (SUL FIANCO)" or ""
     printToColor(string.format("[CARICA] %s ha caricato %s%s", elemento.attackerKey, elemento.targetKey, fiancoTxt), player.color, {r=0.3,g=1,b=0.3})

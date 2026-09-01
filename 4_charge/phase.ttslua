@@ -3,7 +3,7 @@ function charge_phase()
     return {
         CHARGE_DECLARE = {
             title = "FASE 1: DICHIARAZIONI DI CARICA",
-            desc  = "Dichiara le cariche delle tue unità",
+            desc  = "DICHIARA LE CARICHE DELLE TUE UNITÀ",
             before = "before_charge_declare",
             after  = "after_charge_declare",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
@@ -21,7 +21,7 @@ function charge_phase()
         },
         CHARGE_RESOLVE = {
             title = "FASE 1: RISOLUZIONE CARICHE",
-            desc  = "Risolvi le cariche dichiarate (liste sullo schermo)",
+            desc  = "RISOLVI LE CARICHE",
             before = "before_charge_resolve",
             after  = "after_charge_resolve",
             allowedActions = { ACTION.CONFIRM },
