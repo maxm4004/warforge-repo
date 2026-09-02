@@ -15,3 +15,21 @@ function charge_declare_btn_army2(player, value, id, buttonConfig)
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end
+
+-- ============================================================
+-- FUNZIONE: charge_resolve_btn_army1(player, value, id, buttonConfig)
+-- Conferma "Chiudi Fase" per Army1 in CHARGE_RESOLVE.
+-- ============================================================
+function charge_resolve_btn_army1(player, value, id, buttonConfig)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: charge_resolve_btn_army2(player, value, id, buttonConfig)
+-- Conferma "Chiudi Fase" per Army2 in CHARGE_RESOLVE.
+-- ============================================================
+function charge_resolve_btn_army2(player, value, id, buttonConfig)
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
+    return true
+end

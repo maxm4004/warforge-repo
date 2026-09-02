@@ -718,7 +718,7 @@ end
 function charge_getAttackListPanelXml(slot)
     local coda = IEF_CHARGE_QUEUE[slot] or {}
     local colore = ARMY[slot] and ARMY[slot].color or "White"
-    local attivo = (#coda > 0) and "true" or "false"
+    local attivo = (ENGINE.phase == PHASE.CHARGE_DECLARE and #coda > 0) and "true" or "false"
 
     local rows = ""
     for i, e in ipairs(coda) do
@@ -752,7 +752,7 @@ function charge_getDefenseListPanelXml(slot)
     local otherSlot = (slot == 1) and 2 or 1
     local coda = IEF_CHARGE_QUEUE[otherSlot] or {}
     local colore = ARMY[slot] and ARMY[slot].color or "White"
-    local attivo = (#coda > 0) and "true" or "false"
+    local attivo = (ENGINE.phase == PHASE.CHARGE_RESOLVE and #coda > 0) and "true" or "false"
 
     local rows = ""
     for i, e in ipairs(coda) do
@@ -764,7 +764,7 @@ function charge_getDefenseListPanelXml(slot)
     end
 
     return string.format(
-        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.55)" outline="#000000" outlineSize="1" offsetXY="80 -340" visibility="%s" active="%s">' ..
+        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.20)" outline="#000000" outlineSize="1" offsetXY="100 -340" visibility="%s" active="%s">' ..
         '<Text text="CARICHE SUBITE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
         '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
         '%s' ..
@@ -871,6 +871,29 @@ end
 -- "Resta Ferma": nessuna reazione, la carica dell'attaccante
 -- prosegue normalmente quando lui stesso risolve la sua riga.
 -- ============================================================
+-- ============================================================
+-- FUNZIONE: charge_refreshAttackRowText(slot, elemento)
+-- Aggiorna il testo di UNA riga Attacco esistente (lo step è
+-- cambiato) via UI.setAttribute diretto — la riga esiste già,
+-- non serve ricostruire tutta la UI per un cambio di testo.
+-- ============================================================
+function charge_refreshAttackRowText(slot, elemento)
+    local rowId = string.format("charge_attack_row_%d_%s", slot, elemento.attackerKey)
+    UI.setAttribute(rowId, "text", string.format("%s -> %s (%s)", elemento.attackerKey, elemento.targetKey, elemento.step))
+end
+
+-- ============================================================
+-- FUNZIONE: charge_hideDefenseRow(slot, attackerKey)
+-- Nasconde SOLO la riga Difesa specifica appena consumata da una
+-- risposta, via UI.setAttribute diretto — non serve ricostruire
+-- tutta la UI (callHandler("buildUI")) solo per questo, l'id
+-- della riga è già determinato (contiene attackerKey, non un
+-- indice di posizione).
+-- ============================================================
+function charge_hideDefenseRow(slot, attackerKey)
+    UI.setAttribute(string.format("charge_defense_row_%d_%s", slot, attackerKey), "active", "false")
+end
+
 function charge_responseHold(player, value, id)
     local slot = main_getArmyByColor(player)
     local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
@@ -881,8 +904,8 @@ function charge_responseHold(player, value, id)
     printToColor(string.format("[CARICA] %s resta ferma, non reagisce alla carica di %s", pending.targetKey, pending.attackerKey), player.color, {r=0.7,g=0.7,b=0.7})
 
     UI.setAttribute("charge_response_panel", "active", "false")
+    charge_hideDefenseRow(slot, pending.attackerKey)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-
 end
 -- ============================================================
 -- FUNZIONE: charge_responseMorale(player, value, id)
@@ -935,12 +958,14 @@ function charge_responseEvade(player, value, id)
     printToColor(string.format("[CARICA] %s evade la carica di %s", pending.targetKey, pending.attackerKey), player.color, {r=0.3,g=1,b=0.3})
 
     UI.setAttribute("charge_response_panel", "active", "false")
+    charge_hideDefenseRow(slot, pending.attackerKey)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 
     if not charge_queueHasPending() then
         engine_handleAction({ type = ACTION.CONFIRM })
     end
 
+    charge_refreshAttackRowText((slot == 1) and 2 or 1, elemento)
     callHandler("updateCenterPanel")
 end
 
@@ -980,12 +1005,14 @@ function charge_responseCounter(player, value, id)
     printToColor(string.format("[CARICA] %s e %s si scontrano in contro-carica", pending.attackerKey, pending.targetKey), player.color, {r=0.3,g=1,b=0.3})
 
     UI.setAttribute("charge_response_panel", "active", "false")
+    charge_hideDefenseRow(slot, pending.attackerKey)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 
     if not charge_queueHasPending() then
         engine_handleAction({ type = ACTION.CONFIRM })
     end
 
+    charge_refreshAttackRowText((slot == 1) and 2 or 1, elemento)
     callHandler("updateCenterPanel")
 end
 
@@ -1016,6 +1043,7 @@ function charge_responseStopfire(player, value, id)
     printToColor("[CARICA] Risoluzione del tiro (colpi/perdite) non ancora implementata", player.color, {r=1,g=0.6,b=0.2})
 
     UI.setAttribute("charge_response_panel", "active", "false")
+    charge_hideDefenseRow(slot, pending.attackerKey)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 
     callHandler("updateCenterPanel")
@@ -1145,7 +1173,7 @@ function charge_resolveCheckStep(player, elemento, slot)
             if not charge_queueHasPending() then
                 engine_handleAction({ type = ACTION.CONFIRM })
             end
-            callHandler("buildUI")
+            charge_refreshAttackRowText(slot, elemento)
             callHandler("updateCenterPanel")
         end
     end)
@@ -1279,6 +1307,6 @@ function charge_resolveMoveStep(player, elemento, slot)
         engine_handleAction({ type = ACTION.CONFIRM })
     end
 
-    callHandler("buildUI")
+    charge_refreshAttackRowText(slot, elemento)
     callHandler("updateCenterPanel")
 end

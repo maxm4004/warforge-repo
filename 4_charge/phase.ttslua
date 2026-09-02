@@ -3,7 +3,7 @@ function charge_phase()
     return {
         CHARGE_DECLARE = {
             title = "FASE 1: DICHIARAZIONI DI CARICA",
-            desc  = "DICHIARA LE CARICHE DELLE TUE UNITÀ",
+            desc  = "Dichiara le cariche delle tue unità",
             before = "before_charge_declare",
             after  = "after_charge_declare",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
@@ -21,15 +21,19 @@ function charge_phase()
         },
         CHARGE_RESOLVE = {
             title = "FASE 1: RISOLUZIONE CARICHE",
-            desc  = "RISOLVI LE CARICHE",
+            desc  = "Risolvi le cariche dichiarate (liste sullo schermo)",
             before = "before_charge_resolve",
             after  = "after_charge_resolve",
-            allowedActions = { ACTION.CONFIRM },
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
             render = "chargeResolveOnly",
             enforceOwnership = true,
             inputMode = "OWNER",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Chiudi Fase", textColor="White", color="Red",   callback="charge_resolve_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Chiudi Fase", textColor="White", color="Green", callback="charge_resolve_btn_army2" },
+            },
             transitions = {
-                { to="INITIATIVE_ROLL", conditions={ COND.CHARGE_QUEUE_EMPTY } }
+                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         }
     }
