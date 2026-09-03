@@ -1,9 +1,4 @@
 -- ============================================================
--- 4_charge/hooks.ttslua
--- Before/After hook delle 3 fasi CHARGE_DECLARE / CHARGE_REACT / CHARGE_AUTO
--- ============================================================
-
--- ============================================================
 -- FUNZIONE: before_charge_declare(phaseName, phase)
 -- Reset coda cariche di entrambi gli eserciti, mostra le liste
 -- "LE MIE CARICHE", nasconde "CARICHE SUBITE" e il pannello
@@ -13,6 +8,8 @@ function before_charge_declare(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
 
+    IEF_STOPFIRE_CURRENT = nil
+
     charge_close(1)
     charge_close(2)
 
@@ -21,9 +18,7 @@ function before_charge_declare(phaseName, phase)
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
     UI.setAttribute("charge_stopfire_panel", "active", "false")
-    -- Le liste Attacco/Difesa sono generate dinamicamente da
-    -- IEF_CHARGE_QUEUE (appena azzerata sopra): ricostruendo la UI
-    -- risultano vuote/nascoste da sole, nessun UI.setAttribute manuale.
+
     callHandler("updateCenterPanel")
 end
 
@@ -63,16 +58,16 @@ end
 -- per mostrare l'esito finale di ciascuna carica mentre si risolve.
 -- ============================================================
 function after_charge_react(phaseName, phase)
+    TURN.completed = { Army1 = false, Army2 = false }
 end
 
 -- ============================================================
 -- FUNZIONE: before_charge_auto(phaseName, phase)
--- Esegue in blocco tutte le reazioni automatiche pure — le
--- controCarica=true (reciproche decise in Fase 1) e le
--- Contro-carica/Evasione scelte come reazione in CHARGE_REACT —
--- poi avvia la coda interattiva del Tiro d'Arresto
--- (charge_stopfireInit), l'unica reazione che richiede dadi/morale
--- e non può girare in un semplice loop sincrono.
+-- Esegue in blocco le automatiche pure: reciproche di Fase 1
+-- (controCarica=true) e Contro-carica/Evasione scelte come
+-- reazione in CHARGE_REACT. Il Tiro d'Arresto è già stato
+-- risolto interamente in CHARGE_REACT (charge_stopfireBegin),
+-- non compare più qui.
 -- ============================================================
 function before_charge_auto(phaseName, phase)
     TURN.phase = phaseName
@@ -91,10 +86,8 @@ function before_charge_auto(phaseName, phase)
         end
     end
 
-    charge_stopfireInit()
-    callHandler("updateCenterPanel")
+    callHandler("buildUI")
 end
-
 -- ============================================================
 -- FUNZIONE: after_charge_auto(phaseName, phase)
 -- Pulizia UI di fine Fase 1 intera: nasconde tutte le liste e il

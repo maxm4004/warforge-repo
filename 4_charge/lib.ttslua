@@ -241,9 +241,6 @@ function charge_findLineTarget(myKey, slot)
                                 end
 
                                 if anyInside then
-                                    print(string.format("[CARICA]   %-28s bordoVicino localZ=%6.2f (%.1f\")",
-                                        eb.getName(), nearestLocalZ, nearestLocalZ / INCH_TO_TTS))
-
                                     if not best or nearestLocalZ < best.localZ then
                                         best = { targetKey = ek, localZ = nearestLocalZ, distInches = nearestLocalZ / INCH_TO_TTS }
                                     end
@@ -630,18 +627,6 @@ function charge_hasArmaDaTiro(armi)
     end
     return false
 end
-
--- ============================================================
--- FUNZIONE: charge_hasCapability(capabilities, nome)
--- ============================================================
-function charge_hasCapability(capabilities, nome)
-    if not capabilities then return false end
-    for _, c in ipairs(capabilities) do
-        if c == nome then return true end
-    end
-    return false
-end
-
 -- ============================================================
 -- FUNZIONE: charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
 -- Determina le risposte legali per il bersaglio di una carica,
@@ -758,12 +743,7 @@ function charge_getDefenseListPanelXml(slot)
     local rows = ""
     for i, e in ipairs(coda) do
         local y = 80 - (i - 1) * 22
-        local statoReazione
-        if e.controCarica then
-            statoReazione = REACTION_TYPE.COC
-        else
-            statoReazione = e.response or "nessuna reazione"
-        end
+        local statoReazione = e.controCarica and REACTION_TYPE.COC or (e.response or "nessuna reazione")
         rows = rows .. string.format(
             '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s | %s" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="Red" alignment="MiddleLeft" position="0 %d 0" width="350" height="20" onClick="charge_defenseRowClick"/>',
             slot, e.attackerKey, e.attackerKey, e.targetKey, statoReazione, y
@@ -771,7 +751,7 @@ function charge_getDefenseListPanelXml(slot)
     end
 
     return string.format(
-        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="350" height="260" color="rgba(0,0,0,0.20)" outline="#000000" outlineSize="1" offsetXY="100 -340" visibility="%s" active="%s">' ..
+        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="400" height="260" color="rgba(0,0,0,0.20)" outline="#000000" outlineSize="1" offsetXY="100 -340" visibility="%s" active="%s">' ..
         '<Text text="CARICHE SUBITE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
         '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
         '%s' ..
@@ -818,13 +798,13 @@ function charge_defenseRowClick(player, value, id)
     local elemento = charge_findQueueEntry(otherSlot, attackerKey)
     if not elemento then return end
 
-        if IEF_STOPFIRE_CURRENT then
-        printToColor("[CARICA] Risolvi prima il Tiro d'Arresto in corso", player.color, {r=1,g=0.6,b=0})
+    if elemento.step == CHARGE_STEP.CLO then
+        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
         return
     end
 
-    if elemento.step == CHARGE_STEP.CLO then
-        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
+    if IEF_STOPFIRE_CURRENT then
+        printToColor("[CARICA] Risolvi prima il Tiro d'Arresto in corso", player.color, {r=1,g=0.6,b=0})
         return
     end
 
@@ -1185,7 +1165,6 @@ function charge_responseCounter(player, value, id)
     charge_refreshDefenseRowText(slot, pending.elemento)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
-
 -- ============================================================
 -- FUNZIONE: charge_responseEvade(player, value, id)
 -- Reazione "Evasione" (FL obbligatoria salvo bersaglio FL/EL,
@@ -1216,9 +1195,9 @@ function charge_responseStopfire(player, value, id)
     pending.elemento.response = REACTION_TYPE.TIR
     UI.setAttribute("charge_response_panel", "active", "false")
     charge_refreshDefenseRowText(slot, pending.elemento)
+    local elemento = pending.elemento
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-
-    charge_stopfireBegin(slot, pending.elemento)
+    charge_stopfireBegin(slot, elemento)
 end
 -- ============================================================
 -- FUNZIONE: charge_responseHold(player, value, id)
@@ -1287,16 +1266,107 @@ function charge_resolveReaction(player, elemento, slot)
     charge_refreshAttackRowText((slot == 1) and 2 or 1, elemento)
     callHandler("updateCenterPanel")
 end
+-- ============================================================
+-- FUNZIONE: charge_executeStopfire(player, elemento)
+-- Fisica del Tiro d'Arresto: riduce di 2" la distanza residua
+-- della carica dell'attaccante. NON chiude l'elemento (step
+-- resta aperto: l'attaccante deve ancora risolvere la propria
+-- riga). Risoluzione colpi/perdite non ancora implementata.
+-- ============================================================
+function charge_executeStopfire(player, elemento)
+    elemento.distInches = math.max(0, (elemento.distInches or 0) - 2)
+
+    printToColor(string.format("[CARICA] %s spara Tiro d'Arresto: %s si fermerà a 2\" di distanza", elemento.targetKey, elemento.attackerKey), player.color, {r=0.9,g=0.6,b=0.1})
+    printToColor("[CARICA] Risoluzione del tiro (colpi/perdite) non ancora implementata", player.color, {r=1,g=0.6,b=0.2})
+end
+-- ============================================================
+-- FUNZIONE: charge_stopfireInit()
+-- Raccoglie tutte le cariche con response=TIR non ancora chiuse
+-- in IEF_STOPFIRE_QUEUE, poi avvia la prima.
+-- ============================================================
+function charge_stopfireInit()
+    IEF_STOPFIRE_QUEUE = {}
+    for slot = 1, 2 do
+        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
+            if e.response == REACTION_TYPE.TIR and e.step ~= CHARGE_STEP.CLO then
+                table.insert(IEF_STOPFIRE_QUEUE, { elemento = e, slot = slot })
+            end
+        end
+    end
+    charge_stopfireNext()
+end
 
 -- ============================================================
--- FUNZIONE: charge_executeCounter(player, elemento)
--- Fisica della contro-carica: rotazione reciproca verso il nemico
--- (charge_getFrontLine) + traslazione in blocco fino al punto
--- medio fra i due fronti. Chiude l'elemento (step=CLO).
+-- FUNZIONE: charge_stopfireNext()
+-- Estrae la prossima carica dalla coda e la mostra sul pannello.
+-- Coda vuota -> nasconde il pannello (le "Chiudi Fase" di
+-- CHARGE_AUTO diventano sbloccabili tramite COND dedicata).
+-- ============================================================
+function charge_stopfireNext()
+    if #IEF_STOPFIRE_QUEUE == 0 then
+        IEF_STOPFIRE_CURRENT = nil
+        UI.setAttribute("charge_stopfire_panel", "active", "false")
+        callHandler("updateCenterPanel")
+        return
+    end
+    local entry = table.remove(IEF_STOPFIRE_QUEUE, 1)
+    IEF_STOPFIRE_CURRENT = { elemento = entry.elemento, slot = entry.slot, subStep = "TIRO" }
+    charge_stopfireRedraw()
+end
+-- ============================================================
+-- FUNZIONE: charge_stopfireCloseCurrent(contatto)
+-- Chiude la carica corrente senza passare dal test morale
+-- (nessun colpo a segno, o nessuna base/arma trovata).
+-- ============================================================
+function charge_stopfireCloseCurrent(contatto)
+    local cur = IEF_STOPFIRE_CURRENT
+    if not cur then return end
+    cur.elemento.outcome = contatto and CHARGE_OUTCOME.OK or CHARGE_OUTCOME.ANN
+    cur.elemento.step = CHARGE_STEP.CLO
+    charge_stopfireNext()
+end
+-- ============================================================
+-- FUNZIONE: charge_reactQueueHasPending()
+-- Vero se c'è un Tiro d'Arresto in corso sul pannello, o se
+-- almeno una riga NON-controCarica non ha ancora una response.
+-- ============================================================-- 4_charge/lib.ttslua
+function charge_reactQueueHasPending()
+    if IEF_STOPFIRE_CURRENT ~= nil then
+        print("[DEBUG] pending per stopfire in corso")
+        return true
+    end
+    for slot = 1, 2 do
+        local coda = IEF_CHARGE_QUEUE[slot] or {}
+        for i = 1, #coda do
+            local e = coda[i]
+            if not e.controCarica and e.step ~= CHARGE_STEP.CLO and not e.response then
+                print("[DEBUG] pending: slot=" .. slot .. " attacker=" .. tostring(e.attackerKey) .. " controCarica=" .. tostring(e.controCarica) .. " step=" .. tostring(e.step) .. " response=" .. tostring(e.response))
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: charge_refreshDefenseRowText(slot, elemento)
+-- Aggiorna il testo di UNA riga Difesa dopo che la reazione è
+-- stata registrata/annullata — la riga resta sempre visibile.
+-- ============================================================
+function charge_refreshDefenseRowText(slot, elemento)
+    local rowId = string.format("charge_defense_row_%d_%s", slot, elemento.attackerKey)
+    local statoReazione = elemento.controCarica and REACTION_TYPE.COC or (elemento.response or "nessuna reazione")
+    UI.setAttribute(rowId, "text", string.format("%s -> %s | %s", elemento.attackerKey, elemento.targetKey, statoReazione))
+end
+-- ============================================================
+-- FUNZIONE: charge_executeCounter(slot, elemento)
+-- Fisica della contro-carica: rotazione reciproca verso il
+-- nemico (charge_getFrontLine) + traslazione in blocco fino al
+-- punto medio fra i due fronti. Chiude l'elemento (step=CLO).
+-- slot = un esercito coinvolto, usato solo per il colore stampa.
 -- ============================================================
 function charge_executeCounter(slot, elemento)
-    local color = ARMY[slot] and ARMY[slot].color
-    
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
     local attackerBases = charge_getUnitBases(elemento.attackerKey)
     local defenderBases = charge_getUnitBases(elemento.targetKey)
 
@@ -1347,17 +1417,19 @@ function charge_executeCounter(slot, elemento)
 
     elemento.outcome = CHARGE_OUTCOME.OK
     elemento.step = CHARGE_STEP.CLO
-    
-    printToColor(string.format("[CARICA] %s e %s si scontrano in contro-carica", elemento.attackerKey, elemento.targetKey), color, {r=0.3,g=1,b=0.3})
+
+    printToColor(string.format("[CARICA] %s e %s si scontrano in contro-carica", elemento.attackerKey, elemento.targetKey), colore, {r=0.3,g=1,b=0.3})
 end
 
 -- ============================================================
--- FUNZIONE: charge_executeEvade(player, elemento)
--- Fisica dell'evasione: rotazione 180° in loco + movimento lungo
--- la direzione di fuga (calcolata prima di ruotare). Chiude
--- l'elemento (step=CLO).
+-- FUNZIONE: charge_executeEvade(slot, elemento)
+-- Fisica dell'evasione: rotazione 180° in loco + movimento
+-- lungo la direzione di fuga (calcolata prima di ruotare, non
+-- dipende dal timing setRotation/getTransformForward). Chiude
+-- l'elemento (step=CLO). slot = esercito del DIFENSORE.
 -- ============================================================
-function charge_executeEvade(player, elemento)
+function charge_executeEvade(slot, elemento)
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
     local defenderBases = charge_getUnitBases(elemento.targetKey)
 
     if #defenderBases > 0 then
@@ -1379,81 +1451,61 @@ function charge_executeEvade(player, elemento)
     end
 
     IEF_UNIT_NO_MOVE_NEXT_TURN[elemento.targetKey] = true
-
     elemento.outcome = CHARGE_OUTCOME.EVI
     elemento.step = CHARGE_STEP.CLO
 
-    printToColor(string.format("[CARICA] %s evade la carica di %s", elemento.targetKey, elemento.attackerKey), player.color, {r=0.3,g=1,b=0.3})
+    printToColor(string.format("[CARICA] %s evade la carica di %s", elemento.targetKey, elemento.attackerKey), colore, {r=0.3,g=1,b=0.3})
 end
 
 -- ============================================================
--- FUNZIONE: charge_executeStopfire(player, elemento)
--- Fisica del Tiro d'Arresto: riduce di 2" la distanza residua
--- della carica dell'attaccante. NON chiude l'elemento (step
--- resta aperto: l'attaccante deve ancora risolvere la propria
--- riga). Risoluzione colpi/perdite non ancora implementata.
+-- FUNZIONE: charge_responseCancel(player, value, id)
+-- Annulla la reazione scelta: elemento.response torna a nil.
 -- ============================================================
-function charge_executeStopfire(player, elemento)
-    elemento.distInches = math.max(0, (elemento.distInches or 0) - 2)
+function charge_responseCancel(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
 
-    printToColor(string.format("[CARICA] %s spara Tiro d'Arresto: %s si fermerà a 2\" di distanza", elemento.targetKey, elemento.attackerKey), player.color, {r=0.9,g=0.6,b=0.1})
-    printToColor("[CARICA] Risoluzione del tiro (colpi/perdite) non ancora implementata", player.color, {r=1,g=0.6,b=0.2})
+    pending.elemento.response = nil
+
+    printToColor(string.format("[CARICA] Reazione annullata per %s", pending.targetKey), player.color, {r=0.7,g=0.7,b=0.7})
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    charge_refreshDefenseRowText(slot, pending.elemento)
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
+
 -- ============================================================
--- FUNZIONE: charge_refreshDefenseRowText(slot, elemento)
--- Aggiorna il testo di UNA riga Difesa esistente dopo che la
--- reazione è stata registrata (elemento.response impostato) via
--- UI.setAttribute diretto — la riga resta visibile, non si nasconde
--- più: charge_resolveReaction interverrà solo al "Chiudi Fase".
+-- FUNZIONE: charge_stopfireBegin(slot, elemento)
+-- Avvia la risoluzione interattiva del Tiro d'Arresto per QUESTA
+-- carica specifica (slot = esercito del difensore/tiratore).
 -- ============================================================
-function charge_refreshDefenseRowText(slot, elemento)
-    local rowId = string.format("charge_defense_row_%d_%s", slot, elemento.attackerKey)
-    local statoReazione = elemento.response or "nessuna reazione"
-    UI.setAttribute(rowId, "text", string.format("%s -> %s | %s", elemento.attackerKey, elemento.targetKey, statoReazione))
-    UI.setAttribute(rowId, "textColor", "Red")
+function charge_stopfireBegin(slot, elemento)
+    IEF_STOPFIRE_CURRENT = { elemento = elemento, slot = slot, subStep = "TIRO" }
+    callHandler("updateCenterPanel")
 end
+
 -- ============================================================
--- FUNZIONE: charge_stopfireInit()
--- Raccoglie tutte le cariche con response=TIR non ancora chiuse
--- in IEF_STOPFIRE_QUEUE, poi avvia la prima.
+-- FUNZIONE: charge_stopfireEnd()
+-- Chiude la risoluzione corrente, torna ai bottoni normali di
+-- CHARGE_REACT.
 -- ============================================================
-function charge_stopfireInit()
-    IEF_STOPFIRE_QUEUE = {}
-    for slot = 1, 2 do
-        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
-            if e.response == REACTION_TYPE.TIR and e.step ~= CHARGE_STEP.CLO then
-                table.insert(IEF_STOPFIRE_QUEUE, { elemento = e, slot = slot })
-            end
-        end
+function charge_stopfireEnd()
+    local elemento = IEF_STOPFIRE_CURRENT and IEF_STOPFIRE_CURRENT.elemento
+    local slot = IEF_STOPFIRE_CURRENT and IEF_STOPFIRE_CURRENT.slot
+    IEF_STOPFIRE_CURRENT = nil
+    if elemento and slot then
+        charge_refreshDefenseRowText(slot, elemento)
+        charge_refreshAttackRowText((slot == 1) and 2 or 1, elemento)
     end
-    charge_stopfireNext()
-end
-
--- ============================================================
--- FUNZIONE: charge_stopfireNext()
--- Estrae la prossima carica dalla coda e la mostra sul pannello.
--- Coda vuota -> nasconde il pannello (le "Chiudi Fase" di
--- CHARGE_AUTO diventano sbloccabili tramite COND dedicata).
--- ============================================================
-function charge_stopfireNext()
-    if #IEF_STOPFIRE_QUEUE == 0 then
-        IEF_STOPFIRE_CURRENT = nil
-        UI.setAttribute("charge_stopfire_panel", "active", "false")
-        callHandler("updateCenterPanel")
-        return
-    end
-    local entry = table.remove(IEF_STOPFIRE_QUEUE, 1)
-    IEF_STOPFIRE_CURRENT = { elemento = entry.elemento, slot = entry.slot, subStep = "TIRO" }
-    charge_stopfireRedraw()
+    callHandler("updateCenterPanel")
 end
 
 -- ============================================================
 -- FUNZIONE: charge_stopfireRedraw()
--- Aggiorna testo e ruolo dei 2 bottoni del pannello in base al
--- subStep corrente: in "TIRO" il bottone attivo è quello del
--- DIFENSORE (chi spara), in "MORALE" quello dell'ATTACCANTE (chi
--- deve superare il test per chiudere il contatto) — invertiti a
--- seconda di chi è chi, stesso principio dei bottoni Iniziativa.
+-- Aggiorna testo e ruolo dei 2 bottoni del pannello dinamico in
+-- base al subStep: "TIRO" attivo per il DIFENSORE, "MORALE"
+-- attivo per l'ATTACCANTE.
 -- ============================================================
 function charge_stopfireRedraw()
     local cur = IEF_STOPFIRE_CURRENT
@@ -1462,7 +1514,6 @@ function charge_stopfireRedraw()
     local defenderSlot = cur.slot
     local attackerSlot = (cur.slot == 1) and 2 or 1
 
-    UI.setAttribute("charge_stopfire_panel", "active", "true")
     UI.setAttribute("charge_stopfire_text", "text", string.format("%s -> %s", elemento.attackerKey, elemento.targetKey))
 
     local labels  = { [1] = "In attesa...", [2] = "In attesa..." }
@@ -1497,12 +1548,22 @@ function charge_stopfireBtnClick(player, slot)
 end
 
 -- ============================================================
+-- FUNZIONE: charge_hasCapability(capabilities, nome)
+-- Helper generico: vero se "nome" è fra le capacità dell'unità.
+-- ============================================================
+function charge_hasCapability(capabilities, nome)
+    for _, c in ipairs(capabilities or {}) do
+        if c == nome then return true end
+    end
+    return false
+end
+
+-- ============================================================
 -- FUNZIONE: charge_stopfireRollShot(player)
--- Il difensore tira: basi pronte (shoot_basiPronte, riuso diretto
--- da 7_shoot) x soglia arma (weapons.json), con eccezione RAFFICA
--- (+50% dadi, "3D6 ogni 2 basi" — capabilities.json). Se colpi=0,
--- chiude subito con contatto. Se colpi>0, applica le perdite
--- (shoot_applyHits) e passa al subStep MORALE.
+-- Il difensore tira: basi pronte (shoot_basiPronte, riuso da
+-- 7_shoot) x soglia arma (weapons.json), con eccezione RAFFICA
+-- (+50% dadi). Colpi=0 -> chiude con contatto. Colpi>0 -> applica
+-- perdite (shoot_applyHits) e passa al subStep MORALE.
 -- ============================================================
 function charge_stopfireRollShot(player)
     local cur = IEF_STOPFIRE_CURRENT
@@ -1512,7 +1573,9 @@ function charge_stopfireRollShot(player)
     local defenderBases = charge_getUnitBases(elemento.targetKey)
     local attackerBases = charge_getUnitBases(elemento.attackerKey)
     if #defenderBases == 0 or #attackerBases == 0 then
-        charge_stopfireCloseCurrent(true)
+        elemento.outcome = CHARGE_OUTCOME.OK
+        elemento.step = CHARGE_STEP.CLO
+        charge_stopfireEnd()
         return
     end
 
@@ -1527,7 +1590,9 @@ function charge_stopfireRollShot(player)
     end
     if not weapon then
         printToColor("[TIRO D'ARRESTO] Nessuna arma da tiro trovata", player.color, {r=1,g=0.6,b=0})
-        charge_stopfireCloseCurrent(true)
+        elemento.outcome = CHARGE_OUTCOME.OK
+        elemento.step = CHARGE_STEP.CLO
+        charge_stopfireEnd()
         return
     end
 
@@ -1536,9 +1601,6 @@ function charge_stopfireRollShot(player)
 
     local numDadi = basiPronte
     if charge_hasCapability(capabilities, "RAFFICA") then
-        -- RAFFICA in Tiro d'Arresto: 3D6 ogni 2 basi pronte (+50%
-        -- rispetto al normale 1D6/base) — coppie intere x3, base
-        -- dispari residua conta comunque come coppia (2 dadi extra)
         local coppie = math.floor(basiPronte / 2)
         local resto  = basiPronte % 2
         numDadi = coppie * 3 + (resto > 0 and 2 or 0)
@@ -1546,7 +1608,9 @@ function charge_stopfireRollShot(player)
 
     if numDadi <= 0 then
         printToColor("[TIRO D'ARRESTO] Nessuna base in gittata con LOS", player.color, {r=0.7,g=0.7,b=0.7})
-        charge_stopfireCloseCurrent(true)
+        elemento.outcome = CHARGE_OUTCOME.OK
+        elemento.step = CHARGE_STEP.CLO
+        charge_stopfireEnd()
         return
     end
 
@@ -1558,24 +1622,22 @@ function charge_stopfireRollShot(player)
         if hits > 0 then
             local attackerSlot = (cur.slot == 1) and 2 or 1
             local attackerMeta = charge_getUnitMeta(attackerBases[1])
-            -- ATTENZIONE: firma assunta da shoot_shootConfirm
-            -- (targetUnit, targetSlot, hits, player, targetObj) —
-            -- verifica che attackerMeta abbia la stessa forma di
-            -- state.targetUnit lì, altrimenti va adattata.
             shoot_applyHits(attackerMeta, attackerSlot, hits, player, attackerBases[1])
             cur.subStep = "MORALE"
             charge_stopfireRedraw()
         else
             printToAll("[TIRO D'ARRESTO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
-            charge_stopfireCloseCurrent(true)
+            elemento.outcome = CHARGE_OUTCOME.OK
+            elemento.step = CHARGE_STEP.CLO
+            charge_stopfireEnd()
         end
     end)
 end
 
 -- ============================================================
 -- FUNZIONE: charge_stopfireRollMorale(player)
--- L'attaccante testa il morale (main_testMorale, riuso diretto)
--- per chiudere il contatto dopo le perdite subite dal tiro.
+-- L'attaccante testa il morale (main_testMorale) per chiudere il
+-- contatto dopo le perdite subite dal tiro.
 -- ============================================================
 function charge_stopfireRollMorale(player)
     local cur = IEF_STOPFIRE_CURRENT
@@ -1589,99 +1651,6 @@ function charge_stopfireRollMorale(player)
             elemento.outcome = CHARGE_OUTCOME.ANN
         end
         elemento.step = CHARGE_STEP.CLO
-        charge_stopfireNext()
+        charge_stopfireEnd()
     end)
-end
-
--- ============================================================
--- FUNZIONE: charge_stopfireCloseCurrent(contatto)
--- Chiude la carica corrente senza passare dal test morale
--- (nessun colpo a segno, o nessuna base/arma trovata).
--- ============================================================
-function charge_stopfireCloseCurrent(contatto)
-    local cur = IEF_STOPFIRE_CURRENT
-    if not cur then return end
-    cur.elemento.outcome = contatto and CHARGE_OUTCOME.OK or CHARGE_OUTCOME.ANN
-    cur.elemento.step = CHARGE_STEP.CLO
-    charge_stopfireNext()
-end
--- ============================================================
--- FUNZIONE: charge_reactQueueHasPending()
--- Vero se almeno un elemento NON-controCarica (quelli che
--- richiedono davvero una scelta in CHARGE_REACT) non ha ancora
--- una response impostata. Le controCarica=true non contano: non
--- passano mai da questa fase, le gestisce CHARGE_AUTO da sole.
--- ============================================================
-function charge_reactQueueHasPending()
-    if IEF_STOPFIRE_CURRENT ~= nil then return true end
-    for slot = 1, 2 do
-        local coda = IEF_CHARGE_QUEUE[slot] or {}
-        for i = 1, #coda do
-            local e = coda[i]
-            if not e.controCarica and e.step ~= CHARGE_STEP.CLO and not e.response then
-                return true
-            end
-        end
-    end
-    return false
-end
-
--- ============================================================
--- FUNZIONE: charge_responseCancel(player, value, id)
--- Annulla la reazione scelta: elemento.response torna a nil.
--- Nessuna fisica coinvolta (eseguita solo in CHARGE_AUTO).
--- ============================================================
-function charge_responseCancel(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-
-    pending.elemento.response = nil
-
-    printToColor(string.format("[CARICA] Reazione annullata per %s", pending.targetKey), player.color, {r=0.7,g=0.7,b=0.7})
-
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_refreshDefenseRowText(slot, pending.elemento)
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-end
--- ============================================================
--- FUNZIONE: charge_stopfireBegin(slot, elemento)
--- Avvia la risoluzione interattiva del Tiro d'Arresto per QUESTA
--- carica specifica (slot = esercito del difensore/tiratore).
--- Blocca altre scelte di reazione finché non è chiuso
--- (charge_defenseRowClick controlla IEF_STOPFIRE_CURRENT).
--- ============================================================
-function charge_stopfireBegin(slot, elemento)
-    IEF_STOPFIRE_CURRENT = { elemento = elemento, slot = slot, subStep = "TIRO" }
-    callHandler("updateCenterPanel")
-end
-
--- ============================================================
--- FUNZIONE: charge_stopfireBegin(slot, elemento)
--- Avvia la risoluzione interattiva del Tiro d'Arresto per QUESTA
--- carica specifica (slot = esercito del difensore/tiratore).
--- Blocca altre scelte di reazione finché non è chiuso
--- (charge_defenseRowClick controlla IEF_STOPFIRE_CURRENT).
--- ============================================================
-function charge_stopfireBegin(slot, elemento)
-    IEF_STOPFIRE_CURRENT = { elemento = elemento, slot = slot, subStep = "TIRO" }
-    callHandler("updateCenterPanel")
-end
-
--- ============================================================
--- FUNZIONE: charge_stopfireEnd()
--- Chiude la risoluzione corrente, torna ai bottoni normali di
--- CHARGE_REACT. Se dopo la chiusura non ci sono più righe Difesa
--- senza risposta né altri Tiro d'Arresto in corso, la condizione
--- CHARGE_REACT_QUEUE_EMPTY sblocca la transizione a CHARGE_AUTO.
--- ============================================================
-function charge_stopfireEnd()
-    local elemento = IEF_STOPFIRE_CURRENT and IEF_STOPFIRE_CURRENT.elemento
-    local slot = IEF_STOPFIRE_CURRENT and IEF_STOPFIRE_CURRENT.slot
-    IEF_STOPFIRE_CURRENT = nil
-    if elemento and slot then
-        charge_refreshDefenseRowText(slot, elemento)
-        charge_refreshAttackRowText((slot == 1) and 2 or 1, elemento)
-    end
-    callHandler("updateCenterPanel")
 end

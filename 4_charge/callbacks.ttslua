@@ -17,72 +17,32 @@ function charge_declare_btn_army2(player, value, id, buttonConfig)
 end
 
 -- ============================================================
--- FUNZIONE: charge_resolve_btn_army1(player, value, id, buttonConfig)
--- "Chiudi Fase" per Army1: risolve le coppie carica/reazione già
--- pronte (response impostato, non ancora chiuse) sotto la sua
--- responsabilità. Se dopo la risoluzione la coda NON è vuota,
--- NON marca TURN.completed — il bottone resta cliccabile, la
--- fase non può avanzare finché ogni carica non ha una coppia
--- dichiarazione/reazione completa.
--- ============================================================
-function charge_resolve_btn_army1(player, value, id, buttonConfig)
-    local coda = IEF_CHARGE_QUEUE[2] or {}
-    for i = 1, #coda do
-        local elemento = coda[i]
-        if elemento.response and elemento.step ~= CHARGE_STEP.CLO then
-            charge_resolveReaction(player, elemento, 1)
-        end
-    end
-
-    if charge_queueHasPending() then
-        printToColor("[CARICA] Ci sono ancora cariche senza risposta — rispondi a tutte le righe prima di chiudere la fase", player.color, {r=1,g=0.6,b=0})
-        return true
-    end
-
-    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
-    return true
-end
-
--- ============================================================
--- FUNZIONE: charge_resolve_btn_army2(player, value, id, buttonConfig)
--- "Chiudi Fase" per Army2 — stessa logica, coda opposta.
--- ============================================================
-function charge_resolve_btn_army2(player, value, id, buttonConfig)
-    local coda = IEF_CHARGE_QUEUE[1] or {}
-    for i = 1, #coda do
-        local elemento = coda[i]
-        if elemento.response and elemento.step ~= CHARGE_STEP.CLO then
-            charge_resolveReaction(player, elemento, 2)
-        end
-    end
-
-    if charge_queueHasPending() then
-        printToColor("[CARICA] Ci sono ancora cariche senza risposta — rispondi a tutte le righe prima di chiudere la fase", player.color, {r=1,g=0.6,b=0})
-        return true
-    end
-
-    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
-    return true
-end
-
--- ============================================================
 -- FUNZIONE: charge_react_btn_all(player, value, id, buttonConfig)
--- Bottone "Reazioni Completate" di CHARGE_REACT: nessuna logica,
--- solo marca TURN.completed per l'esercito — la transizione a
--- CHARGE_AUTO è gestita dalle condizioni (BOTH_PLAYERS_SELECTED +
--- CHARGE_REACT_QUEUE_EMPTY), non da questo callback.
 -- ============================================================
-function charge_react_btn_all(player, value, id, buttonConfig)
+function charge_react_btn_army1(player, value, id, buttonConfig)
+    print("[CARICA] Army1 ha completato le reazioni")
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: charge_react_btn_army2(player, value, id, buttonConfig)
+-- ============================================================
+function charge_react_btn_army2(player, value, id, buttonConfig)
+    print("[CARICA] Army2 ha completato le reazioni")
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: charge_auto_btn_army1(player, value, id, buttonConfig)
+-- ============================================================
+function charge_auto_btn_army1(player, value, id, buttonConfig)
     return false
 end
 
 -- ============================================================
--- FUNZIONE: charge_auto_btn_all(player, value, id, buttonConfig)
--- Bottone "Chiudi Fase" di CHARGE_AUTO: nessuna logica, solo
--- marca TURN.completed — la transizione a INITIATIVE_ROLL è
--- bloccata dalla condizione CHARGE_STOPFIRE_QUEUE_EMPTY finché
--- restano Tiri d'Arresto da processare.
+-- FUNZIONE: charge_auto_btn_army2(player, value, id, buttonConfig)
 -- ============================================================
-function charge_auto_btn_all(player, value, id, buttonConfig)
+function charge_auto_btn_army2(player, value, id, buttonConfig)
     return false
 end
+
