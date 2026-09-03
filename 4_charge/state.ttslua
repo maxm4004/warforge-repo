@@ -91,3 +91,9 @@ IEF_CHARGE_RESPONSE_UNITS = IEF_CHARGE_RESPONSE_UNITS or {}
 --            startRot={guid=Vector}, pivotUsed, targetKey,
 --            distInches, panel3DObj, activePlayer }
 IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
+-- Coda cariche con Tiro d'Arresto da processare una alla volta in
+-- CHARGE_AUTO, popolata da charge_stopfireInit().
+IEF_STOPFIRE_QUEUE = IEF_STOPFIRE_QUEUE or {}
+-- Carica correntemente in lavorazione sul pannello dinamico:
+-- { elemento, slot (del DIFENSORE che spara), subStep = "TIRO"|"MORALE" }
+IEF_STOPFIRE_CURRENT = IEF_STOPFIRE_CURRENT or nil

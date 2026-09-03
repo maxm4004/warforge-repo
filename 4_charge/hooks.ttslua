@@ -1,5 +1,13 @@
 -- ============================================================
+-- 4_charge/hooks.ttslua
+-- Before/After hook delle 3 fasi CHARGE_DECLARE / CHARGE_REACT / CHARGE_AUTO
+-- ============================================================
+
+-- ============================================================
 -- FUNZIONE: before_charge_declare(phaseName, phase)
+-- Reset coda cariche di entrambi gli eserciti, mostra le liste
+-- "LE MIE CARICHE", nasconde "CARICHE SUBITE" e il pannello
+-- Tiro d'Arresto (residuo di un turno precedente, per sicurezza).
 -- ============================================================
 function before_charge_declare(phaseName, phase)
     TURN.phase = phaseName
@@ -9,52 +17,94 @@ function before_charge_declare(phaseName, phase)
     charge_close(2)
 
     UI.setAttribute("charge_attack_list_army1", "active", "true")
-    UI.setAttribute("charge_attack_list_army2", "active", "true")    
+    UI.setAttribute("charge_attack_list_army2", "active", "true")
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
+    UI.setAttribute("charge_stopfire_panel", "active", "false")
     -- Le liste Attacco/Difesa sono generate dinamicamente da
     -- IEF_CHARGE_QUEUE (appena azzerata sopra): ricostruendo la UI
     -- risultano vuote/nascoste da sole, nessun UI.setAttribute manuale.
     callHandler("updateCenterPanel")
-    
 end
 
 -- ============================================================
 -- FUNZIONE: after_charge_declare(phaseName, phase)
+-- Arbitra i conflitti (charge_resolveConflicts) ora che tutte le
+-- dichiarazioni di entrambi gli eserciti sono note: marca
+-- controCarica=true sulle coppie reciproche, scarta i conflitti
+-- di doppio ruolo per prossimità. Resta a fine Fase 1, prima che
+-- CHARGE_REACT/CHARGE_AUTO leggano la coda.
 -- ============================================================
 function after_charge_declare(phaseName, phase)
- 
+    charge_resolveConflicts()
 end
 
 -- ============================================================
--- FUNZIONE: before_charge_resolve(phaseName, phase)
--- Arbitra i conflitti (charge_resolveConflicts) ora che tutte
--- le dichiarazioni di entrambi gli eserciti sono note, poi
--- ricostruisce la UI: le liste Attacco/Difesa (generate
--- dinamicamente da IEF_CHARGE_QUEUE) compaiono già popolate.
+-- FUNZIONE: before_charge_react(phaseName, phase)
+-- Mostra la lista "CARICHE SUBITE" (tutte le righe, comprese le
+-- controCarica=true — sola lettura per quelle, charge_defenseRowClick
+-- le gestisce con solo zoom). Nessuna fisica in questa fase: solo
+-- scelta/registrazione delle reazioni (elemento.response).
 -- ============================================================
-function before_charge_resolve(phaseName, phase)
+function before_charge_react(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
-    charge_resolveConflicts()
-    
+
     UI.setAttribute("charge_attack_list_army1", "active", "false")
-    UI.setAttribute("charge_attack_list_army2", "active", "false")    
+    UI.setAttribute("charge_attack_list_army2", "active", "false")
     UI.setAttribute("charge_defense_list_army1", "active", "true")
     UI.setAttribute("charge_defense_list_army2", "active", "true")
     callHandler("updateCenterPanel")
-
 end
 
 -- ============================================================
--- FUNZIONE: after_charge_resolve(phaseName, phase)
+-- FUNZIONE: after_charge_react(phaseName, phase)
+-- Nessuna pulizia: le liste Difesa restano visibili in CHARGE_AUTO
+-- per mostrare l'esito finale di ciascuna carica mentre si risolve.
 -- ============================================================
-function after_charge_resolve(phaseName, phase)
+function after_charge_react(phaseName, phase)
+end
 
+-- ============================================================
+-- FUNZIONE: before_charge_auto(phaseName, phase)
+-- Esegue in blocco tutte le reazioni automatiche pure — le
+-- controCarica=true (reciproche decise in Fase 1) e le
+-- Contro-carica/Evasione scelte come reazione in CHARGE_REACT —
+-- poi avvia la coda interattiva del Tiro d'Arresto
+-- (charge_stopfireInit), l'unica reazione che richiede dadi/morale
+-- e non può girare in un semplice loop sincrono.
+-- ============================================================
+function before_charge_auto(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+
+    for slot = 1, 2 do
+        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
+            if e.step ~= CHARGE_STEP.CLO then
+                if e.controCarica or e.response == REACTION_TYPE.COC then
+                    charge_executeCounter(slot, e)
+                elseif e.response == REACTION_TYPE.EVA then
+                    local defenderSlot = (slot == 1) and 2 or 1
+                    charge_executeEvade(defenderSlot, e)
+                end
+            end
+        end
+    end
+
+    charge_stopfireInit()
+    callHandler("updateCenterPanel")
+end
+
+-- ============================================================
+-- FUNZIONE: after_charge_auto(phaseName, phase)
+-- Pulizia UI di fine Fase 1 intera: nasconde tutte le liste e il
+-- pannello Tiro d'Arresto prima di entrare in Iniziativa.
+-- ============================================================
+function after_charge_auto(phaseName, phase)
     UI.setAttribute("charge_attack_list_army1", "active", "false")
-    UI.setAttribute("charge_attack_list_army2", "active", "false")    
+    UI.setAttribute("charge_attack_list_army2", "active", "false")
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
+    UI.setAttribute("charge_stopfire_panel", "active", "false")
     callHandler("updateCenterPanel")
-
 end
