@@ -15,8 +15,8 @@ function charge_phase()
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Dichiarazioni Completate", textColor="White", color="Green", callback="charge_declare_btn_army2" },
             },
             transitions = {
-                { to="CHARGE_REACT",    conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_QUEUE_NOT_EMPTY } },
-                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_QUEUE_EMPTY } },
+                { to="CHARGE_REACT",    conditions={ COND.BOTH_PLAYERS_SELECTED } },
+                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED } },
             }
         },
         CHARGE_REACT = {
@@ -33,7 +33,7 @@ function charge_phase()
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Reazioni Completate", textColor="White", color="Green", callback="charge_react_btn_army2" },
             },
             transitions = {
-                { to="CHARGE_AUTO", conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_REACT_QUEUE_EMPTY } }
+                { to="CHARGE_AUTO", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         },
         CHARGE_AUTO = {

@@ -49,6 +49,11 @@ function before_charge_react(phaseName, phase)
     UI.setAttribute("charge_attack_list_army2", "active", "false")
     UI.setAttribute("charge_defense_list_army1", "active", "true")
     UI.setAttribute("charge_defense_list_army2", "active", "true")
+     
+    charge_getDefenseListPanelXml(1)
+    charge_getDefenseListPanelXml(2)
+
+    callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
 

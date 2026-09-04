@@ -701,24 +701,24 @@ end
 -- numero di riga mappato a parte): "charge_attack_row_<slot>_<attackerKey>".
 -- ============================================================
 function charge_getAttackListPanelXml(slot)
+
     local coda = IEF_CHARGE_QUEUE[slot] or {}
     local colore = ARMY[slot] and ARMY[slot].color or "White"
     local attivo = (ENGINE.phase == PHASE.CHARGE_DECLARE and #coda > 0) and "true" or "false"
 
     local rows = ""
     for i, e in ipairs(coda) do                              
-        local y = 80 - (i - 1) * 22
+        local y = 40 - (i - 1) * 22
         rows = rows .. string.format(
-            '<Button id="charge_attack_row_%d_%s" text="%s -&gt; %s (%s)" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.20)" textColor="Green" alignment="MiddleLeft" position="0 %d 0" width="280" height="20" onClick="charge_attackRowClick"/>',
+            '<Button id="charge_attack_row_%d_%s" text="%s -&gt; %s (%s)" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" position="0 %d 0" width="450" height="20" onClick="charge_attackRowClick"/>',
             slot, e.attackerKey, e.attackerKey, e.targetKey, e.step, y
         )
     end
 
     return string.format(
-        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperLeft" width="400" height="260" color="rgba(0,0,0,0.20)" outline="#000000" outlineSize="1" offsetXY="100 -100" visibility="%s" active="%s">' ..
-        '<Text text="LE MIE CARICHE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
-        '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
-        '%s' ..
+        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperCenter" width="450" height="160" color="rgba(0,0,0,0.35)" visibility="%s" active="%s">' ..
+        '<Text text="LE MIE CARICHE" font="warforge_font" fontSize="13" fontStyle="Bold" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' 
+        ..'%s'..
         '</Panel>',
         slot, colore, attivo, rows
     )
@@ -726,15 +726,9 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_getDefenseListPanelXml(slot)
--- Genera il pannello "CARICHE SUBITE" COMPLETO: una riga per ogni
--- carica dichiarata dall'esercito AVVERSARIO (IEF_CHARGE_QUEUE
--- dell'altro slot), nessun limite fisso. Lista che DOVREBBE
--- consumarsi quando la reazione è usata — non ancora implementato
--- (punto 4, rimandato): per ora mostra semplicemente ogni carica
--- subita finché non è comunque risolta.
 -- ============================================================
-
 function charge_getDefenseListPanelXml(slot)
+
     local otherSlot = (slot == 1) and 2 or 1
     local coda = IEF_CHARGE_QUEUE[otherSlot] or {}
     local colore = ARMY[slot] and ARMY[slot].color or "White"
@@ -742,19 +736,18 @@ function charge_getDefenseListPanelXml(slot)
 
     local rows = ""
     for i, e in ipairs(coda) do
-        local y = 80 - (i - 1) * 22
+        local y = 40 - (i - 1) * 22
         local statoReazione = e.controCarica and REACTION_TYPE.COC or (e.response or "nessuna reazione")
         rows = rows .. string.format(
-            '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s | %s" font="warforge_font" fontSize="11" color="rgba(0.15,0.15,0.15,0.85)" textColor="Red" alignment="MiddleLeft" position="0 %d 0" width="350" height="20" onClick="charge_defenseRowClick"/>',
+           '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s | %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White"   alignment="MiddleLeft" position="0 %d 0" width="450" height="20" onClick="charge_defenseRowClick"/>',
             slot, e.attackerKey, e.attackerKey, e.targetKey, statoReazione, y
         )
     end
 
     return string.format(
-        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperLeft" width="400" height="260" color="rgba(0,0,0,0.20)" outline="#000000" outlineSize="1" offsetXY="100 -340" visibility="%s" active="%s">' ..
-        '<Text text="CARICHE SUBITE" fontSize="13" fontStyle="Bold" color="White" alignment="MiddleCenter" position="0 110 0" width="300" height="22"/>' ..
-        '<Panel width="300" height="1" position="0 97 0" color="#FFFFFF66"/>' ..
-        '%s' ..
+        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperCenter" width="450" height="160" color="rgba(0,0,0,0.35)" visibility="%s" active="%s">' ..
+        '<Text text="CARICHE SUBITE" font="warforge_font" fontSize="13" fontStyle="Bold" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' 
+        .. '%s' ..
         '</Panel>',
         slot, colore, attivo, rows
     )
@@ -790,6 +783,7 @@ end
 -- bersaglio e al tipo dell'attaccante.
 -- ============================================================
 function charge_defenseRowClick(player, value, id)
+
     local slotStr, attackerKey = id:match("^charge_defense_row_(%d)_(.+)$")
     if not slotStr then return end
     local slot = tonumber(slotStr)
@@ -800,11 +794,6 @@ function charge_defenseRowClick(player, value, id)
 
     if elemento.step == CHARGE_STEP.CLO then
         printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
-        return
-    end
-
-    if IEF_STOPFIRE_CURRENT then
-        printToColor("[CARICA] Risolvi prima il Tiro d'Arresto in corso", player.color, {r=1,g=0.6,b=0})
         return
     end
 
@@ -858,22 +847,10 @@ function charge_defenseRowClick(player, value, id)
         UI.setAttribute(buttonIds[chiave], "textColor", "white")
     end
 
-    UI.setAttribute("btnResponseCancel", "active", elemento.response ~= nil and "true" or "false")
-
+    UI.setAttribute("btnResponseCancel", "active", "true")
     UI.setAttribute("charge_response_panel", "visibility", player.color)
     UI.setAttribute("charge_response_panel", "active", "true")
 end
--- ============================================================
--- FUNZIONE: charge_refreshAttackRowText(slot, elemento)
--- Aggiorna il testo di UNA riga Attacco esistente (lo step è
--- cambiato) via UI.setAttribute diretto — la riga esiste già,
--- non serve ricostruire tutta la UI per un cambio di testo.
--- ============================================================
-function charge_refreshAttackRowText(slot, elemento)
-    local rowId = string.format("charge_attack_row_%d_%s", slot, elemento.attackerKey)
-    UI.setAttribute(rowId, "text", string.format("%s -> %s (%s)", elemento.attackerKey, elemento.targetKey, elemento.step))
-end
-
 -- ============================================================
 -- FUNZIONE: charge_hideDefenseRow(slot, attackerKey)
 -- Nasconde SOLO la riga Difesa specifica appena consumata da una
@@ -1190,15 +1167,45 @@ end
 -- ============================================================
 function charge_responseStopfire(player, value, id)
     local slot = main_getArmyByColor(player)
+    local otherSlot = (slot == 1) and 2 or 1
     local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
     if not pending then return end
     pending.elemento.response = REACTION_TYPE.TIR
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_refreshDefenseRowText(slot, pending.elemento)
-    local elemento = pending.elemento
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-    charge_stopfireBegin(slot, elemento)
+
+    local function setTextColor(id)
+    Wait.frames(function()
+            UI.setAttribute(id, "textColor", "White")
+    end, 1)
 end
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+
+    UI.setAttribute("panelBtnUp",   "active", "false")
+
+    UI.setAttribute("charge_stopfire_panel", "active", "true")
+    UI.setAttribute("charge_stopfire_panel", "offsetXY", "0 -223")
+
+    UI.setAttribute("btnStopfire" .. slot, "text", "Tiro di Arresto")
+    setTextColor("btnStopfire" .. slot)
+    UI.setAttribute("btnStopfire" .. slot, "onClick", "charge_stopfireBeginFromClick")
+
+    UI.setAttribute("btnStopfire" .. otherSlot, "text", "Morale")
+    setTextColor("btnStopfire" .. otherSlot)
+    UI.setAttribute("btnStopfire" .. otherSlot, "onClick", "charge_stopfireRollMorale")
+
+    charge_refreshDefenseRowText(slot, pending.elemento)
+end
+
+function charge_stopfireBeginFromClick(player, value, id)
+    warning ("Risoluzione Tiro d'Arresto: il difensore tira i dadi", "Yellow")
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+    charge_stopfireBegin(slot, pending.elemento)
+end
+
+
 -- ============================================================
 -- FUNZIONE: charge_responseHold(player, value, id)
 -- Reazione "Ferma": nessuna reazione attiva, il difensore subisce
@@ -1357,6 +1364,18 @@ function charge_refreshDefenseRowText(slot, elemento)
     local rowId = string.format("charge_defense_row_%d_%s", slot, elemento.attackerKey)
     local statoReazione = elemento.controCarica and REACTION_TYPE.COC or (elemento.response or "nessuna reazione")
     UI.setAttribute(rowId, "text", string.format("%s -> %s | %s", elemento.attackerKey, elemento.targetKey, statoReazione))
+    UI.setAttribute(rowId, "textColor", "White")
+end
+-- ============================================================
+-- FUNZIONE: charge_refreshAttackRowText(slot, elemento)
+-- Aggiorna il testo di UNA riga Attacco esistente (lo step è
+-- cambiato) via UI.setAttribute diretto — la riga esiste già,
+-- non serve ricostruire tutta la UI per un cambio di testo.
+-- ============================================================
+function charge_refreshAttackRowText(slot, elemento)
+    local rowId = string.format("charge_attack_row_%d_%s", slot, elemento.attackerKey)
+    UI.setAttribute(rowId, "text", string.format("%s -> %s (%s)", elemento.attackerKey, elemento.targetKey, elemento.step))
+    UI.setAttribute(rowId, "textColor", "white")
 end
 -- ============================================================
 -- FUNZIONE: charge_executeCounter(slot, elemento)
@@ -1417,8 +1436,7 @@ function charge_executeCounter(slot, elemento)
 
     elemento.outcome = CHARGE_OUTCOME.OK
     elemento.step = CHARGE_STEP.CLO
-
-    printToColor(string.format("[CARICA] %s e %s si scontrano in contro-carica", elemento.attackerKey, elemento.targetKey), colore, {r=0.3,g=1,b=0.3})
+    warning(string.format("[CARICA] %s e %s sono a contatto", elemento.attackerKey, elemento.targetKey), "Yellow")
 end
 
 -- ============================================================
@@ -1454,7 +1472,7 @@ function charge_executeEvade(slot, elemento)
     elemento.outcome = CHARGE_OUTCOME.EVI
     elemento.step = CHARGE_STEP.CLO
 
-    printToColor(string.format("[CARICA] %s evade la carica di %s", elemento.targetKey, elemento.attackerKey), colore, {r=0.3,g=1,b=0.3})
+    warning(string.format("[CARICA] %s evade la carica di %s", elemento.targetKey, elemento.attackerKey), "Yellow")
 end
 
 -- ============================================================
@@ -1508,6 +1526,7 @@ end
 -- attivo per l'ATTACCANTE.
 -- ============================================================
 function charge_stopfireRedraw()
+
     local cur = IEF_STOPFIRE_CURRENT
     if not cur then return end
     local elemento = cur.elemento
@@ -1525,10 +1544,11 @@ function charge_stopfireRedraw()
     enabled[attackerSlot] = (cur.subStep == "MORALE")
 
     for slot = 1, 2 do
-        local btnId = "btnStopfire" .. slot
+        local btnId = "btnArmy" .. slot
         UI.setAttribute(btnId, "text", labels[slot])
         UI.setAttribute(btnId, "interactable", enabled[slot] and "true" or "false")
-        UI.setAttribute(btnId, "color", enabled[slot] and "rgba(0.6,0.45,0.1,1)" or "rgba(0.3,0.3,0.3,0.6)")
+        UI.setAttribute(btnId, "textColor", "White")        
+        --UI.setAttribute(btnId, "color", enabled[slot] and "rgba(0.6,0.45,0.1,1)" or "rgba(0.3,0.3,0.3,0.6)")
     end
 end
 

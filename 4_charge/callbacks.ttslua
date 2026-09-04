@@ -16,19 +16,21 @@ function charge_declare_btn_army2(player, value, id, buttonConfig)
     return true
 end
 
--- ============================================================
--- FUNZIONE: charge_react_btn_all(player, value, id, buttonConfig)
--- ============================================================
 function charge_react_btn_army1(player, value, id, buttonConfig)
-    print("[CARICA] Army1 ha completato le reazioni")
+    if charge_reactQueueHasPending() then
+        printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
 end
 
--- ============================================================
--- FUNZIONE: charge_react_btn_army2(player, value, id, buttonConfig)
--- ============================================================
 function charge_react_btn_army2(player, value, id, buttonConfig)
-    print("[CARICA] Army2 ha completato le reazioni")
+    if charge_reactQueueHasPending() then
+        printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
+        return false
+    end
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end
 
@@ -36,13 +38,15 @@ end
 -- FUNZIONE: charge_auto_btn_army1(player, value, id, buttonConfig)
 -- ============================================================
 function charge_auto_btn_army1(player, value, id, buttonConfig)
-    return false
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
+    return true
 end
 
 -- ============================================================
 -- FUNZIONE: charge_auto_btn_army2(player, value, id, buttonConfig)
 -- ============================================================
 function charge_auto_btn_army2(player, value, id, buttonConfig)
-    return false
+    callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
+    return true
 end
 
