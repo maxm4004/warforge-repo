@@ -563,14 +563,6 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_declareConfirm(player, value, id, buttonConfig)
--- onClick del pulsante "CHARGE" nel popup 2D confirm_panel_charge.
--- Accoda SOLO l'intenzione (attaccante, bersaglio, distanza, perno
--- già fatto) in IEF_CHARGE_QUEUE con step=CHARGE_STEP.DEC — nessun test
--- morale, nessun movimento rettilineo qui. Il perno è già stato
--- applicato fisicamente durante la dichiarazione (interattivo);
--- il movimento rettilineo finale e il test morale si spostano
--- dopo l'arbitraggio dei conflitti (charge_resolveConflicts,
--- prima sotto-fase di CHARGE_RESOLVE).
 -- ============================================================
 function charge_declareConfirm(player, value, id, buttonConfig)
     local slot = main_getArmyByColor(player)
@@ -599,7 +591,7 @@ function charge_declareConfirm(player, value, id, buttonConfig)
         distInches   = session.distInches,
     })
 
-    printToColor(string.format("[CARICA] Dichiarata: %s -> %s", session.attackerKey, session.targetKey), player.color, {r=0.3,g=1,b=0.3})
+    printToColor(string.format("[CARICA] Dichiarazione: %s carica %s", session.attackerKey, session.targetKey), player.color, {r=0.3,g=1,b=0.3})
     UI.setAttribute("confirm_panel_charge", "active", "false")
     charge_close(slot)
     callHandler("buildUI")
@@ -632,14 +624,14 @@ end
 -- Determina le risposte legali per il bersaglio di una carica,
 -- in base al proprio tipo/capacità e al tipo dell'attaccante
 -- (regolamento, "POSSIBILI RISPOSTE ALLE CARICHE"):
---   - KN caricato -> contro-carica obbligatoria
---   - CP con IMPETO -> contro-carica obbligatoria
---   - CP senza IMPETO -> contro-carica o resta ferma (scelta)
---   - CL -> contro-carica / evasione / resta ferma (scelta)
---   - FL caricata da non-FL/EL -> evasione obbligatoria
---   - FL caricata da FL/EL -> stesse opzioni di CL (scelta)
---   - FP/FM con arma da tiro -> Tiro d'Arresto o resta ferma
---   - chiunque altro -> nessuna risposta
+--   - KN caricato > contro-carica obbligatoria
+--   - CP con IMPETO > contro-carica obbligatoria
+--   - CP senza IMPETO > contro-carica o resta ferma (scelta)
+--   - CL > contro-carica / evasione / resta ferma (scelta)
+--   - FL caricata da non-FL/EL > evasione obbligatoria
+--   - FL caricata da FL/EL > stesse opzioni di CL (scelta)
+--   - FP/FM con arma da tiro > Tiro d'Arresto o resta ferma
+--   - chiunque altro > nessuna risposta
 --
 -- Ritorna: obbligato (stringa o nil), opzioni (lista di stringhe,
 -- vuota se obbligato è impostato — in quel caso c'è una sola
@@ -700,6 +692,34 @@ end
 -- L'id di ogni riga contiene l'attackerKey direttamente (non un
 -- numero di riga mappato a parte): "charge_attack_row_<slot>_<attackerKey>".
 -- ============================================================
+-- function charge_getAttackListPanelXml(slot)
+
+--     local coda = IEF_CHARGE_QUEUE[slot] or {}
+--     local colore = ARMY[slot] and ARMY[slot].color or "White"
+--     local attivo = (ENGINE.phase == PHASE.CHARGE_DECLARE and #coda > 0) and "true" or "false"
+
+--     local rows = ""
+--     for i, e in ipairs(coda) do                              
+--         local y = 40 - (i - 1) * 22
+--         rows = rows .. string.format(
+--             '<Text id="charge_attack_row_%d_%s" text="  %s %s carica %s %s" font="warforge_font" fontSize="11" color="White" alignment="MiddleLeft" position="0 %d 0" width="450" height="20" onClick="charge_attackRowClick" />',
+--             slot, e.attackerKey, 
+--             main_decodeUnitTypeLabel(e.attackerKey),
+--             main_decodeArmyCodeLabel(e.attackerKey),
+--             main_decodeUnitTypeLabel(e.targetKey),
+--             main_decodeArmyCodeLabel(e.targetKey),
+--             y
+--         )
+--     end
+
+--     return string.format(
+--         '<Panel id="charge_attack_list_army%d" rectAlignment="LowerCenter" width="450" height="160" color="rgba(0,0,0,0.35)" visibility="%s" active="%s">' ..
+--         '<Text text="CARICHE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' 
+--         ..'%s'..
+--         '</Panel>',
+--         slot, colore, attivo, ARMY[slot].name, rows
+--     )
+-- end
 function charge_getAttackListPanelXml(slot)
 
     local coda = IEF_CHARGE_QUEUE[slot] or {}
@@ -707,26 +727,63 @@ function charge_getAttackListPanelXml(slot)
     local attivo = (ENGINE.phase == PHASE.CHARGE_DECLARE and #coda > 0) and "true" or "false"
 
     local rows = ""
-    for i, e in ipairs(coda) do                              
-        local y = 40 - (i - 1) * 22
+    for i, e in ipairs(coda) do
         rows = rows .. string.format(
-            '<Button id="charge_attack_row_%d_%s" text="%s -&gt; %s (%s)" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" position="0 %d 0" width="450" height="20" onClick="charge_attackRowClick"/>',
-            slot, e.attackerKey, e.attackerKey, e.targetKey, e.step, y
+            '<Row preferredHeight="25">' ..
+                '<Cell>' ..
+                    '<Button id="charge_attack_row_%d_%s" text="  %s %s carica %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
+                '</Cell>' ..
+                '<Cell>' ..
+                    '<Button id="charge_attack_row_btn_%d_%s" text="" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_attackRowClick"/>' ..
+                '</Cell>' ..
+            '</Row>',
+            slot, e.attackerKey,
+            main_decodeUnitTypeLabel(e.attackerKey),
+            main_decodeArmyCodeLabel(e.attackerKey),
+            main_decodeUnitTypeLabel(e.targetKey),
+            main_decodeArmyCodeLabel(e.targetKey),
+            slot, e.attackerKey
         )
     end
 
     return string.format(
-        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperCenter" width="450" height="160" color="rgba(0,0,0,0.35)" visibility="%s" active="%s">' ..
-        '<Text text="LE MIE CARICHE" font="warforge_font" fontSize="13" fontStyle="Bold" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' 
-        ..'%s'..
+        '<Panel id="charge_attack_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
+        '<Text text="CARICHE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
+        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="475 25" position="0 -5 0">' ..
+        '%s' ..
+        '</TableLayout>' ..
         '</Panel>',
-        slot, colore, attivo, rows
+        slot, colore, attivo, ARMY[slot].name, rows
     )
 end
-
 -- ============================================================
 -- FUNZIONE: charge_getDefenseListPanelXml(slot)
 -- ============================================================
+-- function charge_getDefenseListPanelXml(slot)
+
+--     local otherSlot = (slot == 1) and 2 or 1
+--     local coda = IEF_CHARGE_QUEUE[otherSlot] or {}
+--     local colore = ARMY[slot] and ARMY[slot].color or "White"
+--     local attivo = ((ENGINE.phase == PHASE.CHARGE_REACT or ENGINE.phase == PHASE.CHARGE_AUTO) and #coda > 0) and "true" or "false"
+
+--     local rows = ""
+--     for i, e in ipairs(coda) do
+--         local y = 40 - (i - 1) * 22
+--         local statoReazione = e.controCarica and REACTION_TYPE.COC or (e.response or "nessuna reazione")
+--         rows = rows .. string.format(
+--            '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s | %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White"   alignment="MiddleLeft" position="0 %d 0" width="450" height="20" onClick="charge_defenseRowClick"/>',
+--             slot, e.attackerKey, e.attackerKey, e.targetKey, statoReazione, y
+--         )
+--     end
+
+--     return string.format(
+--         '<Panel id="charge_defense_list_army%d" rectAlignment="UpperCenter" width="450" height="160" color="rgba(0,0,0,0.35)" visibility="%s" active="%s">' ..
+--         '<Text text="REAZIONI" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' 
+--         .. '%s' ..
+--         '</Panel>',
+--         slot, colore, attivo, rows
+--     )
+-- end
 function charge_getDefenseListPanelXml(slot)
 
     local otherSlot = (slot == 1) and 2 or 1
@@ -736,32 +793,50 @@ function charge_getDefenseListPanelXml(slot)
 
     local rows = ""
     for i, e in ipairs(coda) do
-        local y = 40 - (i - 1) * 22
         local statoReazione = e.controCarica and REACTION_TYPE.COC or (e.response or "nessuna reazione")
         rows = rows .. string.format(
-           '<Button id="charge_defense_row_%d_%s" text="%s -&gt; %s | %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White"   alignment="MiddleLeft" position="0 %d 0" width="450" height="20" onClick="charge_defenseRowClick"/>',
-            slot, e.attackerKey, e.attackerKey, e.targetKey, statoReazione, y
+            '<Row preferredHeight="25">' ..
+                '<Cell>' ..
+                    '<Button id="charge_defense_row_%d_%s" text="  %s %s è caricata da %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
+                '</Cell>' ..
+                '<Cell>' ..
+                    '<Button id="charge_defense_row_btn_%d_%s" tooltip="charge_defense_row_btn_%d_%s" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_defenseRowClick"/>' ..
+                '</Cell>' ..
+            '</Row>',
+            slot, e.attackerKey,
+            main_decodeUnitTypeLabel(e.targetKey),
+            main_decodeArmyCodeLabel(e.targetKey),
+            main_decodeUnitTypeLabel(e.attackerKey),
+            main_decodeArmyCodeLabel(e.attackerKey),
+            slot,e.attackerKey,
+            slot,e.attackerKey
         )
     end
 
     return string.format(
-        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperCenter" width="450" height="160" color="rgba(0,0,0,0.35)" visibility="%s" active="%s">' ..
-        '<Text text="CARICHE SUBITE" font="warforge_font" fontSize="13" fontStyle="Bold" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' 
-        .. '%s' ..
+        '<Panel id="charge_defense_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" visibility="%s" active="%s">' ..
+        '<Text text="REAZIONI" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
+        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="475 25" position="0 -5 0">' ..
+        '%s' ..
+        '</TableLayout>' ..
         '</Panel>',
         slot, colore, attivo, rows
     )
 end
+
 -- ============================================================
 -- FUNZIONE: charge_attackRowClick(player, value, id)
 -- onClick di una riga del pannello "LE TUE CARICHE": naviga la
 -- telecamera sul punto della carica e avanza di uno step
--- (check->move->resolved), poi ricostruisce l'intera UI globale
+-- (check > move > resolved), poi ricostruisce l'intera UI globale
 -- (callHandler("buildUI")) così la lista riflette il nuovo stato
 -- — stesso schema già in uso per il numero di carte in 2_field.
 -- ============================================================
 function charge_attackRowClick(player, value, id)
-    local slotStr, attackerKey = id:match("^charge_attack_row_(%d)_(.+)$")
+    local slotStr, attackerKey = id:match("^charge_attack_row_btn_(%d)_(.+)$")
+    -- if not slotStr then
+    --     slotStr, attackerKey = id:match("^charge_attack_row_(%d)_(.+)$")
+    -- end
     if not slotStr then return end
     local slot = tonumber(slotStr)
 
@@ -783,8 +858,10 @@ end
 -- bersaglio e al tipo dell'attaccante.
 -- ============================================================
 function charge_defenseRowClick(player, value, id)
-
-    local slotStr, attackerKey = id:match("^charge_defense_row_(%d)_(.+)$")
+    local slotStr, attackerKey = id:match("^charge_defense_row_btn_(%d)_(.+)$")
+    -- if not slotStr then
+    --     slotStr, attackerKey = id:match("^charge_defense_row_(%d)_(.+)$")
+    -- end
     if not slotStr then return end
     local slot = tonumber(slotStr)
     local otherSlot = (slot == 1) and 2 or 1
@@ -839,6 +916,10 @@ function charge_defenseRowClick(player, value, id)
     }
 
     for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
+        UI.setAttribute(buttonIds[chiave], "active", "false")
+    end
+
+    for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
         local presente = false
         for _, d in ipairs(disponibili) do
             if d == chiave then presente = true end
@@ -848,6 +929,7 @@ function charge_defenseRowClick(player, value, id)
     end
 
     UI.setAttribute("btnResponseCancel", "active", "true")
+    UI.setAttribute("btnResponseCancel", "textColor", "white")
     UI.setAttribute("charge_response_panel", "visibility", player.color)
     UI.setAttribute("charge_response_panel", "active", "true")
 end
@@ -1172,16 +1254,21 @@ function charge_responseStopfire(player, value, id)
     if not pending then return end
     pending.elemento.response = REACTION_TYPE.TIR
 
+    IEF_STOPFIRE_CURRENT = { elemento = pending.elemento, slot = slot, subStep = "TIRO" }
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+
     local function setTextColor(id)
-    Wait.frames(function()
+        Wait.frames(function()
             UI.setAttribute(id, "textColor", "White")
-    end, 1)
-end
+        end, 1)
+    end
+
+  
+    UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. pending.attackerKey, "interactable", "false")
+    UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. pending.attackerKey, "color", "rgba(0.3,0.3,0.3,0.6)")
 
     UI.setAttribute("charge_response_panel", "active", "false")
-
     UI.setAttribute("panelBtnUp",   "active", "false")
-
     UI.setAttribute("charge_stopfire_panel", "active", "true")
     UI.setAttribute("charge_stopfire_panel", "offsetXY", "0 -223")
 
@@ -1195,24 +1282,16 @@ end
 
     charge_refreshDefenseRowText(slot, pending.elemento)
 end
-
+-- ============================================================
+-- FUNZIONE: charge_stopfireBeginFromClick(player, value, id)
+-- ============================================================
 function charge_stopfireBeginFromClick(player, value, id)
-    warning ("Risoluzione Tiro d'Arresto: il difensore tira i dadi", "Yellow")
     local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-    charge_stopfireBegin(slot, pending.elemento)
+    if not slot then return end
+    engine_diceCameraZoom(player, slot)
 end
-
-
 -- ============================================================
 -- FUNZIONE: charge_responseHold(player, value, id)
--- Reazione "Ferma": nessuna reazione attiva, il difensore subisce
--- il contatto normale. Registra SOLO elemento.response — in
--- CHARGE_AUTO non scatta nessuna fisica per questo caso (resta
--- semplicemente ferma), coerente con l'assenza di un
--- charge_executeHold dedicato.
 -- ============================================================
 function charge_responseHold(player, value, id)
     local slot = main_getArmyByColor(player)
@@ -1306,7 +1385,7 @@ end
 -- ============================================================
 -- FUNZIONE: charge_stopfireNext()
 -- Estrae la prossima carica dalla coda e la mostra sul pannello.
--- Coda vuota -> nasconde il pannello (le "Chiudi Fase" di
+-- Coda vuota > nasconde il pannello (le "Chiudi Fase" di
 -- CHARGE_AUTO diventano sbloccabili tramite COND dedicata).
 -- ============================================================
 function charge_stopfireNext()
@@ -1362,8 +1441,15 @@ end
 -- ============================================================
 function charge_refreshDefenseRowText(slot, elemento)
     local rowId = string.format("charge_defense_row_%d_%s", slot, elemento.attackerKey)
-    local statoReazione = elemento.controCarica and REACTION_TYPE.COC or (elemento.response or "nessuna reazione")
-    UI.setAttribute(rowId, "text", string.format("%s -> %s | %s", elemento.attackerKey, elemento.targetKey, statoReazione))
+    local statoReazione = elemento.controCarica and REACTION_TYPE.COC or (elemento.response or "è caricata da ")
+    UI.setAttribute(rowId, "text", string.format("  %s %s %s %s %s", 
+    main_decodeUnitTypeLabel(elemento.targetKey), 
+    main_decodeArmyCodeLabel(elemento.targetKey),
+    statoReazione,  
+    main_decodeUnitTypeLabel(elemento.attackerKey),
+    main_decodeArmyCodeLabel(elemento.attackerKey),
+
+    statoReazione))
     UI.setAttribute(rowId, "textColor", "White")
 end
 -- ============================================================
@@ -1374,7 +1460,7 @@ end
 -- ============================================================
 function charge_refreshAttackRowText(slot, elemento)
     local rowId = string.format("charge_attack_row_%d_%s", slot, elemento.attackerKey)
-    UI.setAttribute(rowId, "text", string.format("%s -> %s (%s)", elemento.attackerKey, elemento.targetKey, elemento.step))
+    UI.setAttribute(rowId, "text", string.format("Unità %s carica Unità %s (%s)", elemento.attackerKey, elemento.targetKey, elemento.step))
     UI.setAttribute(rowId, "textColor", "white")
 end
 -- ============================================================
@@ -1490,6 +1576,7 @@ function charge_responseCancel(player, value, id)
 
     UI.setAttribute("charge_response_panel", "active", "false")
     charge_refreshDefenseRowText(slot, pending.elemento)
+
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
 
@@ -1499,6 +1586,7 @@ end
 -- carica specifica (slot = esercito del difensore/tiratore).
 -- ============================================================
 function charge_stopfireBegin(slot, elemento)
+    print(string.format("[CARICA] %s ha scelto Tiro d'Arresto contro %s", elemento.targetKey, elemento.attackerKey))
     IEF_STOPFIRE_CURRENT = { elemento = elemento, slot = slot, subStep = "TIRO" }
     callHandler("updateCenterPanel")
 end
@@ -1509,13 +1597,17 @@ end
 -- CHARGE_REACT.
 -- ============================================================
 function charge_stopfireEnd()
-    local elemento = IEF_STOPFIRE_CURRENT and IEF_STOPFIRE_CURRENT.elemento
-    local slot = IEF_STOPFIRE_CURRENT and IEF_STOPFIRE_CURRENT.slot
+    local cur = IEF_STOPFIRE_CURRENT
     IEF_STOPFIRE_CURRENT = nil
-    if elemento and slot then
-        charge_refreshDefenseRowText(slot, elemento)
-        charge_refreshAttackRowText((slot == 1) and 2 or 1, elemento)
+
+    UI.setAttribute("charge_stopfire_panel", "active", "false")
+    UI.setAttribute("panelBtnUp", "active", "true")
+
+    if cur then
+        charge_refreshDefenseRowText(cur.slot, cur.elemento)
+        charge_refreshAttackRowText((cur.slot == 1) and 2 or 1, cur.elemento)
     end
+
     callHandler("updateCenterPanel")
 end
 
@@ -1526,7 +1618,7 @@ end
 -- attivo per l'ATTACCANTE.
 -- ============================================================
 function charge_stopfireRedraw()
-
+    
     local cur = IEF_STOPFIRE_CURRENT
     if not cur then return end
     local elemento = cur.elemento
@@ -1535,20 +1627,35 @@ function charge_stopfireRedraw()
 
     UI.setAttribute("charge_stopfire_text", "text", string.format("%s -> %s", elemento.attackerKey, elemento.targetKey))
 
+    if cur.subStep == "ESCI" then
+        UI.setAttribute("btnStopfire" .. defenderSlot, "text", "Tiro di Arresto")
+        UI.setAttribute("btnStopfire" .. defenderSlot, "Color", "Grey")
+        UI.setAttribute("btnStopfire" .. defenderSlot, "textColor", "Black")
+        UI.setAttribute("btnStopfire" .. defenderSlot, "interactable", "false")
+       
+        UI.setAttribute("btnStopfire" .. attackerSlot, "text", "Fine Tiro di Arresto")
+        UI.setAttribute("btnStopfire" .. attackerSlot, "textColor", "White")
+        UI.setAttribute("btnStopfire" .. attackerSlot, "interactable", "true")
+        UI.setAttribute("btnStopfire" .. attackerSlot, "onClick", "charge_stopfireExitClick")
+        
+        return
+    end
+
     local labels  = { [1] = "In attesa...", [2] = "In attesa..." }
     local enabled = { [1] = false, [2] = false }
 
-    labels[defenderSlot]  = "Tiro d'Arresto"
+    labels[defenderSlot]  = "Tiro di Arresto"
     enabled[defenderSlot] = (cur.subStep == "TIRO")
-    labels[attackerSlot]  = "Test Morale"
+    labels[attackerSlot]  = "Morale"
     enabled[attackerSlot] = (cur.subStep == "MORALE")
 
     for slot = 1, 2 do
-        local btnId = "btnArmy" .. slot
+        local btnId = "btnStopfire" .. slot
         UI.setAttribute(btnId, "text", labels[slot])
         UI.setAttribute(btnId, "interactable", enabled[slot] and "true" or "false")
-        UI.setAttribute(btnId, "textColor", "White")        
-        --UI.setAttribute(btnId, "color", enabled[slot] and "rgba(0.6,0.45,0.1,1)" or "rgba(0.3,0.3,0.3,0.6)")
+        if slot ~= attackerSlot or cur.subStep ~= "ESCI" then
+            UI.setAttribute(btnId, "onClick", (slot == defenderSlot) and "charge_stopfireBeginFromClick" or "charge_stopfireRollMorale")
+        end
     end
 end
 
@@ -1580,15 +1687,27 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_stopfireRollShot(player)
--- Il difensore tira: basi pronte (shoot_basiPronte, riuso da
--- 7_shoot) x soglia arma (weapons.json), con eccezione RAFFICA
--- (+50% dadi). Colpi=0 -> chiude con contatto. Colpi>0 -> applica
--- perdite (shoot_applyHits) e passa al subStep MORALE.
 -- ============================================================
-function charge_stopfireRollShot(player)
+function charge_stopfireRollShot(player, slot)
+end
+-- ============================================================
+-- FUNZIONE: charge_stopfireRollMorale(player)
+-- ============================================================
+function charge_stopfireRollMorale(player)
+    local cur = IEF_STOPFIRE_CURRENT
+    if not cur or cur.subStep ~= "MORALE" then return end
+    local attackerSlot = (cur.slot == 1) and 2 or 1
+    if main_getArmyByColor(player) ~= attackerSlot then return end
+    engine_diceCameraZoom(player, attackerSlot)
+end
+-- ============================================================
+-- FUNZIONE: charge_stopfireDoRoll(player)
+-- ============================================================
+function charge_stopfireDoRoll(player, slot)
     local cur = IEF_STOPFIRE_CURRENT
     if not cur or cur.subStep ~= "TIRO" then return end
     local elemento = cur.elemento
+    local faseOrigine = ENGINE.phase
 
     local defenderBases = charge_getUnitBases(elemento.targetKey)
     local attackerBases = charge_getUnitBases(elemento.attackerKey)
@@ -1603,9 +1722,10 @@ function charge_stopfireRollShot(player)
     local armi = defenderMeta and defenderMeta.armi or {}
     local capabilities = defenderMeta and defenderMeta.capabilities or {}
 
+    local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
     local weapon = nil
     for _, arma in ipairs(armi) do
-        local w = IEF_DATA.weapons and IEF_DATA.weapons[arma]
+        local w = weaponsDict and weaponsDict[arma]
         if w and w.range_inches and w.range_inches > 0 then weapon = w; break end
     end
     if not weapon then
@@ -1635,42 +1755,103 @@ function charge_stopfireRollShot(player)
     end
 
     local soglia = weapon.hit_threshold or 4
+    local mods = weapon.modifiers or {}
+
+    local attackerMeta = charge_getUnitMeta(attackerBases[1])
+    local attackerArmi = attackerMeta and attackerMeta.armi or {}
+    local haScudo = false
+    for _, a in ipairs(attackerArmi) do
+        if a == "SCUDO" then haScudo = true end
+    end
+    if not haScudo and mods.vs_bersaglio_senza_scudo then
+        soglia = soglia - mods.vs_bersaglio_senza_scudo
+    end
+
+    local attackerTipo = attackerMeta and attackerMeta.unitType
+    local function tipoInLista(tipo, lista)
+        for t in lista:gmatch("[^_]+") do if t == tipo then return true end end
+        return false
+    end
+    for chiave, valore in pairs(mods) do
+        local listaTipi = chiave:match("^vs_(.+)$")
+        if listaTipi and listaTipi ~= "bersaglio_senza_scudo" and listaTipi ~= "unita_in_copertura" then
+            if tipoInLista(attackerTipo, listaTipi) then
+                soglia = soglia - valore
+            end
+        end
+    end
+
+    IEF_DICE_ROLL_TRY[slot] = { dadi = numDadi, soglia = soglia }
 
     printToAll(string.format("[TIRO D'ARRESTO] %s tira %dD6 vs %s (soglia %d+)", elemento.targetKey, numDadi, elemento.attackerKey, soglia), {r=1,g=0.85,b=0.2})
 
-    engine_rollDice(numDadi, soglia, function(hits, results)
-        if hits > 0 then
-            local attackerSlot = (cur.slot == 1) and 2 or 1
-            local attackerMeta = charge_getUnitMeta(attackerBases[1])
-            shoot_applyHits(attackerMeta, attackerSlot, hits, player, attackerBases[1])
-            cur.subStep = "MORALE"
-            charge_stopfireRedraw()
+    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        engine_diceCameraReturn(player, slot, faseOrigine)
+
+        local live = IEF_STOPFIRE_CURRENT
+        if not live or live.elemento ~= elemento then return end
+
+        if successi and successi > 0 then
+            local attackerSlot = (slot == 1) and 2 or 1
+            local baseInfo = main_parseNickname(attackerBases[1].getName())
+            local attackerUnitPrima = baseInfo and main_findUnit(attackerSlot, baseInfo.unitType, baseInfo.unitNumber)
+            local basiPrima = attackerUnitPrima and main_basiPresentiUnita(attackerUnitPrima)
+
+            if attackerUnitPrima then
+                shoot_applyHits(attackerUnitPrima, attackerSlot, successi, player, attackerBases[1])
+            end
+
+            Wait.time(function()
+                callHandler("deployment_scanTable")
+                local unitaAgg = baseInfo and main_findUnit(attackerSlot, baseInfo.unitType, baseInfo.unitNumber)
+                local basiDopo = unitaAgg and main_basiPresentiUnita(unitaAgg)
+
+                print(string.format("[DEBUG STOPFIRE MORALE] basiPrima=%s basiDopo=%s", tostring(basiPrima), tostring(basiDopo)))
+
+                if basiPrima and basiDopo and basiDopo < basiPrima then
+                    live.subStep = "MORALE"
+                    charge_stopfireRedraw()
+                else
+                    elemento.outcome = CHARGE_OUTCOME.OK
+                    elemento.step = CHARGE_STEP.CLO
+                    live.subStep = "ESCI"
+                    charge_stopfireRedraw()
+                end
+            end, 3)
         else
             printToAll("[TIRO D'ARRESTO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
             elemento.outcome = CHARGE_OUTCOME.OK
             elemento.step = CHARGE_STEP.CLO
-            charge_stopfireEnd()
+            local live2 = IEF_STOPFIRE_CURRENT
+            if live2 then
+                live2.subStep = "ESCI"
+                charge_stopfireRedraw()
+            end
         end
     end)
 end
-
 -- ============================================================
--- FUNZIONE: charge_stopfireRollMorale(player)
--- L'attaccante testa il morale (main_testMorale) per chiudere il
--- contatto dopo le perdite subite dal tiro.
+-- FUNZIONE: charge_stopfireDoMoraleq(player, slot)
 -- ============================================================
-function charge_stopfireRollMorale(player)
+function charge_stopfireDoMorale(player, slot)
     local cur = IEF_STOPFIRE_CURRENT
     if not cur or cur.subStep ~= "MORALE" then return end
     local elemento = cur.elemento
 
     main_testMorale(elemento.attackerKey, player, "per_caricare", 0, function(esito, somma, soglia, effetto)
-        if esito == "SUPERATO" then
-            elemento.outcome = CHARGE_OUTCOME.OK
-        else
-            elemento.outcome = CHARGE_OUTCOME.ANN
-        end
+        local live = IEF_STOPFIRE_CURRENT
+        if not live or live.elemento ~= elemento then return end
+
+        elemento.outcome = (esito == "SUPERATO") and CHARGE_OUTCOME.OK or CHARGE_OUTCOME.ANN
         elemento.step = CHARGE_STEP.CLO
         charge_stopfireEnd()
     end)
+end
+
+function charge_stopfireExitClick(player, value, id)
+    local cur = IEF_STOPFIRE_CURRENT
+    if not cur or cur.subStep ~= "ESCI" then return end
+    local attackerSlot = (cur.slot == 1) and 2 or 1
+    if main_getArmyByColor(player) ~= attackerSlot then return end
+    charge_stopfireEnd()
 end

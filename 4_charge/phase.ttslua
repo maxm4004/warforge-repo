@@ -25,7 +25,7 @@ function charge_phase()
             before = "before_charge_react",
             after  = "after_charge_react",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
-            render = "chargeReactDynamic",
+            render = "2BtnClickChargeList",
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
@@ -33,7 +33,25 @@ function charge_phase()
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Reazioni Completate", textColor="White", color="Green", callback="charge_react_btn_army2" },
             },
             transitions = {
+                { to="CHARGE_STOPFIRE", conditions={ COND.BOTH_PLAYERS_SELECTED } },
                 { to="CHARGE_AUTO", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+            }
+        },
+        CHARGE_STOPFIRE = {
+            title = "TIRO DI ARRESTO E MORALE",
+            desc  = "PROVA A FERMARE LE CARICHE SUBITE OPPURE TESTA IL MORALE PER ARRIVARE A CONTATTO",
+            before = "before_charge_stopfire",
+            after  = "after_charge_stopfire",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
+            render = "chargeReactDynamic",
+            enforceOwnership = true,
+            inputMode = "OWNER",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira i Dadi", textColor="White", color="Red", callback="??????" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Morale", textColor="White", color="Green",    callback="??????" },
+            },
+            transitions = {
+                { to="CHARGE_REACT", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         },
         CHARGE_AUTO = {

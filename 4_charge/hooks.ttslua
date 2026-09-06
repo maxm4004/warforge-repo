@@ -13,11 +13,11 @@ function before_charge_declare(phaseName, phase)
     charge_close(1)
     charge_close(2)
 
+    UI.setAttribute("charge_stopfire_panel", "active", "true")
     UI.setAttribute("charge_attack_list_army1", "active", "true")
     UI.setAttribute("charge_attack_list_army2", "active", "true")
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
-    UI.setAttribute("charge_stopfire_panel", "active", "false")
 
     callHandler("updateCenterPanel")
 end
