@@ -1,6 +1,7 @@
 -- ============================================================
 -- rulesets/imperifeudi/4_charge/state.ttslua
--- Stato FASE CARICA (CHARGE_DECLARE + CHARGE_RESOLVE)
+-- Stato FASE CARICA — 4 fasi: CHARGE_DECLARE, CHARGE_REACT,
+-- CHARGE_STOPFIRE, CHARGE_AUTO.
 -- ============================================================
 
 -- ============================================================
@@ -35,7 +36,7 @@ CHARGE_STEP = {
 CHARGE_OUTCOME = {
     OK  = "Riuscita",
     EVI = "Evitata",       -- bersaglio ha evaso
-    ANN = "Annullata",     -- test morale fallito in dichiarazione/limitazioni
+    ANN = "Fermata",     -- test morale fallito in dichiarazione/limitazioni/Tiro d'Arresto
 }
 
 -- ============================================================
@@ -60,16 +61,12 @@ UNIT_TYPES = {
 
 -- Coda cariche dichiarate, una lista indipendente per esercito.
 -- Ogni elemento: { attackerKey, targetKey, step, response,
---                   outcome, flankCharge, pivotInches, distInches }
+--                   outcome, controCarica, flankCharge, pivotInches, distInches }
 -- step: CHARGE_STEP.DEC | CHARGE_STEP.REA | CHARGE_STEP.CLO
 -- response: nil | REACTION_TYPE.COC/.EVA/.FER/.TIR
 -- Nessun indice sequenziale: ogni elemento è risolvibile in
 -- qualsiasi ordine tramite le liste Attacco/Difesa (righe cliccabili).
 IEF_CHARGE_QUEUE = IEF_CHARGE_QUEUE or { [1] = {}, [2] = {} }
-
--- Lock globale: una sola risposta-nemico alla volta sul tavolo.
--- nil = nessuna risposta in sospeso, altrimenti { slot, index }
-IEF_CHARGE_ACTIVE_RESPONSE = IEF_CHARGE_ACTIVE_RESPONSE or nil
 
 -- Proposta di risposta in attesa di scelta nel popup
 -- (charge_response_panel), una per esercito:
@@ -82,14 +79,15 @@ IEF_CHARGE_RESPONSE_PENDING = IEF_CHARGE_RESPONSE_PENDING or {}
 -- collegare quando si costruirà quel controllo.
 IEF_UNIT_NO_MOVE_NEXT_TURN = IEF_UNIT_NO_MOVE_NEXT_TURN or {}
 
--- Pannelli 3D di risposta attivi, indicizzati per unitKey del bersaglio
-IEF_CHARGE_RESPONSE_UNITS = IEF_CHARGE_RESPONSE_UNITS or {}
-
 -- Sessione di dichiarazione interattiva (pannello 3D Perno Sx/Dx
 -- + Check Carica, agganciato alla base), una per esercito:
 -- [slot] = { attackerKey, myBases, startPos={guid=Vector},
 --            startRot={guid=Vector}, pivotUsed, targetKey,
 --            distInches, panel3DObj, activePlayer }
 IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
--- Coda cariche con Tiro d'Arresto da processare una alla volta in
--- CHARGE_AUTO, popolata da charge_stopfireInit().
+
+-- Carica attualmente in risoluzione nella fase CHARGE_STOPFIRE:
+-- nil = nessuna in corso, altrimenti { elemento, slot, subStep }
+-- slot = esercito del DIFENSORE/tiratore.
+-- subStep: "TIRO" | "MORALE" | "ESCI"
+IEF_STOPFIRE_CURRENT = IEF_STOPFIRE_CURRENT or nil

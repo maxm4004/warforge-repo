@@ -347,7 +347,7 @@ function debug_hide()
 end
 
 function debug_tag()
-local listaOggetti = getObjectsWithAllTags({main_ArmySlotByColor("Green")})
+local listaOggetti = getObjectsWithAllTags({main_ArmyByColor("Green")})
      for _, value in ipairs(listaOggetti) do
         value.setInvisibleTo({"Red"})
      end
@@ -627,4 +627,27 @@ local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
             end    
         end
     end
+end
+-- ============================================================
+-- DEBUG: svuota davvero la coda cariche (entrambi gli eserciti) —
+-- /execute debug_chargeClearQueue()
+-- ============================================================
+function debug_chargeClearQueue()
+
+    IEF_CHARGE_QUEUE[1] = {}
+    IEF_CHARGE_QUEUE[2] = {}
+    IEF_CHARGE_RESPONSE_PENDING[1] = nil
+    IEF_CHARGE_RESPONSE_PENDING[2] = nil
+    
+    callHandler("buildUI")
+    callHandler("updateCenterPanel")
+    print("[DEBUG] Coda cariche svuotata (entrambi gli eserciti)")
+end
+-- ============================================================
+-- DEBUG: debug_moveToPhase(phaseName)
+-- /execute debug_moveToPhase("CHARGE_DECLARE")
+-- ============================================================
+function debug_moveToPhase(phaseName)
+    main_goToPhase(phaseName)    
+    callHandler("updateCenterPanel")
 end

@@ -28,8 +28,8 @@ function main_updateCenterPanel()
         local n1 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army1.nome or "Army 1")
         local n2 = (DEPLOYMENT and DEPLOYMENT.urls and DEPLOYMENT.urls.army1 and DEPLOYMENT.urls.army2.nome or "Army 2")
 
-        UI.setAttribute("army1", "text",  n1)
-        UI.setAttribute("army2", "text",  n2)
+        UI.setAttribute("army1", "text",  ARMY[1].name)
+        UI.setAttribute("army2", "text",  ARMY[2].name)
         UI.setAttribute("army1", "color", colorArmy1 or COLOR.NOARMY)
         UI.setAttribute("army2", "color", colorArmy2 or COLOR.NOARMY)
     end)
@@ -264,7 +264,7 @@ end
 -- ============================================================
 -- FUNZIONE: getArmySlotByColor()
 -- ============================================================
-function main_ArmySlotByColor(color)
+function main_ArmyByColor(color)
     if color == COLOR.ARMY1 then return "Army1" end
     if color == COLOR.ARMY2 then return "Army2" end
     return nil
@@ -337,7 +337,7 @@ function main_resetTurnForPhase()
     if DEBUG then print("resetTurnForPhase") end
     if not DICE_CONTEST or not DICE_CONTEST.initiative then return end
 
-    local army = main_ArmySlotByColor(DICE_CONTEST.initiative.color)
+    local army = main_ArmyByColor(DICE_CONTEST.initiative.color)
     TURN.phase          = ENGINE.phase
     TURN.firstArmy      = army
     TURN.activeArmy     = army
@@ -396,9 +396,7 @@ end
 -- FUNZIONE: advanceTurnAfterClick()
 -- ============================================================
 function main_advanceTurnAfterClick(slot)
-
-    print("[ADV] slot=" .. tostring(slot) .. " activeArmy=" .. tostring(TURN and TURN.activeArmy))
-    
+   
     if slot == BUTTONS.BTN_ARMY1 then
         TURN.completed.Army1 = true
     end
@@ -430,6 +428,7 @@ end
 -- ============================================================
 function main_canUseButton(slot, player, value, id, button, phase)
 
+    print("main_canUseButton")
     local mode = phase and phase.inputMode or "FREE"
 
     -- ========================================================
@@ -446,14 +445,14 @@ function main_canUseButton(slot, player, value, id, button, phase)
 
         if slot == BUTTONS.BTN_ARMY1 then
             if not player or player.color ~= COLOR.ARMY1 then
-                warningToColor("Non è un tuo bottone", player, "Yellow")
+                warningToColor("Non è possibile usare questo pulsante", player, "Yellow")
                 return false
             end
         end
 
         if slot == BUTTONS.BTN_ARMY2 then
             if not player or player.color ~= COLOR.ARMY2 then
-                warningToColor("Non è un tuo bottone", player, "Yellow")
+                warningToColor("Non è possibile usare questo pulsante", player, "Yellow")
                 return false
             end
         end
@@ -483,7 +482,7 @@ end
 -- ============================================================
 -- FUNZIONE: prettyPrintTable()
 -- ============================================================
-function main_prettyPrintTable(t, indent)
+function printTable(t, indent)
     indent = indent or 0
     if type(t) ~= "table" then
         print(tostring(t))
@@ -493,7 +492,7 @@ function main_prettyPrintTable(t, indent)
         local prefix = string.rep("  ", indent) .. tostring(k) .. ": "
         if type(v) == "table" then
             print(prefix)
-            main_prettyPrintTable(v, indent + 1)
+            printTable(v, indent + 1)
         else
             print(prefix .. tostring(v))
         end
@@ -601,10 +600,6 @@ function main_aggiornaPopupUnita(slot, tipo, unita_num)
     UI.setAttribute(p .. "_figure", "text", "Figs:   " .. fig_att .. " / " .. fig_max)
     UI.setAttribute(p .. "_salute", "text", "Status: " .. salute)
 
-    print("[POPUP] fig_att=" .. tostring(fig_att) .. " fig_max=" .. tostring(fig_max))
-    for _, base in ipairs(unita.basi) do
-        print("[POPUP] base=" .. tostring(base.nickname) .. " wounds=" .. tostring(wounds_data and wounds_data[base.nickname] or 0))
-    end
 end
 -- ============================================================
 -- FUNZIONE: mostraPopupUnita()
@@ -1982,7 +1977,7 @@ function main_testMorale(unitKey, player, situazione, modificatori, callback)
         local somma = risultati[1] + risultati[2] + (modificatori or 0)
 
         Wait.time(function()
-            local esito = (somma >= soglia) and "SUPERATO" or "FALLITO"
+            local esito = (somma >= soglia) and MORALE_RESULT.OK or MORALE_RESULT.KO
             local effetto = main_getMoraleEffect(esito, situazione)
 
             printToColor(string.format("[MORALE] %s: %d+%d%s = %d vs soglia %d -> %s",
@@ -2151,4 +2146,25 @@ function recovery(obj, unit, pos, rot)
         height = 400,
         font_size = 60,
     })
+end
+-- ============================================================
+-- FUNZIONE: recovery()
+-- ============================================================
+function main_decodeUnitTypeLabel(unitKey)
+    if not unitKey then return "Sconosciuto" end
+    for segmento in unitKey:gmatch("[^_]+") do
+        if UNIT_TYPE_LABELS[segmento] then
+            return UNIT_TYPE_LABELS[segmento]
+        end
+    end
+    return "Sconosciuto"
+end
+-- ============================================================
+-- FUNZIONE: recovery()
+-- ============================================================
+function main_decodeArmyCodeLabel(unitKey)
+    if not unitKey then return "Sconosciuto" end
+    local codice = unitKey:match("^([^_]+)")
+    if not codice then return "Sconosciuto" end
+    return ARMIES_LABELS[codice] or codice
 end

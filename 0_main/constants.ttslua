@@ -9,15 +9,16 @@ ACTION = {
 }
 
 COND = {
-    BOTH_PLAYERS_SELECTED  = "both_players_selected",
-    CONFIRM_READY          = "confirm_ready",
-    CONFIRM_IMMEDIATE      = "confirm_immediate",
-    AUTO_ADVANCE           = "auto_advance",
-    REQUIREMENT_MET        = "requirement_met",
-    WINNER                 = "winner",
-    ASSIGNMENT             = "assignment",
-    CHARGE_QUEUE_EMPTY     = "charge_queue_empty",
-    CHARGE_QUEUE_NOT_EMPTY = "charge_queue_not_empty"
+    BOTH_PLAYERS_SELECTED       = "both_players_selected",
+    CONFIRM_READY                = "confirm_ready",
+    CONFIRM_IMMEDIATE            = "confirm_immediate",
+    AUTO_ADVANCE                 = "auto_advance",
+    REQUIREMENT_MET              = "requirement_met",
+    WINNER                       = "winner",
+    ASSIGNMENT                   = "assignment",
+    CHARGE_QUEUE_EMPTY           = "charge_queue_empty",
+    CHARGE_QUEUE_NOT_EMPTY       = "charge_queue_not_empty",
+    CHARGE_HAS_STOPFIRE_PENDING  = "charge_has_stopfire_pending"
 }
 
 COLOR = {
@@ -43,7 +44,9 @@ PHASE = {
     DEPLOY_SPAWN     = "DEPLOY_SPAWN",
     DEPLOY_POSITION  = "DEPLOY_POSITION",
     CHARGE_DECLARE   = "CHARGE_DECLARE",
-    CHARGE_RESOLVE   = "CHARGE_RESOLVE",
+    CHARGE_REACT     = "CHARGE_REACT",
+    CHARGE_STOPFIRE  = "CHARGE_STOPFIRE",
+    CHARGE_AUTO      = "CHARGE_AUTO",
     INITIATIVE_ROLL  = "INITIATIVE_ROLL",
     INITIATIVE_CHOICE = "INITIATIVE_CHOICE",
     MOVE             = "MOVE",

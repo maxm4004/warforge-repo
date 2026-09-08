@@ -7,16 +7,22 @@ function charge_phase()
             before = "before_charge_declare",
             after  = "after_charge_declare",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
-            render = "2BtnClickChargeList",
+            render = "2BtnClickChargeAttackList",
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
                 BTN_ARMY1 = { action="ARMY1_CLICK", label="Dichiarazioni Completate", textColor="White", color="Red",   callback="charge_declare_btn_army1" },
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Dichiarazioni Completate", textColor="White", color="Green", callback="charge_declare_btn_army2" },
             },
+            -- Condizione specifica (coda NOT_EMPTY) prima di quella
+            -- generica: a parità di BOTH_PLAYERS_SELECTED, la prima
+            -- transizione con tutte le condizioni vere vince — se non
+            -- distinte, CHARGE_REACT vincerebbe sempre anche a coda
+            -- vuota (o INITIATIVE_ROLL diventerebbe irraggiungibile,
+            -- a seconda dell'ordine).
             transitions = {
-                { to="CHARGE_REACT",    conditions={ COND.BOTH_PLAYERS_SELECTED } },
-                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED } },
+                { to="CHARGE_REACT",    conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_QUEUE_NOT_EMPTY } },
+                { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_QUEUE_EMPTY } },
             }
         },
         CHARGE_REACT = {
@@ -25,16 +31,24 @@ function charge_phase()
             before = "before_charge_react",
             after  = "after_charge_react",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
-            render = "2BtnClickChargeList",
+            render = "2BtnClickChargeDefenseList",
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
                 BTN_ARMY1 = { action="ARMY1_CLICK", label="Reazioni Completate", textColor="White", color="Red",   callback="charge_react_btn_army1" },
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Reazioni Completate", textColor="White", color="Green", callback="charge_react_btn_army2" },
             },
+            -- NOTA: il salto a CHARGE_STOPFIRE nella pratica avviene
+            -- via main_goToPhase diretto da charge_responseStopfire
+            -- (appena il player sceglie Tiro d'Arresto nel popup),
+            -- non tramite questi bottoni — questa transizione resta
+            -- dichiarata per completezza/validazione del motore e
+            -- come rete di sicurezza se mai richiamata da un'azione
+            -- standard. Condizione specifica prima di quella generica,
+            -- stesso principio di CHARGE_DECLARE sopra.
             transitions = {
-                { to="CHARGE_STOPFIRE", conditions={ COND.BOTH_PLAYERS_SELECTED } },
-                { to="CHARGE_AUTO", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+                { to="CHARGE_STOPFIRE", conditions={ COND.BOTH_PLAYERS_SELECTED, COND.CHARGE_HAS_STOPFIRE_PENDING } },
+                { to="CHARGE_AUTO",     conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         },
         CHARGE_STOPFIRE = {
@@ -43,24 +57,24 @@ function charge_phase()
             before = "before_charge_stopfire",
             after  = "after_charge_stopfire",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
-            render = "chargeReactDynamic",
+            render = "chargeStopfire",
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira i Dadi", textColor="White", color="Red", callback="??????" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Morale", textColor="White", color="Green",    callback="??????" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="in attesa...", textColor="White", color="Red",   callback="charge_stopfire_btn_noop" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="in attesa...", textColor="White", color="Green", callback="charge_stopfire_btn_noop" },
             },
             transitions = {
                 { to="CHARGE_REACT", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         },
         CHARGE_AUTO = {
-            title = "FASE 1: ESECUZIONE AUTOMATICA",
-            desc  = "CONTRO-CARICHE RECIPROCHE IN RISOLUZIONE",
+            title = "FASE 1: MOVIMENTI DI CARICA AUTOMATICI",
+            desc  = "LE UNITA' CHE HANNO DICHIARATO LA CARICA ARRIVANO A CONTATTO CON IL NEMICO",
             before = "before_charge_auto",
             after  = "after_charge_auto",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
-            render = "2BtnClick",
+            render = "2BtnClickChargeAttackList",
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {

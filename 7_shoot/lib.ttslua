@@ -915,8 +915,7 @@ function shoot_shootReset()
     }
 end
 -- ============================================================
--- FUNZIONE: lionheart_applyHits(unita, slot, hits, player)
--- Applica N ferite all'unità distribuendole sulle basi
+-- FUNZIONE: shoot_applyHits(unita, slot, hits, player, targetObj)
 -- ============================================================
 function shoot_applyHits(unita, slot, hits, player, targetObj)
 

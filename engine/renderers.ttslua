@@ -129,10 +129,39 @@ end
 -- ============================================================
 -- RENDERER: 2BtnClickChargeList
 -- ============================================================
-RENDERERS["2BtnClickChargeList"] = function(phase)
+RENDERERS["2BtnClickChargeAttackList"] = function(phase)
     UI.setAttribute("panelBtnUp",   "active", "true")
     UI.setAttribute("panelBtnDown", "active", "false")
     UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
     UI.setAttribute("panelDices",   "active", "false")
-    UI.setAttribute("charge_declared_list", "active", "true")
+    UI.setAttribute("charge_attack_list_army1", "active", "true")
+    UI.setAttribute("charge_attack_list_army2", "active", "true")
+    UI.setAttribute("charge_defense_list_army1", "active", "false") 
+    UI.setAttribute("charge_defense_list_army2", "active", "false")
+    UI.setAttribute("charge_attack_list_army1", "offsetXY", "0 110")
+    UI.setAttribute("charge_attack_list_army2", "offsetXY", "0 110")    
+end
+-- ============================================================
+-- RENDERER: chargeStopfireOnly
+-- ============================================================
+RENDERERS["2BtnClickChargeDefenseList"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
+    UI.setAttribute("panelDices",   "active", "false")
+    UI.setAttribute("charge_attack_list_army1", "active", "false")
+    UI.setAttribute("charge_attack_list_army2", "active", "false")
+    UI.setAttribute("charge_defense_list_army1", "active", "true")
+    UI.setAttribute("charge_defense_list_army2", "active", "true")
+    UI.setAttribute("charge_defense_list_army1", "offsetXY", "0 110")
+    UI.setAttribute("charge_defense_list_army2", "offsetXY", "0 110")
+end
+-- ============================================================
+-- RENDERER: chargeStopfire
+-- ============================================================
+RENDERERS["chargeStopfire"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelDices",   "active", "false")
+    UI.setAttribute("panelBtnUp", "offsetXY", "0 -223")
 end

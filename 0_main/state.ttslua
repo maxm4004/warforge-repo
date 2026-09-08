@@ -99,3 +99,32 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
     ["ArmyBlock"]    = { position = ArmyBlockPos,     pitch = 60, yaw = ArmyYaw, distance = 60 },
     ["ArmyHome"]      = { position = ArmyHomePos,      pitch = 40, yaw = ArmyYaw, distance = 80 },
 }
+
+ UNIT_TYPE_LABELS = {
+    KN  = "Cavalieri",
+    CP  = "Cavalleria Pesante",
+    CL  = "Cavalleria Leggera",
+    FP  = "Fanteria Pesante",
+    FM  = "Fanteria Media",
+    FL  = "Fanteria Leggera",
+    ART = "Artiglieria",
+    EL  = "Elefanti",
+    GEN = "Generale",
+}
+
+ARMIES_LABELS = {
+["ANG"] = "Anglosassone",					
+["VIK"] = "Vichinga",				
+["NOR"] = "Normanna",				
+["FRA"] = "Franca",			
+["IRL"] = "Irlandesi",		
+["COM"] = "Italiana",			
+["LON"] = "Longobarda",				
+["BIZ"] = "Bizantina",			
+["CRO"] = "Crociata", 				
+["SAS"] = "Sassanida", 				
+["TED"] = "Tedesca",
+["SEL"] = "Turca", 			
+["TEU"] = "Teutonica", 				
+["RUS"] = "Russa",	
+}

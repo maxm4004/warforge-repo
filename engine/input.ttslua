@@ -39,6 +39,7 @@ end
 -- FUNZIONE: onBtnArmy1()
 -- ============================================================
 function onBtnArmy1(player, value, id)
+    print("onBtnArmy1")
     engine_handleButton("BTN_ARMY1", player, value, id)
 end
 
@@ -46,6 +47,7 @@ end
 -- FUNZIONE: onBtnArmy2()
 -- ============================================================
 function onBtnArmy2(player, value, id)
+    print("onBtnArmy2")
     engine_handleButton("BTN_ARMY2", player, value, id)
 end
 

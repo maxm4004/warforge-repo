@@ -1,4 +1,10 @@
 -- ============================================================
+-- 4_charge/hooks.ttslua
+-- Before/After hook delle 4 fasi:
+-- CHARGE_DECLARE -> CHARGE_REACT (<-> CHARGE_STOPFIRE) -> CHARGE_AUTO
+-- ============================================================
+
+-- ============================================================
 -- FUNZIONE: before_charge_declare(phaseName, phase)
 -- Reset coda cariche di entrambi gli eserciti, mostra le liste
 -- "LE MIE CARICHE", nasconde "CARICHE SUBITE" e il pannello
@@ -13,12 +19,10 @@ function before_charge_declare(phaseName, phase)
     charge_close(1)
     charge_close(2)
 
-    UI.setAttribute("charge_stopfire_panel", "active", "true")
     UI.setAttribute("charge_attack_list_army1", "active", "true")
     UI.setAttribute("charge_attack_list_army2", "active", "true")
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
-
     callHandler("updateCenterPanel")
 end
 
@@ -27,11 +31,14 @@ end
 -- Arbitra i conflitti (charge_resolveConflicts) ora che tutte le
 -- dichiarazioni di entrambi gli eserciti sono note: marca
 -- controCarica=true sulle coppie reciproche, scarta i conflitti
--- di doppio ruolo per prossimità. Resta a fine Fase 1, prima che
--- CHARGE_REACT/CHARGE_AUTO leggano la coda.
+-- di doppio ruolo per prossimità. Resta a fine Fase 1-Dichiarazione,
+-- prima che CHARGE_REACT legga la coda. Nasconde anche
+-- charge_declared_list (mostrata dal renderer 2BtnClickChargeList
+-- di questa fase), che non serve più nelle fasi successive.
 -- ============================================================
 function after_charge_declare(phaseName, phase)
     charge_resolveConflicts()
+    UI.setAttribute("charge_declared_list", "active", "false")
 end
 
 -- ============================================================
@@ -39,7 +46,10 @@ end
 -- Mostra la lista "CARICHE SUBITE" (tutte le righe, comprese le
 -- controCarica=true — sola lettura per quelle, charge_defenseRowClick
 -- le gestisce con solo zoom). Nessuna fisica in questa fase: solo
--- scelta/registrazione delle reazioni (elemento.response).
+-- scelta/registrazione delle reazioni (elemento.response). Chiamata
+-- anche al RIENTRO da CHARGE_STOPFIRE (loop), quindi il reset di
+-- TURN.completed qui è ciò che impedisce di richiudere subito la
+-- fase senza una nuova conferma esplicita dei player.
 -- ============================================================
 function before_charge_react(phaseName, phase)
     TURN.phase = phaseName
@@ -49,21 +59,52 @@ function before_charge_react(phaseName, phase)
     UI.setAttribute("charge_attack_list_army2", "active", "false")
     UI.setAttribute("charge_defense_list_army1", "active", "true")
     UI.setAttribute("charge_defense_list_army2", "active", "true")
-     
-    charge_getDefenseListPanelXml(1)
-    charge_getDefenseListPanelXml(2)
 
+    callHandler("engine_diceClearLastRoll", 1)
+    callHandler("engine_diceClearLastRoll", 2)
+    
     callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
 
 -- ============================================================
 -- FUNZIONE: after_charge_react(phaseName, phase)
--- Nessuna pulizia: le liste Difesa restano visibili in CHARGE_AUTO
--- per mostrare l'esito finale di ciascuna carica mentre si risolve.
+-- Nessuna pulizia liste: restano visibili sia se si passa a
+-- CHARGE_STOPFIRE (si rientrerà qui) sia a CHARGE_AUTO (mostrano
+-- l'esito finale mentre si risolve).
 -- ============================================================
 function after_charge_react(phaseName, phase)
+end
+
+-- ============================================================
+-- FUNZIONE: before_charge_stopfire(phaseName, phase)
+-- Trova la carica con Tiro d'Arresto pendente (response=TIR,
+-- step~=CLO) — ce n'è sempre esattamente una appena scelta nel
+-- popup di reazione, dato che il salto qui avviene subito dopo
+-- charge_responseStopfire — e avvia la sua risoluzione.
+-- ============================================================
+function before_charge_stopfire(phaseName, phase)
+    TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
+
+    for slot = 1, 2 do
+        local coda = IEF_CHARGE_QUEUE[slot] or {}
+        for i = 1, #coda do
+            local e = coda[i]
+            if e.response == REACTION_TYPE.TIR and e.step ~= CHARGE_STEP.CLO then
+                    charge_stopfireBegin((slot == 1) and 2 or 1, e)
+                return
+            end
+        end
+    end
+    main_goToPhase("CHARGE_REACT")
+end
+
+-- ============================================================
+-- FUNZIONE: after_charge_stopfire(phaseName, phase)
+-- ============================================================
+function after_charge_stopfire(phaseName, phase)
+
 end
 
 -- ============================================================
@@ -71,8 +112,7 @@ end
 -- Esegue in blocco le automatiche pure: reciproche di Fase 1
 -- (controCarica=true) e Contro-carica/Evasione scelte come
 -- reazione in CHARGE_REACT. Il Tiro d'Arresto è già stato
--- risolto interamente in CHARGE_REACT (charge_stopfireBegin),
--- non compare più qui.
+-- risolto interamente in CHARGE_STOPFIRE, non compare più qui.
 -- ============================================================
 function before_charge_auto(phaseName, phase)
     TURN.phase = phaseName
@@ -93,6 +133,7 @@ function before_charge_auto(phaseName, phase)
 
     callHandler("buildUI")
 end
+
 -- ============================================================
 -- FUNZIONE: after_charge_auto(phaseName, phase)
 -- Pulizia UI di fine Fase 1 intera: nasconde tutte le liste e il
@@ -103,6 +144,5 @@ function after_charge_auto(phaseName, phase)
     UI.setAttribute("charge_attack_list_army2", "active", "false")
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
-    UI.setAttribute("charge_stopfire_panel", "active", "false")
     callHandler("updateCenterPanel")
 end

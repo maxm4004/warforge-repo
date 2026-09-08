@@ -535,6 +535,22 @@ function engine_diceRoll_start(player)
         return
     end    
 
+    -- 4_charge/CHARGE_STOPFIRE: Tiro d'Arresto (difensore) e Test
+    -- Morale (attaccante) hanno ciascuno il proprio entry point
+    -- dedicato, dispatchati in base al subStep corrente e a chi
+    -- clicca (IEF_STOPFIRE_CURRENT.slot = difensore).
+    if ENGINE.phase == "CHARGE_STOPFIRE" and IEF_STOPFIRE_CURRENT then
+        if IEF_STOPFIRE_CURRENT.subStep == "TIRO" and IEF_STOPFIRE_CURRENT.slot == slot then
+            charge_stopfireDoRoll(player, slot)
+            return
+        end
+        if IEF_STOPFIRE_CURRENT.subStep == "MORALE" and IEF_STOPFIRE_CURRENT.slot ~= slot then
+            charge_stopfireDoMorale(player, slot)
+            return
+        end
+        return
+    end
+
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
     engine_diceCameraReturn(player, slot)
     end)
@@ -556,7 +572,7 @@ function engine_diceCameraZoom(player, slot)
             ENGINE.phase == "FIELD_ROLL" or 
                     ENGINE.phase == "FIELD_BLOCK" or 
                             ENGINE.phase == "INITIATIVE_ROLL" or
-                                    ENGINE.phase == "CHARGE_RESOLVE" then
+                                    ENGINE.phase == "CHARGE_STOPFIRE" then
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)              
    end
 end
@@ -595,7 +611,7 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
     end
 
     if faseOrigine == "INITIATIVE_ROLL" or
-            faseOrigine == "CHARGE_RESOLVE" then
+            faseOrigine == "CHARGE_STOPFIRE" then
                 Wait.time(function()
                     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
                 end, 2)

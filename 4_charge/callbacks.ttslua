@@ -16,6 +16,11 @@ function charge_declare_btn_army2(player, value, id, buttonConfig)
     return true
 end
 
+-- ============================================================
+-- FUNZIONE: charge_react_btn_army1(player, value, id, buttonConfig)
+-- "Reazioni Completate" per Army1 — blocca se ci sono ancora
+-- righe Difesa senza risposta o un Tiro d'Arresto in corso.
+-- ============================================================
 function charge_react_btn_army1(player, value, id, buttonConfig)
     if charge_reactQueueHasPending() then
         printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
@@ -25,6 +30,9 @@ function charge_react_btn_army1(player, value, id, buttonConfig)
     return true
 end
 
+-- ============================================================
+-- FUNZIONE: charge_react_btn_army2(player, value, id, buttonConfig)
+-- ============================================================
 function charge_react_btn_army2(player, value, id, buttonConfig)
     if charge_reactQueueHasPending() then
         printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
@@ -32,6 +40,35 @@ function charge_react_btn_army2(player, value, id, buttonConfig)
     end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfire_btn_noop(player, value, id, buttonConfig)
+-- ============================================================
+function charge_stopfire_btn_noop(player, value, id, buttonConfig)
+    print("charge_stopfire_btn_noop")
+    print(player," ", value," ", id)
+
+    local slot = main_SlotByColor(player.color)
+    local cur = IEF_STOPFIRE_CURRENT
+    if not cur then return end
+    local defenderSlot = cur.slot
+    local attackerSlot = (cur.slot == 1) and 2 or 1
+
+    print("defenderSlot: ", defenderSlot)
+    print("attackerSlot: ", attackerSlot)
+
+            if slot == defenderSlot then
+                charge_stopfireBeginFromClick(player)
+            else
+                if cur.subStep == "ESCI" then 
+                    charge_stopfireExitClick(player)
+                else
+                    charge_stopfireRollMorale(player)
+                end 
+            end
+
+    return false
 end
 
 -- ============================================================
@@ -49,4 +86,3 @@ function charge_auto_btn_army2(player, value, id, buttonConfig)
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end
-

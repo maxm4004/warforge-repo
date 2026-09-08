@@ -52,7 +52,6 @@ function main_onSave()
     ief_unit_button_base = IEF_UNIT_BUTTON_BASE,
     field_state = callHandler("field_serializeState"),
     ief_charge_queue = IEF_CHARGE_QUEUE,
-    ief_charge_index = IEF_CHARGE_INDEX,
 }
 
     return JSON.encode(saveData)
@@ -119,9 +118,6 @@ function main_restoreState(save_state)
         IEF_CHARGE_QUEUE = data.ief_charge_queue
     end
 
-    if data.ief_charge_index then
-        IEF_CHARGE_INDEX = data.ief_charge_index
-    end
     if data.ief_unit_button_base then
         IEF_UNIT_BUTTON_BASE = data.ief_unit_button_base
     end

@@ -376,7 +376,6 @@ end
 -- FUNZIONE: move_btnUndoLast(player, value, id)
 -- ============================================================
 function move_btnUndoLast(player, value, id)
-    print("qqqqqqq")
     local unitKey = id:match("^btn_(.+)_UndoLast$")
     if unitKey then move_undoLast(unitKey) end
 end

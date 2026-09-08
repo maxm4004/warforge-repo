@@ -41,7 +41,7 @@ registerHandler("restoreDiceUiState",           function()             return re
 
 -- Player management
 registerHandler("resetPlayers",                 function()             return main_resetPlayers()                      end)
-registerHandler("getArmySlotByColor",           function(c)            return main_ArmySlotByColor(c)               end)
+registerHandler("getArmySlotByColor",           function(c)            return main_ArmyByColor(c)               end)
 registerHandler("canUseButton",                 function(s,p,v,i,b,ph) return main_canUseButton(s,p,v,i,b,ph)         end)
 
 -- Game flow
