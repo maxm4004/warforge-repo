@@ -59,18 +59,41 @@ UNIT_TYPES = {
     GEN = "Generali e Comandanti",
 }
 
--- Coda cariche dichiarate, una lista indipendente per esercito.
--- Ogni elemento: { attackerKey, targetKey, step, response,
---                   outcome, controCarica, flankCharge, pivotInches, distInches }
--- step: CHARGE_STEP.DEC | CHARGE_STEP.REA | CHARGE_STEP.CLO
--- response: nil | REACTION_TYPE.COC/.EVA/.FER/.TIR
--- Nessun indice sequenziale: ogni elemento è risolvibile in
--- qualsiasi ordine tramite le liste Attacco/Difesa (righe cliccabili).
-IEF_CHARGE_QUEUE = IEF_CHARGE_QUEUE or { [1] = {}, [2] = {} }
+-- Coda cariche UNICA (non più indicizzata per esercito): un solo
+-- oggetto per evento di carica, condiviso fra le due unità
+-- coinvolte, chiunque delle due lo scrive/legge.
+--
+-- Ogni elemento:
+-- {
+--   id            = 1,                 -- contatore progressivo univoco
+--   unitArmy1Key  = "...",              -- unità dell'esercito 1 coinvolta
+--   unitArmy2Key  = "...",              -- unità dell'esercito 2 coinvolta
+--   requestArmy1  = false,              -- true se Army1 ha dichiarato la carica contro Army2
+--   requestArmy2  = false,              -- true se Army2 ha dichiarato la carica contro Army1
+--                                       -- (entrambi true = reciproca/contro-carica automatica)
+--   pivotInchesArmy1 = nil, distInchesArmy1 = nil,  -- dati di dichiarazione, solo se requestArmy1
+--   pivotInchesArmy2 = nil, distInchesArmy2 = nil,  -- dati di dichiarazione, solo se requestArmy2
+--   responseArmy1 = nil,                -- reazione scelta da Army1 (ha senso se requestArmy1==false)
+--   responseArmy2 = nil,                -- reazione scelta da Army2 (ha senso se requestArmy2==false)
+--   step          = CHARGE_STEP.DEC,    -- DEC -> REA -> CLO
+--   outcome       = nil,                -- CHARGE_OUTCOME.OK/.EVI/.ANN, impostato alla chiusura
+--   flankCharge   = nil,
+-- }
+--
+-- Deduplicazione: se Army1 dichiara carica su un'unità che a sua
+-- volta la sta già caricando (Army2 ha già dichiarato prima),
+-- charge_findOrCreateElement trova l'oggetto esistente e imposta
+-- requestArmy1=true su di esso, invece di crearne uno nuovo — la
+-- reciprocità (controCarica) è quindi DERIVATA (requestArmy1 AND
+-- requestArmy2), non più un flag scritto a parte.
+IEF_CHARGE_QUEUE = IEF_CHARGE_QUEUE or {}
+
+-- Contatore per generare id univoci progressivi in IEF_CHARGE_QUEUE.
+IEF_CHARGE_NEXT_ID = IEF_CHARGE_NEXT_ID or 0
 
 -- Proposta di risposta in attesa di scelta nel popup
 -- (charge_response_panel), una per esercito:
--- [slot] = { attackerKey, targetKey, elemento }
+-- [slot] = { elemento }
 IEF_CHARGE_RESPONSE_PENDING = IEF_CHARGE_RESPONSE_PENDING or {}
 
 -- Unità che hanno evaso una carica questo turno: non potranno

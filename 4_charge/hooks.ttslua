@@ -87,12 +87,13 @@ function before_charge_stopfire(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
 
-    for slot = 1, 2 do
-        local coda = IEF_CHARGE_QUEUE[slot] or {}
-        for i = 1, #coda do
-            local e = coda[i]
-            if e.response == REACTION_TYPE.TIR and e.step ~= CHARGE_STEP.CLO then
-                    charge_stopfireBegin((slot == 1) and 2 or 1, e)
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if e.step ~= CHARGE_STEP.CLO then
+            if e.responseArmy1 == REACTION_TYPE.TIR then
+                charge_stopfireBegin(1, e)
+                return
+            elseif e.responseArmy2 == REACTION_TYPE.TIR then
+                charge_stopfireBegin(2, e)
                 return
             end
         end
@@ -114,19 +115,26 @@ end
 -- reazione in CHARGE_REACT. Il Tiro d'Arresto è già stato
 -- risolto interamente in CHARGE_STOPFIRE, non compare più qui.
 -- ============================================================
+-- ============================================================
+-- FUNZIONE: before_charge_auto(phaseName, phase)
+-- Un solo giro sulla coda UNICA (non più due giri per slot):
+-- prima la coda era duplicata per le reciproche, quindi
+-- charge_executeCounter veniva chiamata due volte per lo STESSO
+-- evento fisico (bug del doppio movimento). Ora ogni elemento
+-- condiviso viene processato una volta sola.
+-- ============================================================
 function before_charge_auto(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
 
-    for slot = 1, 2 do
-        for _, e in ipairs(IEF_CHARGE_QUEUE[slot]) do
-            if e.step ~= CHARGE_STEP.CLO then
-                if e.controCarica or e.response == REACTION_TYPE.COC then
-                    charge_executeCounter(slot, e)
-                elseif e.response == REACTION_TYPE.EVA then
-                    local defenderSlot = (slot == 1) and 2 or 1
-                    charge_executeEvade(defenderSlot, e)
-                end
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if e.step ~= CHARGE_STEP.CLO then
+            if charge_elementoIsReciprocal(e) or e.responseArmy1 == REACTION_TYPE.COC or e.responseArmy2 == REACTION_TYPE.COC then
+                charge_executeCounter(e)
+            elseif e.responseArmy1 == REACTION_TYPE.EVA then
+                charge_executeEvade(1, e)
+            elseif e.responseArmy2 == REACTION_TYPE.EVA then
+                charge_executeEvade(2, e)
             end
         end
     end
