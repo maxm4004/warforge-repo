@@ -57,7 +57,11 @@ function charge_elementoOtherSlot(slot)
 end
 
 function charge_elementoRequest(elemento, slot)
-    return (slot == 1) and elemento.requestArmy1 or elemento.requestArmy2
+    if slot == 1 then
+        return elemento.requestArmy1
+    else
+        return elemento.requestArmy2
+    end
 end
 
 function charge_elementoSetRequest(elemento, slot, valore)
@@ -122,9 +126,14 @@ end
 -- Ritorna: elemento, creato (bool, true se appena creato).
 -- ============================================================
 function charge_findOrCreateElement(mySlot, myKey, otherSlot, otherKey)
+    if not myKey or not otherKey then
+        print("[CARICA] ERRORE: charge_findOrCreateElement chiamata con chiave nil, ignorata")
+        return nil
+    end
+
     local existing = charge_findElementByUnits(mySlot, myKey, otherSlot, otherKey)
     if existing then return existing, false end
-
+    
     IEF_CHARGE_NEXT_ID = (IEF_CHARGE_NEXT_ID or 0) + 1
     local nuovo = {
         id = IEF_CHARGE_NEXT_ID,
@@ -139,6 +148,8 @@ function charge_findOrCreateElement(mySlot, myKey, otherSlot, otherKey)
         step    = CHARGE_STEP.DEC,
         outcome = nil,
         flankCharge = nil,
+        movedArmy1 = false,
+        movedArmy2 = false,
     }
     table.insert(IEF_CHARGE_QUEUE, nuovo)
     return nuovo, true
@@ -690,17 +701,11 @@ end
 -- ============================================================
 -- FUNZIONE: charge_declareConfirm(player, value, id, buttonConfig)
 -- ============================================================
--- ============================================================
--- FUNZIONE: charge_declareConfirm(player, value, id, buttonConfig)
--- Trova o crea l'oggetto CONDIVISO per questa coppia di unità
--- (charge_findOrCreateElement): se il bersaglio ha già dichiarato
--- una carica di ritorno, questa dichiarazione converge sullo
--- STESSO elemento (reciprocità derivata), non ne crea uno nuovo.
--- ============================================================
 function charge_declareConfirm(player, value, id, buttonConfig)
     local slot = main_getArmyByColor(player)
     local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
-    if not session or not session.targetKey then
+
+    if not session or not session.targetKey or not session.attackerKey then
         UI.setAttribute("confirm_panel_charge", "active", "false")
         return
     end
@@ -1036,8 +1041,10 @@ function charge_resolveConflicts()
 
     local unitKeys = {}
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        unitKeys[e.unitArmy1Key] = true
-        unitKeys[e.unitArmy2Key] = true
+        if e.unitArmy1Key and e.unitArmy2Key then
+            unitKeys[e.unitArmy1Key] = true
+            unitKeys[e.unitArmy2Key] = true
+        end
     end
 
     local daRimuovere = {}
@@ -1359,6 +1366,9 @@ end
 -- questa reazione.
 -- ============================================================
 function charge_executeEvade(evadingSlot, elemento)
+
+    print("charge_executeEvade")
+
     local evadingKey = charge_elementoUnitKey(elemento, evadingSlot)
     local chargingKey = charge_elementoOtherKey(elemento, evadingSlot)
     local defenderBases = charge_getUnitBases(evadingKey)
@@ -1659,11 +1669,15 @@ function charge_stopfireDoMorale(player, slot)
     local elemento = cur.elemento
     local attackerKey = charge_elementoOtherKey(elemento, cur.slot)
 
-    main_testMorale(attackerKey, player, "per_caricare", 0, function(esito, somma, soglia, effetto)
+     main_testMorale(attackerKey, player, "per_caricare", 0, function(esito, somma, soglia, effetto)
         local live = IEF_STOPFIRE_CURRENT
         if not live or live.elemento ~= elemento then return end
 
-        elemento.outcome = (esito == "SUPERATO") and CHARGE_OUTCOME.OK or CHARGE_OUTCOME.ANN
+        if esito == MORALE_RESULT.OK then
+            elemento.outcome = CHARGE_OUTCOME.OK
+        else
+            elemento.outcome = CHARGE_OUTCOME.ANN
+        end
         elemento.step = CHARGE_STEP.CLO
         charge_stopfireEnd()
     end)
@@ -1682,4 +1696,163 @@ function charge_stopfireExitClick(player, value, id)
 
     if main_SlotByColor(player.color) ~= attackerSlot then return end
     charge_stopfireEnd()
+end
+-- ============================================================
+-- FUNZIONE: charge_executeContact(chargingSlot, elemento)
+-- Muove SOLO l'unità caricante (chargingSlot, quella con
+-- request=true) fino al fronte dell'unità bersaglio, che resta
+-- ferma. Usata per l'esito "Ferma" (nessuna reazione/evasione/
+-- contro-carica) e per il Tiro d'Arresto risolto senza evasione
+-- (nessun colpo, o morale superato) — casi in cui il perno era
+-- già stato fatto in dichiarazione ma il movimento vero e proprio
+-- fino al contatto non era mai stato eseguito da nessuna parte.
+-- ============================================================
+function charge_executeContact(chargingSlot, elemento)
+
+    print("charge_executeContact")
+
+    local chargingKey = charge_elementoUnitKey(elemento, chargingSlot)
+    local targetSlot = charge_elementoOtherSlot(chargingSlot)
+    local targetKey = charge_elementoUnitKey(elemento, targetSlot)
+
+    local chargingBases = charge_getUnitBases(chargingKey)
+    local targetBases = charge_getUnitBases(targetKey)
+
+    if #chargingBases > 0 and #targetBases > 0 then
+        local _, _, cFrontLeft, cFrontRight = charge_getFrontLine(chargingBases)
+        local _, _, tFrontLeft, tFrontRight = charge_getFrontLine(targetBases)
+
+        local cp1, cp2 = cFrontLeft.getPosition(), cFrontRight.getPosition()
+        local tp1, tp2 = tFrontLeft.getPosition(), tFrontRight.getPosition()
+
+        local chargingFrontCenter = Vector((cp1.x + cp2.x) / 2, 0, (cp1.z + cp2.z) / 2)
+        local targetFrontCenter   = Vector((tp1.x + tp2.x) / 2, 0, (tp1.z + tp2.z) / 2)
+
+        local dir = Vector(targetFrontCenter.x - chargingFrontCenter.x, 0, targetFrontCenter.z - chargingFrontCenter.z):normalized()
+        local yaw = math.deg(math.atan(dir.x, dir.z))
+
+        for _, obj in ipairs(chargingBases) do
+            local rot = obj.getRotation()
+            obj.setRotation(Vector(rot.x, yaw, rot.z))
+        end
+
+        local delta = Vector(targetFrontCenter.x - chargingFrontCenter.x, 0, targetFrontCenter.z - chargingFrontCenter.z)
+        for _, obj in ipairs(chargingBases) do
+            local p = obj.getPosition()
+            obj.setPosition(Vector(p.x + delta.x, p.y, p.z + delta.z))
+        end
+    end
+
+    elemento.outcome = CHARGE_OUTCOME.OK
+    elemento.step = CHARGE_STEP.CLO
+    warning(string.format("[CARICA] %s raggiunge il contatto con %s", chargingKey, targetKey), "Yellow")
+end
+-- ============================================================
+-- FUNZIONE: charge_executeCounterHalf(slot, elemento)
+-- Contro-carica: muove SOLO le basi di ARMY{slot} verso il punto
+-- medio, calcolato al momento del click con le posizioni ATTUALI
+-- di entrambe le unità (nessuno snapshot). Chiamata una volta per
+-- ciascun esercito, indipendentemente, dal proprio bottone.
+-- ============================================================
+function charge_executeCounterHalf(slot, elemento)
+
+    print("charge_executeCounterHalf")
+    
+    local myKey = charge_elementoUnitKey(elemento, slot)
+    local otherKey = charge_elementoOtherKey(elemento, slot)
+    local myBases = charge_getUnitBases(myKey)
+    local otherBases = charge_getUnitBases(otherKey)
+
+    if #myBases > 0 and #otherBases > 0 then
+        local _, _, mFrontLeft, mFrontRight = charge_getFrontLine(myBases)
+        local _, _, oFrontLeft, oFrontRight = charge_getFrontLine(otherBases)
+
+        local mp1, mp2 = mFrontLeft.getPosition(), mFrontRight.getPosition()
+        local op1, op2 = oFrontLeft.getPosition(), oFrontRight.getPosition()
+
+        local myFrontCenter = Vector((mp1.x + mp2.x) / 2, 0, (mp1.z + mp2.z) / 2)
+        local otherFrontCenter = Vector((op1.x + op2.x) / 2, 0, (op1.z + op2.z) / 2)
+
+        local midY = myBases[1].getPosition().y
+        local midpoint = Vector(
+            (myFrontCenter.x + otherFrontCenter.x) / 2,
+            midY,
+            (myFrontCenter.z + otherFrontCenter.z) / 2
+        )
+
+        local dir = Vector(otherFrontCenter.x - myFrontCenter.x, 0, otherFrontCenter.z - myFrontCenter.z):normalized()
+        local yaw = math.deg(math.atan(dir.x, dir.z))
+
+        for _, obj in ipairs(myBases) do
+            local rot = obj.getRotation()
+            obj.setRotation(Vector(rot.x, yaw, rot.z))
+        end
+
+        local delta = Vector(midpoint.x - myFrontCenter.x, 0, midpoint.z - myFrontCenter.z)
+        for _, obj in ipairs(myBases) do
+            local p = obj.getPosition()
+            obj.setPosition(Vector(p.x + delta.x, p.y, p.z + delta.z))
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_processAutoForSlot(slot, elemento)
+-- Elabora UN elemento per conto di ARMY{slot}, agendo solo sulle
+-- proprie basi. Chiamata in loop da charge_auto_btn_army1/2, una
+-- per esercito. Ogni caso (reciproca/COC, EVA, TIR, Ferma) gestito
+-- esplicitamente; chiusura garantita in ogni ramo.
+-- ============================================================
+function charge_processAutoForSlot(slot, elemento)
+    if elemento.step == CHARGE_STEP.CLO then return end
+
+    if charge_elementoIsReciprocal(elemento)
+       or elemento.responseArmy1 == REACTION_TYPE.COC
+       or elemento.responseArmy2 == REACTION_TYPE.COC then
+        if slot == 1 and not elemento.movedArmy1 then
+            charge_executeCounterHalf(1, elemento)
+            elemento.movedArmy1 = true
+        elseif slot == 2 and not elemento.movedArmy2 then
+            charge_executeCounterHalf(2, elemento)
+            elemento.movedArmy2 = true
+        end
+        if elemento.movedArmy1 and elemento.movedArmy2 then
+            elemento.outcome = CHARGE_OUTCOME.OK
+            elemento.step = CHARGE_STEP.CLO
+        end
+        return
+    end
+
+    if elemento.responseArmy1 == REACTION_TYPE.EVA and slot == 1 then
+        charge_executeEvade(1, elemento)
+        return
+    end
+    if elemento.responseArmy2 == REACTION_TYPE.EVA and slot == 2 then
+        charge_executeEvade(2, elemento)
+        return
+    end
+
+    if elemento.responseArmy1 == REACTION_TYPE.TIR or elemento.responseArmy2 == REACTION_TYPE.TIR then
+        -- Già risolto in CHARGE_STOPFIRE (colpi/morale). Qui resta
+        -- solo l'eventuale movimento di contatto, a carico di chi
+        -- ha dichiarato (request=true) — se l'esito è OK deve
+        -- ancora muoversi fino al bersaglio; se ANN (morale fallito)
+        -- resta dov'è, si chiude senza movimento.
+        local chargingSlot = elemento.requestArmy1 and 1 or 2
+        if slot == chargingSlot then
+            if elemento.outcome == CHARGE_OUTCOME.OK then
+                charge_executeContact(chargingSlot, elemento)
+            else
+                elemento.step = CHARGE_STEP.CLO
+            end
+        end
+        return
+    end
+
+    -- Ferma (nessuna risposta, o FER esplicito): solo chi ha
+    -- dichiarato la carica si muove fino al contatto.
+    local chargingSlot = elemento.requestArmy1 and 1 or (elemento.requestArmy2 and 2 or nil)
+    if chargingSlot and slot == chargingSlot then
+        charge_executeContact(chargingSlot, elemento)
+    end
 end

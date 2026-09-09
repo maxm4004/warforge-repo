@@ -1,19 +1,13 @@
 -- ============================================================
--- 4_charge/hooks.ttslua
--- Before/After hook delle 4 fasi:
--- CHARGE_DECLARE -> CHARGE_REACT (<-> CHARGE_STOPFIRE) -> CHARGE_AUTO
--- ============================================================
-
--- ============================================================
 -- FUNZIONE: before_charge_declare(phaseName, phase)
--- Reset coda cariche di entrambi gli eserciti, mostra le liste
--- "LE MIE CARICHE", nasconde "CARICHE SUBITE" e il pannello
--- Tiro d'Arresto (residuo di un turno precedente, per sicurezza).
 -- ============================================================
 function before_charge_declare(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
 
+    IEF_CHARGE_QUEUE = {}
+    IEF_CHARGE_RESPONSE_PENDING = {}
+    IEF_CHARGE_DECLARE_SESSION = {}
     IEF_STOPFIRE_CURRENT = nil
 
     charge_close(1)
@@ -28,13 +22,6 @@ end
 
 -- ============================================================
 -- FUNZIONE: after_charge_declare(phaseName, phase)
--- Arbitra i conflitti (charge_resolveConflicts) ora che tutte le
--- dichiarazioni di entrambi gli eserciti sono note: marca
--- controCarica=true sulle coppie reciproche, scarta i conflitti
--- di doppio ruolo per prossimità. Resta a fine Fase 1-Dichiarazione,
--- prima che CHARGE_REACT legga la coda. Nasconde anche
--- charge_declared_list (mostrata dal renderer 2BtnClickChargeList
--- di questa fase), che non serve più nelle fasi successive.
 -- ============================================================
 function after_charge_declare(phaseName, phase)
     charge_resolveConflicts()
@@ -43,14 +30,7 @@ end
 
 -- ============================================================
 -- FUNZIONE: before_charge_react(phaseName, phase)
--- Mostra la lista "CARICHE SUBITE" (tutte le righe, comprese le
--- controCarica=true — sola lettura per quelle, charge_defenseRowClick
--- le gestisce con solo zoom). Nessuna fisica in questa fase: solo
--- scelta/registrazione delle reazioni (elemento.response). Chiamata
--- anche al RIENTRO da CHARGE_STOPFIRE (loop), quindi il reset di
--- TURN.completed qui è ciò che impedisce di richiudere subito la
--- fase senza una nuova conferma esplicita dei player.
--- ============================================================
+--- ============================================================
 function before_charge_react(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
@@ -69,19 +49,12 @@ end
 
 -- ============================================================
 -- FUNZIONE: after_charge_react(phaseName, phase)
--- Nessuna pulizia liste: restano visibili sia se si passa a
--- CHARGE_STOPFIRE (si rientrerà qui) sia a CHARGE_AUTO (mostrano
--- l'esito finale mentre si risolve).
 -- ============================================================
 function after_charge_react(phaseName, phase)
 end
 
 -- ============================================================
 -- FUNZIONE: before_charge_stopfire(phaseName, phase)
--- Trova la carica con Tiro d'Arresto pendente (response=TIR,
--- step~=CLO) — ce n'è sempre esattamente una appena scelta nel
--- popup di reazione, dato che il salto qui avviene subito dopo
--- charge_responseStopfire — e avvia la sua risoluzione.
 -- ============================================================
 function before_charge_stopfire(phaseName, phase)
     TURN.phase = phaseName
@@ -110,42 +83,22 @@ end
 
 -- ============================================================
 -- FUNZIONE: before_charge_auto(phaseName, phase)
--- Esegue in blocco le automatiche pure: reciproche di Fase 1
--- (controCarica=true) e Contro-carica/Evasione scelte come
--- reazione in CHARGE_REACT. Il Tiro d'Arresto è già stato
--- risolto interamente in CHARGE_STOPFIRE, non compare più qui.
 -- ============================================================
 -- ============================================================
 -- FUNZIONE: before_charge_auto(phaseName, phase)
--- Un solo giro sulla coda UNICA (non più due giri per slot):
--- prima la coda era duplicata per le reciproche, quindi
--- charge_executeCounter veniva chiamata due volte per lo STESSO
--- evento fisico (bug del doppio movimento). Ora ogni elemento
--- condiviso viene processato una volta sola.
+-- Processa OGNI elemento non chiuso della coda, valutando
+-- request/response, con un ramo esplicito per ciascun esito
+-- possibile — nessun elemento può uscire da questa fase senza
+-- step=CLO, qualunque sia la combinazione request/response.
 -- ============================================================
 function before_charge_auto(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
-
-    for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if e.step ~= CHARGE_STEP.CLO then
-            if charge_elementoIsReciprocal(e) or e.responseArmy1 == REACTION_TYPE.COC or e.responseArmy2 == REACTION_TYPE.COC then
-                charge_executeCounter(e)
-            elseif e.responseArmy1 == REACTION_TYPE.EVA then
-                charge_executeEvade(1, e)
-            elseif e.responseArmy2 == REACTION_TYPE.EVA then
-                charge_executeEvade(2, e)
-            end
-        end
-    end
-
     callHandler("buildUI")
 end
 
 -- ============================================================
 -- FUNZIONE: after_charge_auto(phaseName, phase)
--- Pulizia UI di fine Fase 1 intera: nasconde tutte le liste e il
--- pannello Tiro d'Arresto prima di entrare in Iniziativa.
 -- ============================================================
 function after_charge_auto(phaseName, phase)
     UI.setAttribute("charge_attack_list_army1", "active", "false")

@@ -78,6 +78,11 @@ UNIT_TYPES = {
 --   step          = CHARGE_STEP.DEC,    -- DEC -> REA -> CLO
 --   outcome       = nil,                -- CHARGE_OUTCOME.OK/.EVI/.ANN, impostato alla chiusura
 --   flankCharge   = nil,
+--   movedArmy1    = false,             -- true se Army1 ha già eseguito il
+--                                       -- proprio movimento (serve solo
+--                                       -- per la contro-carica, dove
+--                                       -- entrambi muovono indipendentemente)
+--   movedArmy2    = false
 -- }
 --
 -- Deduplicazione: se Army1 dichiara carica su un'unità che a sua
@@ -114,3 +119,8 @@ IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
 -- slot = esercito del DIFENSORE/tiratore.
 -- subStep: "TIRO" | "MORALE" | "ESCI"
 IEF_STOPFIRE_CURRENT = IEF_STOPFIRE_CURRENT or nil
+
+MORALE_RESULT = {
+    OK = "SUPERATO",
+    KO = "FALLITO",
+}

@@ -75,14 +75,25 @@ end
 -- FUNZIONE: charge_auto_btn_army1(player, value, id, buttonConfig)
 -- ============================================================
 function charge_auto_btn_army1(player, value, id, buttonConfig)
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        charge_processAutoForSlot(1, e)
+    end
+    callHandler("buildUI")
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
 end
-
 -- ============================================================
 -- FUNZIONE: charge_auto_btn_army2(player, value, id, buttonConfig)
 -- ============================================================
 function charge_auto_btn_army2(player, value, id, buttonConfig)
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        charge_processAutoForSlot(2, e)
+    end
+    callHandler("buildUI")
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
+    --callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
 end
+
+
+
