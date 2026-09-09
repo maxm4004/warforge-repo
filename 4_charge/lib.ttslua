@@ -1543,7 +1543,6 @@ function charge_stopfireDoRoll(player, slot)
     local attackerBases = charge_getUnitBases(attackerKey)
     if #defenderBases == 0 or #attackerBases == 0 then
         elemento.outcome = CHARGE_OUTCOME.OK
-        elemento.step = CHARGE_STEP.CLO
         charge_stopfireEnd()
         return
     end
@@ -1561,7 +1560,6 @@ function charge_stopfireDoRoll(player, slot)
     if not weapon then
         printToColor("[TIRO D'ARRESTO] Nessuna arma da tiro trovata", player.color, {r=1,g=0.6,b=0})
         elemento.outcome = CHARGE_OUTCOME.OK
-        elemento.step = CHARGE_STEP.CLO
         charge_stopfireEnd()
         return
     end
@@ -1579,7 +1577,6 @@ function charge_stopfireDoRoll(player, slot)
     if numDadi <= 0 then
         printToColor("[TIRO D'ARRESTO] Nessuna base in gittata con LOS", player.color, {r=0.7,g=0.7,b=0.7})
         elemento.outcome = CHARGE_OUTCOME.OK
-        elemento.step = CHARGE_STEP.CLO
         charge_stopfireEnd()
         return
     end
@@ -1678,7 +1675,6 @@ function charge_stopfireDoMorale(player, slot)
         else
             elemento.outcome = CHARGE_OUTCOME.ANN
         end
-        elemento.step = CHARGE_STEP.CLO
         charge_stopfireEnd()
     end)
 end
@@ -1728,7 +1724,7 @@ function charge_executeContact(chargingSlot, elemento)
         local chargingFrontCenter = Vector((cp1.x + cp2.x) / 2, 0, (cp1.z + cp2.z) / 2)
         local targetFrontCenter   = Vector((tp1.x + tp2.x) / 2, 0, (tp1.z + tp2.z) / 2)
 
-        local dir = Vector(targetFrontCenter.x - chargingFrontCenter.x, 0, targetFrontCenter.z - chargingFrontCenter.z):normalized()
+        local dir = Vector(chargingFrontCenter.x - targetFrontCenter.x, 0, chargingFrontCenter.z - targetFrontCenter.z):normalized()
         local yaw = math.deg(math.atan(dir.x, dir.z))
 
         for _, obj in ipairs(chargingBases) do
@@ -1779,8 +1775,8 @@ function charge_executeCounterHalf(slot, elemento)
             midY,
             (myFrontCenter.z + otherFrontCenter.z) / 2
         )
-
-        local dir = Vector(otherFrontCenter.x - myFrontCenter.x, 0, otherFrontCenter.z - myFrontCenter.z):normalized()
+        
+        local dir = Vector(myFrontCenter.x - otherFrontCenter.x, 0, myFrontCenter.z - otherFrontCenter.z):normalized()
         local yaw = math.deg(math.atan(dir.x, dir.z))
 
         for _, obj in ipairs(myBases) do
