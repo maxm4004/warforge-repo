@@ -61,7 +61,7 @@ function before_charge_stopfire(phaseName, phase)
     TURN.completed = { Army1 = false, Army2 = false }
 
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if e.step ~= CHARGE_STEP.CLO then
+        if not e.stopfireResolved then
             if e.responseArmy1 == REACTION_TYPE.TIR then
                 charge_stopfireBegin(1, e)
                 return

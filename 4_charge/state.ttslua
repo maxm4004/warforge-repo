@@ -82,7 +82,8 @@ UNIT_TYPES = {
 --                                       -- proprio movimento (serve solo
 --                                       -- per la contro-carica, dove
 --                                       -- entrambi muovono indipendentemente)
---   movedArmy2    = false
+--   movedArmy2    = false,
+--   stopfireResolved = false,
 -- }
 --
 -- Deduplicazione: se Army1 dichiara carica su un'unità che a sua

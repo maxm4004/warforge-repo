@@ -150,6 +150,7 @@ function charge_findOrCreateElement(mySlot, myKey, otherSlot, otherKey)
         flankCharge = nil,
         movedArmy1 = false,
         movedArmy2 = false,
+        stopfireResolved = false,
     }
     table.insert(IEF_CHARGE_QUEUE, nuovo)
     return nuovo, true
@@ -186,13 +187,12 @@ end
 -- ============================================================
 function charge_hasStopfirePending()
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if (e.responseArmy1 == REACTION_TYPE.TIR or e.responseArmy2 == REACTION_TYPE.TIR) and e.step ~= CHARGE_STEP.CLO then
+        if (e.responseArmy1 == REACTION_TYPE.TIR or e.responseArmy2 == REACTION_TYPE.TIR) and not e.stopfireResolved then
             return true
         end
     end
     return false
 end
-
 -- ============================================================
 -- FUNZIONE: charge_getUnitMeta(obj)
 -- Wrapper su main_getUnitMeta (motore condiviso in 0_main/lib.ttslua).
@@ -1279,92 +1279,11 @@ function charge_refreshAttackRowText(slot, elemento)
     UI.setAttribute(rowId, "text", string.format("Unità %s carica Unità %s (%s)", myKey, otherKey, elemento.step))
     UI.setAttribute(rowId, "textColor", "white")
 end
--- ============================================================
--- FUNZIONE: charge_executeCounter(slot, elemento)
--- Fisica della contro-carica: rotazione reciproca verso il
--- nemico (charge_getFrontLine) + traslazione in blocco fino al
--- punto medio fra i due fronti. Chiude l'elemento (step=CLO).
--- slot = un esercito coinvolto, usato solo per il colore stampa.
--- ============================================================
--- ============================================================
--- FUNZIONE: charge_executeCounter(elemento)
--- Fisica della contro-carica: rotazione reciproca verso il
--- nemico (charge_getFrontLine) + traslazione in blocco fino al
--- punto medio fra i due fronti. SIMMETRICA — un solo elemento
--- condiviso rappresenta l'intero evento, chiamata una volta sola
--- da before_charge_auto (prima veniva chiamata due volte, una per
--- ciascuna "vista" attaccante/difensore, causando doppio movimento).
--- Chiude l'elemento (step=CLO).
--- ============================================================
-function charge_executeCounter(elemento)
-    local army1Bases = charge_getUnitBases(elemento.unitArmy1Key)
-    local army2Bases  = charge_getUnitBases(elemento.unitArmy2Key)
-
-    if #army1Bases > 0 and #army2Bases > 0 then
-        local _, _, a1FrontLeft, a1FrontRight = charge_getFrontLine(army1Bases)
-        local _, _, a2FrontLeft, a2FrontRight = charge_getFrontLine(army2Bases)
-
-        local ap1, ap2 = a1FrontLeft.getPosition(), a1FrontRight.getPosition()
-        local dp1, dp2 = a2FrontLeft.getPosition(), a2FrontRight.getPosition()
-
-        local army1FrontCenter = Vector((ap1.x + ap2.x) / 2, 0, (ap1.z + ap2.z) / 2)
-        local army2FrontCenter = Vector((dp1.x + dp2.x) / 2, 0, (dp1.z + dp2.z) / 2)
-
-        local midY = army1Bases[1].getPosition().y
-        local midpoint = Vector(
-            (army1FrontCenter.x + army2FrontCenter.x) / 2,
-            midY,
-            (army1FrontCenter.z + army2FrontCenter.z) / 2
-        )
-
-        local a1ToA2 = Vector(army2FrontCenter.x - army1FrontCenter.x, 0, army2FrontCenter.z - army1FrontCenter.z):normalized()
-        local a2ToA1 = Vector(-a1ToA2.x, 0, -a1ToA2.z)
-
-        local yawArmy1 = math.deg(math.atan(a1ToA2.x, a1ToA2.z))
-        local yawArmy2 = math.deg(math.atan(a2ToA1.x, a2ToA1.z))
-
-        for _, obj in ipairs(army1Bases) do
-            local rot = obj.getRotation()
-            obj.setRotation(Vector(rot.x, yawArmy1, rot.z))
-        end
-        for _, obj in ipairs(army2Bases) do
-            local rot = obj.getRotation()
-            obj.setRotation(Vector(rot.x, yawArmy2, rot.z))
-        end
-
-        local army1Delta = Vector(midpoint.x - army1FrontCenter.x, 0, midpoint.z - army1FrontCenter.z)
-        local army2Delta = Vector(midpoint.x - army2FrontCenter.x, 0, midpoint.z - army2FrontCenter.z)
-
-        for _, obj in ipairs(army1Bases) do
-            local p = obj.getPosition()
-            obj.setPosition(Vector(p.x + army1Delta.x, p.y, p.z + army1Delta.z))
-        end
-        for _, obj in ipairs(army2Bases) do
-            local p = obj.getPosition()
-            obj.setPosition(Vector(p.x + army2Delta.x, p.y, p.z + army2Delta.z))
-        end
-    end
-
-    elemento.outcome = CHARGE_OUTCOME.OK
-    elemento.step = CHARGE_STEP.CLO
-    warning(string.format("[CARICA] %s e %s sono a contatto", elemento.unitArmy1Key, elemento.unitArmy2Key), "Yellow")
-end
 
 -- ============================================================
 -- FUNZIONE: charge_executeEvade(slot, elemento)
--- Fisica dell'evasione: rotazione 180° in loco + movimento
--- lungo la direzione di fuga (calcolata prima di ruotare, non
--- dipende dal timing setRotation/getTransformForward). Chiude
--- l'elemento (step=CLO). slot = esercito del DIFENSORE.
 -- ============================================================
--- ============================================================
--- FUNZIONE: charge_executeEvade(evadingSlot, elemento)
--- Fisica dell'evasione: rotazione 180° in loco + movimento lungo
--- la direzione di fuga. evadingSlot = l'esercito la cui unità
--- evade (quella con responseArmy{slot}=EVA), determinato dal
--- chiamante (before_charge_auto) leggendo quale lato ha scelto
--- questa reazione.
--- ============================================================
+
 function charge_executeEvade(evadingSlot, elemento)
 
     print("charge_executeEvade")
@@ -1543,6 +1462,7 @@ function charge_stopfireDoRoll(player, slot)
     local attackerBases = charge_getUnitBases(attackerKey)
     if #defenderBases == 0 or #attackerBases == 0 then
         elemento.outcome = CHARGE_OUTCOME.OK
+        elemento.stopfireResolved = true
         charge_stopfireEnd()
         return
     end
@@ -1560,6 +1480,7 @@ function charge_stopfireDoRoll(player, slot)
     if not weapon then
         printToColor("[TIRO D'ARRESTO] Nessuna arma da tiro trovata", player.color, {r=1,g=0.6,b=0})
         elemento.outcome = CHARGE_OUTCOME.OK
+        elemento.stopfireResolved = true
         charge_stopfireEnd()
         return
     end
@@ -1577,6 +1498,7 @@ function charge_stopfireDoRoll(player, slot)
     if numDadi <= 0 then
         printToColor("[TIRO D'ARRESTO] Nessuna base in gittata con LOS", player.color, {r=0.7,g=0.7,b=0.7})
         elemento.outcome = CHARGE_OUTCOME.OK
+        elemento.stopfireResolved = true
         charge_stopfireEnd()
         return
     end
@@ -1640,7 +1562,7 @@ function charge_stopfireDoRoll(player, slot)
                     charge_stopfireRedraw()
                 else
                     elemento.outcome = CHARGE_OUTCOME.OK
-                    elemento.step = CHARGE_STEP.CLO
+                    elemento.stopfireResolved = true
                     live.subStep = "ESCI"
                     charge_stopfireRedraw()
                 end
@@ -1648,7 +1570,7 @@ function charge_stopfireDoRoll(player, slot)
         else
             printToAll("[TIRO D'ARRESTO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
             elemento.outcome = CHARGE_OUTCOME.OK
-            elemento.step = CHARGE_STEP.CLO
+            elemento.stopfireResolved = true
             local live2 = IEF_STOPFIRE_CURRENT
             if live2 then
                 live2.subStep = "ESCI"
@@ -1675,6 +1597,7 @@ function charge_stopfireDoMorale(player, slot)
         else
             elemento.outcome = CHARGE_OUTCOME.ANN
         end
+        elemento.stopfireResolved = true
         charge_stopfireEnd()
     end)
 end
@@ -1692,56 +1615,6 @@ function charge_stopfireExitClick(player, value, id)
 
     if main_SlotByColor(player.color) ~= attackerSlot then return end
     charge_stopfireEnd()
-end
--- ============================================================
--- FUNZIONE: charge_executeContact(chargingSlot, elemento)
--- Muove SOLO l'unità caricante (chargingSlot, quella con
--- request=true) fino al fronte dell'unità bersaglio, che resta
--- ferma. Usata per l'esito "Ferma" (nessuna reazione/evasione/
--- contro-carica) e per il Tiro d'Arresto risolto senza evasione
--- (nessun colpo, o morale superato) — casi in cui il perno era
--- già stato fatto in dichiarazione ma il movimento vero e proprio
--- fino al contatto non era mai stato eseguito da nessuna parte.
--- ============================================================
-function charge_executeContact(chargingSlot, elemento)
-
-    print("charge_executeContact")
-
-    local chargingKey = charge_elementoUnitKey(elemento, chargingSlot)
-    local targetSlot = charge_elementoOtherSlot(chargingSlot)
-    local targetKey = charge_elementoUnitKey(elemento, targetSlot)
-
-    local chargingBases = charge_getUnitBases(chargingKey)
-    local targetBases = charge_getUnitBases(targetKey)
-
-    if #chargingBases > 0 and #targetBases > 0 then
-        local _, _, cFrontLeft, cFrontRight = charge_getFrontLine(chargingBases)
-        local _, _, tFrontLeft, tFrontRight = charge_getFrontLine(targetBases)
-
-        local cp1, cp2 = cFrontLeft.getPosition(), cFrontRight.getPosition()
-        local tp1, tp2 = tFrontLeft.getPosition(), tFrontRight.getPosition()
-
-        local chargingFrontCenter = Vector((cp1.x + cp2.x) / 2, 0, (cp1.z + cp2.z) / 2)
-        local targetFrontCenter   = Vector((tp1.x + tp2.x) / 2, 0, (tp1.z + tp2.z) / 2)
-
-        local dir = Vector(chargingFrontCenter.x - targetFrontCenter.x, 0, chargingFrontCenter.z - targetFrontCenter.z):normalized()
-        local yaw = math.deg(math.atan(dir.x, dir.z))
-
-        for _, obj in ipairs(chargingBases) do
-            local rot = obj.getRotation()
-            obj.setRotation(Vector(rot.x, yaw, rot.z))
-        end
-
-        local delta = Vector(targetFrontCenter.x - chargingFrontCenter.x, 0, targetFrontCenter.z - chargingFrontCenter.z)
-        for _, obj in ipairs(chargingBases) do
-            local p = obj.getPosition()
-            obj.setPosition(Vector(p.x + delta.x, p.y, p.z + delta.z))
-        end
-    end
-
-    elemento.outcome = CHARGE_OUTCOME.OK
-    elemento.step = CHARGE_STEP.CLO
-    warning(string.format("[CARICA] %s raggiunge il contatto con %s", chargingKey, targetKey), "Yellow")
 end
 -- ============================================================
 -- FUNZIONE: charge_executeCounterHalf(slot, elemento)
@@ -1851,4 +1724,165 @@ function charge_processAutoForSlot(slot, elemento)
     if chargingSlot and slot == chargingSlot then
         charge_executeContact(chargingSlot, elemento)
     end
+end
+-- ============================================================
+-- FUNZIONE: charge_rigidRotate(basiObjs, deltaYawDeg)
+-- Ruota l'INTERA formazione come corpo rigido di deltaYawDeg,
+-- usando basiObjs[1] come ANCORA REALE che non si sposta (stessa
+-- tecnica di move_perno_apply — mai un punto calcolato come pivot,
+-- sempre una base vera).
+-- ============================================================
+function charge_rigidRotate(basiObjs, deltaYawDeg)
+    if #basiObjs == 0 then return end
+    local pivotBase = basiObjs[1]
+    local pivotPos = pivotBase.getPosition()
+    local deltaRad = math.rad(deltaYawDeg)
+
+    for _, obj in ipairs(basiObjs) do
+        if obj ~= pivotBase then
+            local p = obj.getPosition()
+            local rel = Vector(p.x - pivotPos.x, 0, p.z - pivotPos.z)
+            local rx = rel.x * math.cos(deltaRad) - rel.z * math.sin(deltaRad)
+            local rz = rel.x * math.sin(deltaRad) + rel.z * math.cos(deltaRad)
+            obj.setPosition(Vector(pivotPos.x + rx, p.y, pivotPos.z + rz))
+        end
+        local rot = obj.getRotation()
+        obj.setRotation(Vector(rot.x, rot.y + deltaYawDeg, rot.z))
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_rigidTranslate(basiObjs, deltaX, deltaZ)
+-- Trasla l'intera formazione in blocco (stessa tecnica di
+-- move_avanti_apply — nessuna rotazione qui, solo spostamento).
+-- ============================================================
+function charge_rigidTranslate(basiObjs, deltaX, deltaZ)
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        obj.setPosition(Vector(p.x + deltaX, p.y, p.z + deltaZ))
+    end
+end
+-- ============================================================
+-- FUNZIONE: charge_executeContact(chargingSlot, elemento)
+-- ============================================================
+function charge_executeContact(chargingSlot, elemento)
+
+    print("charge_executeContact")
+
+    local chargingKey = charge_elementoUnitKey(elemento, chargingSlot)
+    local targetSlot  = charge_elementoOtherSlot(chargingSlot)
+    local targetKey   = charge_elementoUnitKey(elemento, targetSlot)
+
+    local chargingBases = charge_getUnitBases(chargingKey)
+    local targetBases   = charge_getUnitBases(targetKey)
+
+    if #chargingBases > 0 and #targetBases > 0 then
+        local _, _, cFrontLeft, cFrontRight = charge_getFrontLine(chargingBases)
+        local _, _, tFrontLeft, tFrontRight = charge_getFrontLine(targetBases)
+
+        local cp1, cp2 = cFrontLeft.getPosition(), cFrontRight.getPosition()
+        local tp1, tp2 = tFrontLeft.getPosition(), tFrontRight.getPosition()
+
+        local chargingFrontCenter = Vector((cp1.x + cp2.x) / 2, 0, (cp1.z + cp2.z) / 2)
+        local targetFrontCenter   = Vector((tp1.x + tp2.x) / 2, 0, (tp1.z + tp2.z) / 2)
+
+        -- FIX: target - charger (non charger - target) per puntare VERSO il bersaglio
+        local dir = Vector(
+            targetFrontCenter.x - chargingFrontCenter.x,
+            0,
+            targetFrontCenter.z - chargingFrontCenter.z
+        ):normalized()
+        local yaw = math.deg(math.atan(dir.x, dir.z))
+
+        for _, obj in ipairs(chargingBases) do
+            local rot = obj.getRotation()
+            obj.setRotation(Vector(rot.x, yaw, rot.z))
+        end
+
+        local delta = Vector(
+            targetFrontCenter.x - chargingFrontCenter.x,
+            0,
+            targetFrontCenter.z - chargingFrontCenter.z
+        )
+        for _, obj in ipairs(chargingBases) do
+            local p = obj.getPosition()
+            obj.setPosition(Vector(p.x + delta.x, p.y, p.z + delta.z))
+        end
+
+        -- FIX: riallinea la griglia dopo rotazione + traslazione
+        local fronteAttuale = main_detectFormation(chargingBases)
+        main_ricostruisciFormazione(chargingBases, fronteAttuale)
+    end
+
+    elemento.outcome = CHARGE_OUTCOME.OK
+    elemento.step = CHARGE_STEP.CLO
+    warning(string.format("[CARICA] %s raggiunge il contatto con %s", chargingKey, targetKey), "Yellow")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_executeCounter(elemento)
+-- ============================================================
+function charge_executeCounter(elemento)
+    local army1Bases = charge_getUnitBases(elemento.unitArmy1Key)
+    local army2Bases = charge_getUnitBases(elemento.unitArmy2Key)
+
+    if #army1Bases > 0 and #army2Bases > 0 then
+        local _, _, a1FrontLeft, a1FrontRight = charge_getFrontLine(army1Bases)
+        local _, _, a2FrontLeft, a2FrontRight = charge_getFrontLine(army2Bases)
+
+        local ap1, ap2 = a1FrontLeft.getPosition(), a1FrontRight.getPosition()
+        local dp1, dp2 = a2FrontLeft.getPosition(), a2FrontRight.getPosition()
+
+        local army1FrontCenter = Vector((ap1.x + ap2.x) / 2, 0, (ap1.z + ap2.z) / 2)
+        local army2FrontCenter = Vector((dp1.x + dp2.x) / 2, 0, (dp1.z + dp2.z) / 2)
+
+        local midY = army1Bases[1].getPosition().y
+        local midpoint = Vector(
+            (army1FrontCenter.x + army2FrontCenter.x) / 2,
+            midY,
+            (army1FrontCenter.z + army2FrontCenter.z) / 2
+        )
+
+        -- FIX: army1 punta VERSO army2, army2 punta VERSO army1
+        local a1ToA2 = Vector(
+            army2FrontCenter.x - army1FrontCenter.x,
+            0,
+            army2FrontCenter.z - army1FrontCenter.z
+        ):normalized()
+        local a2ToA1 = Vector(-a1ToA2.x, 0, -a1ToA2.z)
+
+        local yawArmy1 = math.deg(math.atan(a1ToA2.x, a1ToA2.z))
+        local yawArmy2 = math.deg(math.atan(a2ToA1.x, a2ToA1.z))
+
+        for _, obj in ipairs(army1Bases) do
+            local rot = obj.getRotation()
+            obj.setRotation(Vector(rot.x, yawArmy1, rot.z))
+        end
+        for _, obj in ipairs(army2Bases) do
+            local rot = obj.getRotation()
+            obj.setRotation(Vector(rot.x, yawArmy2, rot.z))
+        end
+
+        local army1Delta = Vector(midpoint.x - army1FrontCenter.x, 0, midpoint.z - army1FrontCenter.z)
+        local army2Delta = Vector(midpoint.x - army2FrontCenter.x, 0, midpoint.z - army2FrontCenter.z)
+
+        for _, obj in ipairs(army1Bases) do
+            local p = obj.getPosition()
+            obj.setPosition(Vector(p.x + army1Delta.x, p.y, p.z + army1Delta.z))
+        end
+        for _, obj in ipairs(army2Bases) do
+            local p = obj.getPosition()
+            obj.setPosition(Vector(p.x + army2Delta.x, p.y, p.z + army2Delta.z))
+        end
+
+        -- FIX: riallinea la griglia di entrambe le unità dopo rotazione + traslazione
+        local fronte1 = main_detectFormation(army1Bases)
+        main_ricostruisciFormazione(army1Bases, fronte1)
+        local fronte2 = main_detectFormation(army2Bases)
+        main_ricostruisciFormazione(army2Bases, fronte2)
+    end
+
+    elemento.outcome = CHARGE_OUTCOME.OK
+    elemento.step = CHARGE_STEP.CLO
+    warning(string.format("[CARICA] %s e %s sono a contatto", elemento.unitArmy1Key, elemento.unitArmy2Key), "Yellow")
 end
