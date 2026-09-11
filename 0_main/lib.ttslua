@@ -1181,11 +1181,6 @@ function main_detectFormation(basiObjs)
     return count
 end
 -- ============================================================
--- SISTEMA FORMAZIONE — solo pannello 3D, stato per unitKey.
--- Nessun riferimento al pannello 2D schermo: rimosso del tutto.
--- ============================================================
-
--- ============================================================
 -- FUNZIONE: main_formationOpenFromButton(obj, player_color, alt_click)
 -- Click sul pulsante 3D "Formazione" attaccato alla base
 -- capitana. Popola IEF_FORM_UNITS[unitKey] e apre il pannello.
@@ -1204,6 +1199,8 @@ function main_formationOpenFromButton(obj, player_color, alt_click)
         end
     end
     if #basiObjs == 0 then return end
+
+    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
 
     IEF_FORM_UNITS[unitKey] = {
         basiObjs     = basiObjs,
@@ -1642,6 +1639,8 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
     end
     if #basiObjs == 0 then return end
 
+    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
+
     if IEF_MOVE_BUDGET[unitKey] == nil or IEF_MOVE_TEST_MODE then
         local unitTypesDict = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
         local baseInfo = main_parseNickname(obj.getName())
@@ -2034,7 +2033,7 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.DEPLOY_SPAWN]     = {form},
         [PHASE.DEPLOY_POSITION]  = {form},
         [PHASE.MOVE]             = {form, move},
-        [PHASE.CHARGE_DECLARE]   = {charge},
+        [PHASE.CHARGE_DECLARE]   = {range, form, move, charge},
         [PHASE.CHARGE_REACT]     = {charge},
         [PHASE.CHARGE_STOPFIRE]  = {charge},
         [PHASE.CHARGE_AUTO]      = {charge},
@@ -2053,6 +2052,25 @@ function main_createBaseButtons(obj, phase, unit)
 
     for _, f in ipairs(funzioni) do
         f(obj, unit, pos, rot, w, h)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: move(obj, unit, pos, rot, w, h)
+-- ============================================================
+function range(obj, unit, pos, rot, w, h)
+    if unit and string.find(unit, "GEN") then 
+        
+        obj.createButton({
+            click_function = "main_btnShowRange",
+            function_owner = Global,
+            label = "RAGGIO",
+            position = pos,
+            rotation = rot,
+            width = w, 
+            height = h, 
+            font_size = 60,
+        })
         pos.x = pos.x - 0.8
     end
 end
@@ -2061,8 +2079,8 @@ end
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
 function move(obj, unit, pos, rot, w, h)
-
-      obj.createButton({
+  
+    obj.createButton({
         click_function = "main_movementOpenFromButton",
         function_owner = Global,
         label = "MOVIMENTO",
@@ -2072,13 +2090,14 @@ function move(obj, unit, pos, rot, w, h)
         height = h, 
         font_size = 60,
     })
+    pos.x = pos.x - 0.8
 end
 -- ============================================================
 -- FUNZIONE: form(obj, unit, pos, rot, w, h)
 -- ============================================================
 function form(obj, unit, pos, rot, w, h)
-
-        obj.createButton({
+ if unit and not string.find(unit, "GEN") then
+    obj.createButton({
         click_function = "main_formationOpenFromButton",
         function_owner = Global,
         label = "FORMAZIONE",
@@ -2087,62 +2106,73 @@ function form(obj, unit, pos, rot, w, h)
         width = w, 
         height = h, 
         font_size = 60,
-    })
+    }) 
+    pos.x = pos.x - 0.8
+    end
 end
 -- ============================================================
 -- FUNZIONE: charge(obj)
 -- ============================================================
 function charge(obj, unit, pos, rot, w, h)
+    if unit and not string.find(unit, "GEN") then
 
-    obj.createButton({
-        click_function = "charge_declareOpenFromButton",
-        function_owner = Global,
-        label = "CARICA",
-        position = pos,
-        rotation = rot,
-        width = w, 
-        height = h, 
-        font_size = 60,
-    })
+        obj.createButton({
+            click_function = "charge_declareOpenFromButton",
+            function_owner = Global,
+            label = "CARICA",
+            position = pos,
+            rotation = rot,
+            width = w, 
+            height = h, 
+            font_size = 60,
+        })
+        pos.x = pos.x - 0.8
+    end
 end
 -- ============================================================
 -- FUNZIONE: form()
 -- ============================================================
 function shoot(obj, unit, pos, rot, w, h)
+    if unit and not string.find(unit, "GEN") then
 
-        obj.createButton({
-        click_function = "shoot_buttonclick",
-        function_owner = Global,
-        label = "TIRO",
-        position = pos,
-        rotation = rot,
-        width = w, 
-        height = h, 
-        font_size = 60,
-    })
+            obj.createButton({
+            click_function = "shoot_buttonBaseClick",
+            function_owner = Global,
+            label = "TIRO",
+            position = pos,
+            rotation = rot,
+            width = w, 
+            height = h, 
+            font_size = 60,
+        }) 
+        pos.x = pos.x - 0.8
+    end
 end
 -- ============================================================
 -- FUNZIONE: melee()
 -- ============================================================
 function melee(obj, unit, pos, rot, w, h)
-
-        obj.createButton({
-        click_function = "melee_buttonclick",
-        function_owner = Global,
-        label = "MISCHIA",
-        position = pos,
-        rotation = rot,
-        width = w, 
-        height = h, 
-        font_size = 60,
-    })
+    if unit and not string.find(unit, "GEN") then
+        
+            obj.createButton({
+            click_function = "melee_buttonBaseClick",
+            function_owner = Global,
+            label = "MISCHIA",
+            position = pos,
+            rotation = rot,
+            width = w, 
+            height = h, 
+            font_size = 60,
+        })
+    pos.x = pos.x - 0.8 
+    end
 end
 -- ============================================================
 -- FUNZIONE: recovery()
 -- ============================================================
 function recovery(obj, unit, pos, rot)
-           
-        obj.createButton({
+
+    obj.createButton({
         click_function = "",
         function_owner = Global,
         label = "RECUPERO",
@@ -2152,6 +2182,7 @@ function recovery(obj, unit, pos, rot)
         height = 400,
         font_size = 60,
     })
+
 end
 -- ============================================================
 -- FUNZIONE:  main_decodeUnitTypeLabel(unitKey)
@@ -2174,4 +2205,166 @@ function main_decodeArmyCodeLabel(unitKey)
     local codice = unitKey:match("^([^_]+)")
     if not codice then return "Sconosciuto" end
     return ARMIES_LABELS[codice] or codice
+end
+-- ============================================================
+-- FUNZIONE: main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
+-- Centra la camera sul CENTRO della formazione (media di tutte le
+-- basi, non solo quella cliccata) più un offset verticale per
+-- includere il pannello 3D (che sta sopra la base) nell'inquadratura.
+-- Condivisa da tutti i pannelli 3D-su-base (Carica, Manovra, Formazione).
+-- ============================================================
+function main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
+    if #basiObjs == 0 then return end
+
+    local sumX, sumY, sumZ = 0, 0, 0
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        sumX = sumX + p.x
+        sumY = sumY + p.y
+        sumZ = sumZ + p.z
+    end
+    local n = #basiObjs
+    local center = Vector(sumX / n, (sumY / n) + 2, sumZ / n)
+
+    engine_cameraByPosition(player, center, pitch, yaw, distance)
+end
+-- ============================================================
+-- FUNZIONE: main_findGenerals(slot)
+-- ============================================================
+function main_findGenerals(slot)
+    local generali = {}
+    for _, obj in ipairs(getAllObjects()) do
+        local meta = main_getUnitMeta(obj)
+        if meta and meta.armySlot == slot and meta.unitType == "GEN" then
+            table.insert(generali, obj)
+        end
+    end
+    return generali
+end
+-- ============================================================
+-- FUNZIONE: main_isInCommandRange(baseObj, slot)
+-- ============================================================
+function main_isInCommandRange(baseObj, slot)
+    if not baseObj then return false end
+    local generali = main_findGenerals(slot)
+    if #generali == 0 then return false end
+
+    local rangeUnits = 12 * INCH_TO_TTS
+    local p = baseObj.getPosition()
+
+    for _, gen in ipairs(generali) do
+        local gp = gen.getPosition()
+        local dist = Vector(p.x - gp.x, 0, p.z - gp.z):magnitude()
+        if dist <= rangeUnits then return true end
+    end
+    return false
+end
+-- ============================================================
+-- FUNZIONE: main_drawRangeCircle(obj, radiusInches, colorRGB, segments)
+-- Disegna una circonferenza di raggio radiusInches centrata su
+-- obj, self-hosted (stesso principio del corridoio di carica —
+-- obj.setVectorLines su se stesso, coordinate locali). segments
+-- = numero di lati del poligono che approssima il cerchio
+-- (default 48, abbastanza per sembrare liscio).
+-- ============================================================
+function main_drawRangeCircle(obj, radiusInches, colorRGB, segments)
+    if not obj then return end
+    segments = segments or 48
+    colorRGB = colorRGB or {0.2, 0.6, 1}
+
+    local center = obj.getPosition()
+    local radiusUnits = radiusInches * INCH_TO_TTS
+    local y = 1.20
+
+    local points = {}
+    for i = 0, segments do
+        local angle = (i / segments) * 2 * math.pi
+        local px = center.x + math.cos(angle) * radiusUnits
+        local pz = center.z + math.sin(angle) * radiusUnits
+        table.insert(points, obj.positionToLocal(Vector(px, y, pz)))
+    end
+
+    local segments_data = {}
+    for i = 1, #points - 1 do
+        table.insert(segments_data, {
+            points = {points[i], points[i+1]},
+            color = "Yellow",
+            thickness = 0.03,
+        })
+    end
+
+    obj.setVectorLines(segments_data)
+end
+
+-- ============================================================
+-- FUNZIONE: main_clearRangeCircle(obj)
+-- ============================================================
+function main_clearRangeCircle(obj)
+    if not obj then return end
+    obj.setVectorLines({})
+end
+-- ============================================================
+-- FUNZIONE: main_btnShowRange(obj, player_color, alt_click)
+-- Bottone 3D direttamente sulla base (createButton, stesso stile
+-- di charge_declareOpenFromButton): mostra/nasconde (toggle) il
+-- cerchio di 12" (raggio di comando) centrato su questa base.
+-- ============================================================
+
+function main_btnShowRange(obj, player_color, alt_click)
+    local player = Player[player_color]
+    if not player then return end
+
+    local unitKey = main_getUnitKey(obj)
+    if not unitKey then return end
+
+    local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+    if not slot then return end
+
+    if IEF_RANGE_CIRCLE_SHOWN[unitKey] then
+        main_clearRangeCircle(obj)
+        main_clearHighlightList(IEF_RANGE_HIGHLIGHTED[unitKey])
+        IEF_RANGE_CIRCLE_SHOWN[unitKey] = nil
+        IEF_RANGE_HIGHLIGHTED[unitKey] = nil
+    else
+        main_drawRangeCircle(obj, 12, {0.2, 0.6, 1})
+        IEF_RANGE_HIGHLIGHTED[unitKey] = main_highlightUnitsInRange(obj, slot, 12, {0.2, 0.6, 1})
+        IEF_RANGE_CIRCLE_SHOWN[unitKey] = true
+    end
+end
+-- ============================================================
+-- FUNZIONE: main_highlightUnitsInRange(obj, slot, radiusInches, highlightColor)
+-- Evidenzia (highlightOn) tutte le basi di ARMY{slot} entro
+-- radiusInches da obj (il Generale). Ritorna la lista delle basi
+-- evidenziate, per poterle spegnere dopo col toggle.
+-- ============================================================
+function main_highlightUnitsInRange(obj, slot, radiusInches, highlightColor)
+    local center = obj.getPosition()
+    local rangeUnits = radiusInches * INCH_TO_TTS
+    local evidenziate = {}
+
+    for _, o in ipairs(getAllObjects()) do
+        local meta = main_getUnitMeta(o)
+        if meta and meta.armySlot == slot and o ~= obj then
+            local p = o.getPosition()
+            local dist = Vector(p.x - center.x, 0, p.z - center.z):magnitude()
+            if dist <= rangeUnits then
+                o.highlightOn(highlightColor, 999)
+                table.insert(evidenziate, o)
+            end
+        end
+    end
+
+    return evidenziate
+end
+
+-- ============================================================
+-- FUNZIONE: main_clearHighlightList(lista)
+-- ============================================================
+function main_clearHighlightList(lista)
+    if not lista then return end
+    for _, o in ipairs(lista) do
+        if not o.isDestroyed() then
+            o.highlightOff()
+        end
+    end
 end

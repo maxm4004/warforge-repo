@@ -117,13 +117,6 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_findOrCreateElement(mySlot, myKey, otherSlot, otherKey)
--- Cerca l'elemento condiviso per questa coppia di unità; se non
--- esiste lo crea. Usata da charge_declareConfirm: se l'unità
--- bersaglio ha già dichiarato una carica di ritorno (o sta per
--- farlo), i due lati convergono sullo STESSO oggetto invece di
--- generarne uno duplicato — elimina il problema delle contro-
--- cariche reciproche processate due volte in CHARGE_AUTO.
--- Ritorna: elemento, creato (bool, true se appena creato).
 -- ============================================================
 function charge_findOrCreateElement(mySlot, myKey, otherSlot, otherKey)
     if not myKey or not otherKey then
@@ -424,18 +417,18 @@ function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText)
     ]], unitKey, x, y, z, colore, labelText, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey)
 end
 -- ============================================================
--- FUNZIONE: charge_redraw(slot)
+-- FUNZIONE: charge_redraw(unitKey)
 -- Ricostruisce il pannello 3D di dichiarazione con il testo
 -- pollici-di-perno aggiornato. Stesso principio di move_redraw
 -- (6_move/lib.ttslua).
 -- ============================================================
-function charge_redraw(slot)
-    
-    local player = Player[ARMY[slot].color]
-    local session = IEF_CHARGE_DECLARE_SESSION[slot]
+function charge_redraw(unitKey)
+
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if not session or not session.panel3DObj then return end
     if session.panel3DObj.isDestroyed() then return end
 
+    local slot = main_getArmyByColor(session.activePlayer)
     local _, _, _, newHost = charge_findLineTarget(session.attackerKey, slot)
     if newHost then
         if session.lineHost and session.lineHost ~= newHost then
@@ -452,12 +445,12 @@ function charge_redraw(slot)
 end
 
 -- ============================================================
--- FUNZIONE: charge_close(slot)
+-- FUNZIONE: charge_close(unitKey)
 -- Chiude il pannello 3D e pulisce la sessione di dichiarazione.
 -- Stesso principio di move_close (6_move/lib.ttslua).
 -- ============================================================
-function charge_close(slot)
-    local session = IEF_CHARGE_DECLARE_SESSION[slot]
+function charge_close(unitKey)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if not session then return end
 
     if session.lineHost then
@@ -468,7 +461,7 @@ function charge_close(slot)
         session.panel3DObj.UI.setXml("")
     end
 
-    IEF_CHARGE_DECLARE_SESSION[slot] = nil
+    IEF_CHARGE_DECLARE_SESSION[unitKey] = nil
 end
 
 -- ============================================================
@@ -507,6 +500,15 @@ function charge_declareOpenFromButton(obj, player_color, alt_click)
         return
     end
 
+    -- Se questa STESSA unità aveva già un pannello aperto (es. il
+    -- player riclicca la base), chiude quella sessione prima di
+    -- ricrearla — non serve chiudere le sessioni di ALTRE unità:
+    -- più pannelli in parallelo (uno per unitKey) sono ammessi,
+    -- stesso principio di Move/Formazione.
+    if IEF_CHARGE_DECLARE_SESSION[myKey] then
+        charge_close(myKey)
+    end
+
     local myMeta = charge_getUnitMeta(obj)
     local myTipo = myMeta and myMeta.unitType
     if myTipo == "ART" then
@@ -526,7 +528,7 @@ function charge_declareOpenFromButton(obj, player_color, alt_click)
         startRot[i] = b.getRotation()
     end
 
-    IEF_CHARGE_DECLARE_SESSION[slot] = {
+    IEF_CHARGE_DECLARE_SESSION[myKey] = {
         attackerKey  = myKey,
         myBases      = myBases,
         startPos     = startPos,
@@ -538,10 +540,10 @@ function charge_declareOpenFromButton(obj, player_color, alt_click)
         activePlayer = player,
     }
 
-    engine_cameraByPosition(player, obj.getPosition(), 30, ArmyYaw["ButtonBase"][slot], 15)
+    main_cameraToUnitPanel(player, myBases, 30, ArmyYaw["ButtonBase"][slot], 15)
     UI.setAttribute("confirm_panel_charge", "active", "false")
     Wait.time(function ()
-        charge_redraw(slot)
+        charge_redraw(myKey)
     end, 1)
 end
 -- ============================================================
@@ -551,9 +553,9 @@ end
 -- Stessa matrice di rotazione di move_perno_apply, ma pivotBase
 -- = angolo di fronte reale (charge_getFrontLine).
 -- ============================================================
-function charge_pivotApply(player, direzione)
+function charge_pivotApply(player, unitKey, direzione)
     local slot = main_getArmyByColor(player)
-    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if not session then return end
 
     if charge_alreadyDeclared(slot, session.attackerKey) then
@@ -587,17 +589,21 @@ function charge_pivotApply(player, direzione)
     charge_applyPivot(myBases, pivotBase, angoloSigned)
 
     session.pivotUsed = session.pivotUsed + distanzaInch
-    charge_redraw(slot)
+    charge_redraw(unitKey)
 end
 
 -- ============================================================
 -- FUNZIONE: charge_btnPivotSx(player, value, id)
 -- onClick 3D (prefisso "Global/") del pulsante "Perno Sx".
--- TTS passa (player, value, id) per XML attaccato a un oggetto.
+-- unitKey estratto dall'id (contiene già l'unità del pannello),
+-- non più derivato da player/slot — più pannelli possono coesistere
+-- in parallelo, uno per unitKey.
 -- ============================================================
 function charge_btnPivotSx(player, value, id)
     if not player then return end
-    charge_pivotApply(player, "left")
+    local unitKey = id:match("^btn_(.+)_ChargePivotSx$")
+    if not unitKey then return end
+    charge_pivotApply(player, unitKey, "left")
 end
 
 -- ============================================================
@@ -606,15 +612,22 @@ end
 -- ============================================================
 function charge_btnPivotDx(player, value, id)
     if not player then return end
-    charge_pivotApply(player, "right")
+    local unitKey = id:match("^btn_(.+)_ChargePivotDx$")
+    if not unitKey then return end
+    charge_pivotApply(player, unitKey, "right")
 end
 
 -- ============================================================
--- FUNZIONE: charge_checkTarget(player)
+-- FUNZIONE: charge_checkTarget(player, unitKey)
+-- Registra anche IEF_CHARGE_ACTIVE_CONFIRM[slot]=unitKey: il popup
+-- 2D confirm_panel_charge è condiviso (un solo oggetto UI, non uno
+-- per pannello 3D) — serve sapere a quale unità si riferisce
+-- l'ultimo Check fatto da questo player, letto poi da
+-- charge_declareCancel/charge_declareConfirm.
 -- ============================================================
-function charge_checkTarget(player)
+function charge_checkTarget(player, unitKey)
     local slot = main_getArmyByColor(player)
-    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if not session then return end
 
     local targetKey, a, distInches, newHost = charge_findLineTarget(session.attackerKey, slot)
@@ -640,6 +653,8 @@ function charge_checkTarget(player)
     session.targetKey  = targetKey
     session.distInches = distInches
 
+    IEF_CHARGE_ACTIVE_CONFIRM[slot] = unitKey
+
     UI.setAttribute("confirm_panel_charge", "visibility", player.color)
     UI.setAttribute("confirm_panel_charge", "active", "true")
     printToColor("[CARICA] OK — bersaglio raggiungibile", player.color, {r=0.3,g=1,b=0.3})
@@ -651,7 +666,9 @@ end
 -- ============================================================
 function charge_btnCheck(player, value, id)
     if not player then return end
-    charge_checkTarget(player)
+    local unitKey = id:match("^btn_(.+)_ChargeCheck$")
+    if not unitKey then return end
+    charge_checkTarget(player, unitKey)
 end
 
 -- ============================================================
@@ -667,13 +684,12 @@ function charge_declareRestorePosition(session)
     end
 end
 -- ============================================================
--- FUNZIONE: charge_declareAbort(player)
+-- FUNZIONE: charge_declareAbort(player, unitKey)
 -- Annulla tutto (compresi i perni), ripristina la posizione di
 -- partenza, chiude il pannello 3D e il popup di conferma.
 -- ============================================================
-function charge_declareAbort(player)
-    local slot = main_getArmyByColor(player)
-    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+function charge_declareAbort(player, unitKey)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if session then
         charge_declareRestorePosition(session)
     end
@@ -684,33 +700,39 @@ end
 -- ============================================================
 function charge_btnAbort(player, value, id)
     if not player then return end
-    charge_declareAbort(player)
+    local unitKey = id:match("^btn_(.+)_ChargeAbort$")
+    if not unitKey then return end
+    charge_declareAbort(player, unitKey)
 end
 -- ============================================================
 -- FUNZIONE: charge_btnClose(player, value, id)
 -- ============================================================
 function charge_btnClose(player, value, id)
     if not player then return end
-    local slot = main_getArmyByColor(player)
-    charge_close(slot)
+    local unitKey = id:match("^btn_(.+)_ChargeClose$")
+    if not unitKey then return end
+    charge_close(unitKey)
     UI.setAttribute("confirm_panel_charge", "active", "false")
 end
 -- ============================================================
 -- FUNZIONE: charge_declareCancel(player, value, id, buttonConfig)
 -- onClick del pulsante "CANCEL" nel popup 2D confirm_panel_charge.
--- Annulla tutto (compresi i perni già fatti) e ripristina la
--- posizione di partenza — il pannello 3D resta aperto per
--- riprovare (nuovi perni/check).
+-- Nessun unitKey nell'id (popup condiviso, fisso): letto da
+-- IEF_CHARGE_ACTIVE_CONFIRM[slot], impostato dall'ultimo Check
+-- fatto da questo player. Annulla tutto (compresi i perni già
+-- fatti) e ripristina la posizione di partenza — il pannello 3D
+-- resta aperto per riprovare (nuovi perni/check).
 -- ============================================================
 function charge_declareCancel(player, value, id, buttonConfig)
     local slot = main_getArmyByColor(player)
-    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    local unitKey = slot and IEF_CHARGE_ACTIVE_CONFIRM[slot]
+    local session = unitKey and IEF_CHARGE_DECLARE_SESSION[unitKey]
     if session then
         charge_declareRestorePosition(session)
         session.pivotUsed  = 0
         session.targetKey  = nil
         session.distInches = nil
-        charge_redraw(slot)
+        charge_redraw(unitKey)
     end
     UI.setAttribute("confirm_panel_charge", "active", "false")
     return true
@@ -721,7 +743,8 @@ end
 -- ============================================================
 function charge_declareConfirm(player, value, id, buttonConfig)
     local slot = main_getArmyByColor(player)
-    local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
+    local unitKey = slot and IEF_CHARGE_ACTIVE_CONFIRM[slot]
+    local session = unitKey and IEF_CHARGE_DECLARE_SESSION[unitKey]
 
     if not session or not session.targetKey or not session.attackerKey then
         UI.setAttribute("confirm_panel_charge", "active", "false")
@@ -730,9 +753,28 @@ function charge_declareConfirm(player, value, id, buttonConfig)
 
     if charge_alreadyDeclared(slot, session.attackerKey) then
         printToColor("[CARICA] Questa unità ha già dichiarato una carica questo turno", player.color, {r=1,g=0.6,b=0})
-        charge_close(slot)
+        charge_close(unitKey)
         UI.setAttribute("confirm_panel_charge", "active", "false")
         return
+    end
+
+        local attackerMeta = charge_getUnitMeta(charge_getUnitBases(session.attackerKey)[1])
+    local attackerTipo = attackerMeta and attackerMeta.unitType
+    local attackerCapabilities = attackerMeta and attackerMeta.capabilities or {}
+
+    local targetMeta = charge_getUnitMeta(charge_getUnitBases(session.targetKey)[1])
+    local targetTipo = targetMeta and targetMeta.unitType
+
+    local obbligatoria = charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
+
+    if not obbligatoria then
+        local myBase = charge_getUnitBases(session.attackerKey)[1]
+        if not main_isInCommandRange(myBase, slot) then
+            printToColor("[CARICA] Fuori dal raggio di comando (12\") di un Generale — dichiarazione non permessa", player.color, {r=1,g=0.6,b=0})
+            charge_close(unitKey)
+            UI.setAttribute("confirm_panel_charge", "active", "false")
+            return
+        end
     end
 
     local otherSlot = charge_elementoOtherSlot(slot)
@@ -742,17 +784,10 @@ function charge_declareConfirm(player, value, id, buttonConfig)
 
     printToColor(string.format("[CARICA] Dichiarazione: %s carica %s", session.attackerKey, session.targetKey), player.color, {r=0.3,g=1,b=0.3})
     UI.setAttribute("confirm_panel_charge", "active", "false")
-    charge_close(slot)
+    charge_close(unitKey)
     callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
--- ============================================================
--- FUNZIONE: charge_hasArmaDaTiro(armi)
--- Vero se la lista di armi contiene almeno un'arma da tiro
--- (range_inches > 0 in weapons.json), ESCLUSO il Giavellotto —
--- il regolamento lo esclude esplicitamente da questa limitazione
--- (FP/FM con armi da tiro devono superare un test per caricare).
--- ============================================================
 function charge_hasArmaDaTiro(armi)
     if not armi then return false end
     local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
@@ -1906,9 +1941,6 @@ function charge_executeCounter(elemento)
 end
 -- ============================================================
 -- FUNZIONE: charge_btnChargeMove(player, value, id)
--- STUB: per ora stampa solo i pollici da percorrere per questa
--- carica (elemento.distInches del lato caricante). Il movimento
--- vero verrà aggiunto in un secondo momento.
 -- ============================================================
 function charge_btnChargeMove(player, value, id)
     local unitKey = id:match("^btn_(.+)_ChargeMove$")
@@ -1920,7 +1952,111 @@ function charge_btnChargeMove(player, value, id)
         printToColor("[CARICA] Nessuna carica trovata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
         return
     end
+    if elemento.step == CHARGE_STEP.CLO then
+        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
+        return
+    end
 
-    local distInches = charge_elementoDistInches(elemento, slot)
-    printToColor(string.format("[CARICA] %s deve percorrere %.1f pollici", unitKey, distInches or 0), player.color, {r=1,g=0.85,b=0.2})
+    local otherSlot = charge_elementoOtherSlot(slot)
+    local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+    local myBases = charge_getUnitBases(unitKey)
+    local otherBases = charge_getUnitBases(otherKey)
+    if #myBases == 0 or #otherBases == 0 then return end
+
+    -- Distanza TOTALE al contatto: proiettata sul PROPRIO fronte
+    -- attuale (non la distanza euclidea pura) — nessuna rotazione
+    -- viene ricalcolata, si muove solo in avanti lungo il perno già
+    -- fatto in Dichiarazione.
+    local _, _, myFrontLeft, myFrontRight = charge_getFrontLine(myBases)
+    local _, _, otherFrontLeft, otherFrontRight = charge_getFrontLine(otherBases)
+    local mp1, mp2 = myFrontLeft.getPosition(), myFrontRight.getPosition()
+    local op1, op2 = otherFrontLeft.getPosition(), otherFrontRight.getPosition()
+    local myFrontCenter = Vector((mp1.x+mp2.x)/2, 0, (mp1.z+mp2.z)/2)
+    local otherFrontCenter = Vector((op1.x+op2.x)/2, 0, (op1.z+op2.z)/2)
+
+    local myFwd = myBases[1].getTransformForward()
+    local myFwdXZ = Vector(myFwd.x, 0, myFwd.z):normalized()
+    local toTarget = Vector(otherFrontCenter.x - myFrontCenter.x, 0, otherFrontCenter.z - myFrontCenter.z)
+    local distanzaTotaleTTS = toTarget.x * myFwdXZ.x + toTarget.z * myFwdXZ.z
+    local distanzaTotaleInch = distanzaTotaleTTS / INCH_TO_TTS
+
+    -- Riduzione secondo il caso:
+    -- - reciproca/COC: metà strada (l'altro lato si muove altrettanto)
+    -- - morale fallito al Tiro d'Arresto (ANN): si ferma 2" prima
+    -- - Ferma / Tiro d'Arresto riuscito / Evasione: nessuna riduzione,
+    --   percorre la distanza intera (per l'Evasione: nessun impatto,
+    --   il bersaglio non è più lì)
+    local distanzaDaPercorrere = distanzaTotaleInch
+    local reciproca = charge_elementoIsReciprocal(elemento)
+    local otherResponse = charge_elementoResponse(elemento, otherSlot)
+
+    if reciproca or otherResponse == REACTION_TYPE.COC then
+        distanzaDaPercorrere = distanzaTotaleInch / 2
+    elseif elemento.outcome == CHARGE_OUTCOME.ANN then
+        distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
+    end
+
+    -- Popola lo stato minimo che move_avanti_apply (6_move) si
+    -- aspetta, la richiama davvero (funzione testata), poi pulisce.
+    IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
+    IEF_MOVE_BUDGET[unitKey] = distanzaDaPercorrere
+    move_avanti_apply(unitKey, distanzaDaPercorrere)
+    IEF_MOVE_UNITS[unitKey] = nil
+    IEF_MOVE_BUDGET[unitKey] = nil
+
+    if otherResponse == REACTION_TYPE.EVA then
+        elemento.outcome = CHARGE_OUTCOME.EVI
+    else
+        elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
+    end
+    elemento.step = CHARGE_STEP.CLO
+
+    printToColor(string.format("[CARICA] %s percorre %.1f\" (di %.1f\" totali)", unitKey, distanzaDaPercorrere, distanzaTotaleInch), player.color, {r=1,g=0.85,b=0.2})
+end
+-- ============================================================
+-- FUNZIONE: charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
+-- ============================================================
+function charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
+    if attackerTipo == "KN" and targetTipo ~= "FL" and targetTipo ~= "EL" then
+        return true
+    end
+    if attackerTipo == "CP" and charge_hasCapability(attackerCapabilities, "IMPETO") and targetTipo ~= "FL" and targetTipo ~= "EL" then
+        return true
+    end
+    if (attackerTipo == "FP" or attackerTipo == "FM") and charge_hasCapability(attackerCapabilities, "IMPETO") then
+        if targetTipo == "FP" or targetTipo == "FM" or targetTipo == "FL" then
+            return true
+        end
+    end
+    return false
+end
+-- ============================================================
+-- FUNZIONE: charge_checkMandatoryObligations(slot) 
+-- ============================================================
+function charge_checkMandatoryObligations(slot)
+    local violazioni = {}
+    local unita = main_listUnits()
+
+    for unitKey, info in pairs(unita) do
+        if info.slot == slot and (info.tipo == "KN" or info.tipo == "CP" or info.tipo == "FP" or info.tipo == "FM") then
+            if not charge_alreadyDeclared(slot, unitKey) then
+                local bases = charge_getUnitBases(unitKey)
+                local meta = bases[1] and charge_getUnitMeta(bases[1])
+                local capabilities = meta and meta.capabilities or {}
+
+                local targetKey = charge_findLineTarget(unitKey, slot)
+                if targetKey then
+                    local targetBases = charge_getUnitBases(targetKey)
+                    local targetMeta = targetBases[1] and charge_getUnitMeta(targetBases[1])
+                    local targetTipo = targetMeta and targetMeta.unitType
+
+                    if charge_isMandatoryCharge(info.tipo, capabilities, targetTipo) then
+                        table.insert(violazioni, unitKey)
+                    end
+                end
+            end
+        end
+    end
+
+    return violazioni
 end

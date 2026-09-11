@@ -77,22 +77,11 @@ function engine_measure(player, value, id, buttonConfig)
     local objA = selected[1]
     local objB = selected[2]
 
-    local unitaA = engine_measure_getUnitObjects(objA)
-    local unitaB = engine_measure_getUnitObjects(objB)
+    local posA = objA.getPosition()
+    local posB = objB.getPosition()
 
-    local isMultiUnit = (#unitaA > 1) or (#unitaB > 1)
-
-    local realA, realB = objA, objB
-
-    if isMultiUnit then
-        realA, realB = engine_measure_coppiaPiuVicina(unitaA, unitaB)
-    end
-
-    local posA = realA and realA.getPosition()
-    local posB = realB and realB.getPosition()
-
-    local boundsA = realA and realA.getBounds()
-    local boundsB = realB and realB.getBounds()
+    local boundsA = objA.getBounds()
+    local boundsB = objB.getBounds()
 
     if not posA or not posB or not boundsA or not boundsB then return end
 
@@ -103,9 +92,9 @@ function engine_measure(player, value, id, buttonConfig)
     local startPoint = Vector(posA.x + dirAB.x * offsetA, posA.y + 0.1, posA.z + dirAB.z * offsetA)
     local endPoint   = Vector(posB.x - dirAB.x * offsetB, posB.y + 0.1, posB.z - dirAB.z * offsetB)
 
-      local distTTS   = (endPoint - startPoint):magnitude()
-      local distUnit, unitLabel = engine_measure_toUnit(distTTS)
-      local msg = string.format("Distanza tra %s e %s: %.1f %s", objA.getName(), objB.getName(), distUnit, unitLabel)
+    local distTTS   = (endPoint - startPoint):magnitude()
+    local distUnit, unitLabel = engine_measure_toUnit(distTTS)
+    local msg = string.format("Distanza tra %s e %s: %.1f %s", objA.getName(), objB.getName(), distUnit, unitLabel)
 
     warningToColor(msg, player, "Yellow")
     printToColor(msg, player.color, "Orange")
@@ -119,7 +108,6 @@ function engine_measure(player, value, id, buttonConfig)
     callHandler("aggiornaLinee")
 
     UI.setAttribute("measure_cancel_panel", "active", "true")
-    UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
     return true
 end
 

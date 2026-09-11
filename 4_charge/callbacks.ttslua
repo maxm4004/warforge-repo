@@ -3,23 +3,30 @@
 -- Conferma "Dichiarazioni Completate" per Army1.
 -- ============================================================
 function charge_declare_btn_army1(player, value, id, buttonConfig)
+    local violazioni = charge_checkMandatoryObligations(1)
+    if #violazioni > 0 then
+        printToColor("[CARICA] Obbligo di carica non rispettato per: " .. table.concat(violazioni, ", "), player.color, {r=1,g=0.3,b=0.3})
+        return false
+    end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
 end
+-- stessa cosa per charge_declare_btn_army2 con slot=2
 
 -- ============================================================
 -- FUNZIONE: charge_declare_btn_army2(player, value, id, buttonConfig)
--- Conferma "Dichiarazioni Completate" per Army2.
 -- ============================================================
 function charge_declare_btn_army2(player, value, id, buttonConfig)
+    local violazioni = charge_checkMandatoryObligations(2)
+    if #violazioni > 0 then
+        printToColor("[CARICA] Obbligo di carica non rispettato per: " .. table.concat(violazioni, ", "), player.color, {r=1,g=0.3,b=0.3})
+        return false
+    end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end
-
 -- ============================================================
 -- FUNZIONE: charge_react_btn_army1(player, value, id, buttonConfig)
--- "Reazioni Completate" per Army1 — blocca se ci sono ancora
--- righe Difesa senza risposta o un Tiro d'Arresto in corso.
 -- ============================================================
 function charge_react_btn_army1(player, value, id, buttonConfig)
     if charge_reactQueueHasPending() then

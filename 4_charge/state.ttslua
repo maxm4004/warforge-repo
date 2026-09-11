@@ -115,6 +115,11 @@ IEF_UNIT_NO_MOVE_NEXT_TURN = IEF_UNIT_NO_MOVE_NEXT_TURN or {}
 --            distInches, panel3DObj, activePlayer }
 IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
 
+-- Quale unitKey ha aperto l'ultimo popup 2D di conferma
+-- (confirm_panel_charge, oggetto UI condiviso, non uno per
+-- pannello 3D) per ciascun player: [slot] = unitKey
+IEF_CHARGE_ACTIVE_CONFIRM = IEF_CHARGE_ACTIVE_CONFIRM or {}
+
 -- Carica attualmente in risoluzione nella fase CHARGE_STOPFIRE:
 -- nil = nessuna in corso, altrimenti { elemento, slot, subStep }
 -- slot = esercito del DIFENSORE/tiratore.
