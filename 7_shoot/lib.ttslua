@@ -1,12 +1,32 @@
+function shoot_buttonBaseClick(obj, player_color, alt_click)
+
+    local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+    if not slot then return end
+
+    local unitKey = main_getUnitKey(obj)
+    if not unitKey then return end
+
+    local basiObjs = {}
+    for _, o in ipairs(getAllObjects()) do
+        if main_getUnitKey(o) == unitKey then
+            table.insert(basiObjs, o)
+        end
+    end
+
+    if #basiObjs == 0 then return end
+
+    shoot_range_and_target(Player[ARMY[slot].color], basiObjs)
+
+end
 -- ============================================================
 -- FUNZIONE: shoot_range_and_target
 -- ============================================================
-function shoot_range_and_target(player, value, id, buttonConfig)
+function shoot_range_and_target(player, selection)
 
     local phase = ENGINE.phases[ENGINE.phase]
     if not phase then print("No phase") return false end
-    
-    local selected = main_getSelectedObjects(player)
+    local selected = selection
+        
     if not selected or #selected < 1 then
         printToAll("[TIRO] Seleziona una base", {r=1,g=0.6,b=0})
         return false

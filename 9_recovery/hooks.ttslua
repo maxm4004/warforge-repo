@@ -24,7 +24,7 @@ function after_recovery(phaseName, phase)
     TURN.completed.Army1 = false
     TURN.completed.Army2 = false
  
-    IEF_CHARGE_QUEUE = { [1] = {}, [2] = {} }
+    IEF_CHARGE_QUEUE = {}
     IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_STOPFIRE_CURRENT = nil

@@ -634,8 +634,7 @@ end
 -- ============================================================
 function debug_chargeClearQueue()
 
-    IEF_CHARGE_QUEUE[1] = {}
-    IEF_CHARGE_QUEUE[2] = {}
+    IEF_CHARGE_QUEUE = {}
     IEF_CHARGE_RESPONSE_PENDING[1] = nil
     IEF_CHARGE_RESPONSE_PENDING[2] = nil
     
@@ -650,4 +649,67 @@ end
 function debug_moveToPhase(phaseName)
     main_goToPhase(phaseName)    
     callHandler("updateCenterPanel")
+end
+-- ============================================================
+-- FUNZIONE DI TEST: debug_checkIefDataStructure()
+-- Verifica la forma reale di IEF_DATA.weapons e IEF_DATA.meleed
+-- dopo il caricamento JSON, confrontata con morale (di controllo).
+-- /execute debug_checkIefDataStructure()
+-- ============================================================
+function debug_checkIefDataStructure()
+
+    print("========== [DEBUG] IEF_DATA.weapons ==========")
+    print("tipo:", type(IEF_DATA.weapons))
+    for k, v in pairs(IEF_DATA.weapons or {}) do
+        print("  chiave weapons:", k)
+    end
+
+    print("ARCO esiste?", IEF_DATA.weapons and IEF_DATA.weapons.ARCO ~= nil)
+    if IEF_DATA.weapons and IEF_DATA.weapons.ARCO then
+        print("  hit_threshold:", IEF_DATA.weapons.ARCO.hit_threshold)
+        print("  min_to_hit:", IEF_DATA.weapons.ARCO.min_to_hit)
+    end
+
+    print("========== [DEBUG] IEF_DATA.melee ==========")
+    print("tipo:", type(IEF_DATA.melee))
+    for k, v in pairs(IEF_DATA.melee or {}) do
+        print("  chiave melee:", k)
+    end
+    print("first_turn_modifiers esiste?", IEF_DATA.melee and IEF_DATA.melee.first_turn_modifiers ~= nil)
+
+    print("========== [DEBUG] IEF_DATA.morale (controllo) ==========")
+    print("morale_levels esiste?", IEF_DATA.morale and IEF_DATA.morale.morale_levels ~= nil)
+    for k, v in pairs(IEF_DATA.morale and IEF_DATA.morale.morale_levels or {}) do
+        print("  livello:", k, "soglia:", v.threshold)
+    end
+
+    print("========== [DEBUG] DUMP COMPLETO weapons ==========")
+    print(JSON.encode_pretty(IEF_DATA.weapons))
+
+    print("========== [DEBUG] DUMP COMPLETO melee ==========")
+    print(JSON.encode_pretty(IEF_DATA.melee))
+
+end
+-- ============================================================
+-- DEBUG: stampa in console il contenuto di IEF_CHARGE_QUEUE,
+-- una riga per elemento, leggibile.
+-- /execute debug_chargePrintQueue()
+-- ============================================================
+function debug_chargePrintQueue()
+    if #IEF_CHARGE_QUEUE == 0 then
+        print("[DEBUG CARICA] Coda vuota")
+        return
+    end
+
+    print(#IEF_CHARGE_QUEUE)
+
+    for i, e in ipairs(IEF_CHARGE_QUEUE) do
+        print(string.format("[DEBUG CARICA] #%d  id=%s  step=%s  outcome=%s  reciproca=%s",
+            i, tostring(e.id), tostring(e.step), tostring(e.outcome), tostring(charge_elementoIsReciprocal(e))))
+        print(string.format("    Army1: %-20s  request=%-6s  response=%s",
+            tostring(e.unitArmy1Key), tostring(e.requestArmy1), tostring(e.responseArmy1)))
+        print(string.format("    Army2: %-20s  request=%-6s  response=%s",
+            tostring(e.unitArmy2Key), tostring(e.requestArmy2), tostring(e.responseArmy2)))
+        print("")
+    end
 end

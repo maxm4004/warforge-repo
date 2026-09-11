@@ -276,8 +276,7 @@ function charge_findLineTarget(myKey, slot)
 
     local unitTypeData = main_getUnitType(myTipo)
     local moveInches = unitTypeData and unitTypeData.move_inches or 0
-    local INCH_TO_TTS = 1.885
-    local CM_TO_TTS = 0.7423
+  
     local baseHalfWidth = (unitTypeData and unitTypeData.base_width_cm or 4) * CM_TO_TTS / 2 - 0.06
     local baseHalfDepth = (unitTypeData and unitTypeData.base_depth_cm or 3) * CM_TO_TTS / 2 - 0.06
 
@@ -407,20 +406,23 @@ end
 -- ============================================================
 function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText)
     return string.format([[
-        <Panel id="panelCharge_%s" active="true" color="rgba(0,0,0,0.85)" width="700" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+        <Panel id="panelCharge_%s" active="true" color="rgba(0,0,0,0.99)" width="700" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
             <VerticalLayout spacing="10" padding="20 20 20 20" childAlignment="MiddleCenter">
                 <Text text="%s" fontStyle="Bold" font="warforge_font" fontSize="20" color="Orange" alignment="MiddleCenter" width="660" height="35"/>
                 <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
-                    <Button id="btn_%s_ChargePivotSx" text="Perno Sx"     font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotSx"/>
-                    <Button id="btn_%s_ChargePivotDx" text="Perno Dx"     font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotDx"/>
-                    <Button id="btn_%s_ChargeCheck"   text="Check Carica" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.6,0.45,0.1,1)"  textColor="White" width="150" height="30" onClick="Global/charge_btnCheck"/>
+                    <Button id="btn_%s_ChargePivotSx" tooltip="" text="Perno Destro"     font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotSx"/>
+                    <Button id="btn_%s_ChargePivotDx" tooltip="" text="Perno Sinistro"     font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotDx"/>
+                    <Button id="btn_%s_ChargeCheck"   tooltip="Controlla se cè un nemico a distanza" text="Controllo" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.6,0.45,0.1,1)"  textColor="White" width="150" height="30" onClick="Global/charge_btnCheck"/>
+                    <Button id="btn_%s_ChargeMove"    tooltip="" text="Carica"       font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.7,0.15,0.15,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnChargeMove"/>
                 </HorizontalLayout>
-                <Button id="btn_%s_ChargeAbort" text="Annulla" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/charge_btnAbort"/>
-            </VerticalLayout>
+                <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
+                    <Button id="btn_%s_ChargeAbort" text="Annulla" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/charge_btnAbort"/>
+                    <Button id="btn_%s_ChargeClose" text="Chiudi"  font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/charge_btnClose"/>
+                </HorizontalLayout>
+                </VerticalLayout>
         </Panel>
-    ]], unitKey, x, y, z, colore, labelText, unitKey, unitKey, unitKey, unitKey)
+    ]], unitKey, x, y, z, colore, labelText, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey)
 end
-
 -- ============================================================
 -- FUNZIONE: charge_redraw(slot)
 -- Ricostruisce il pannello 3D di dichiarazione con il testo
@@ -429,6 +431,7 @@ end
 -- ============================================================
 function charge_redraw(slot)
     
+    local player = Player[ARMY[slot].color]
     local session = IEF_CHARGE_DECLARE_SESSION[slot]
     if not session or not session.panel3DObj then return end
     if session.panel3DObj.isDestroyed() then return end
@@ -477,6 +480,7 @@ end
 -- Nessuna selezione nativa richiesta al giocatore.
 -- ============================================================
 function charge_declareOpenFromButton(obj, player_color, alt_click)
+
     local player = Player[player_color]
     if not player then return end
 
@@ -500,11 +504,6 @@ function charge_declareOpenFromButton(obj, player_color, alt_click)
     local myKey = main_getUnitKey(obj)
     if not myKey then
         printToColor("[CARICA] Impossibile identificare l'unità caricante", player.color, {r=1,g=0.6,b=0})
-        return
-    end
-
-    if charge_alreadyDeclared(slot, myKey) then
-        printToColor("[CARICA] Questa unità ha già dichiarato una carica questo turno", player.color, {r=1,g=0.6,b=0})
         return
     end
 
@@ -539,8 +538,11 @@ function charge_declareOpenFromButton(obj, player_color, alt_click)
         activePlayer = player,
     }
 
+    engine_cameraByPosition(player, obj.getPosition(), 30, ArmyYaw["ButtonBase"][slot], 15)
     UI.setAttribute("confirm_panel_charge", "active", "false")
-    charge_redraw(slot)
+    Wait.time(function ()
+        charge_redraw(slot)
+    end, 1)
 end
 -- ============================================================
 -- FUNZIONE: charge_pivotApply(player, direzione)
@@ -553,6 +555,11 @@ function charge_pivotApply(player, direzione)
     local slot = main_getArmyByColor(player)
     local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
     if not session then return end
+
+    if charge_alreadyDeclared(slot, session.attackerKey) then
+        warning("[CARICA] Questa unità ha già dichiarato una carica questo turno", "Yellow")
+        return
+    end
 
     local residuo = 2 - session.pivotUsed
     if residuo <= 0.001 then
@@ -619,6 +626,12 @@ function charge_checkTarget(player)
         session.lineHost = newHost
     end
 
+    if charge_alreadyDeclared(slot, session.attackerKey) then
+        warning("[CARICA] Questa unità ha già dichiarato una carica questo turno", "Yellow")
+        return
+    end
+
+
     if not targetKey then
         printToColor("[CARICA] KO — " .. tostring(a), player.color, {r=1,g=0.5,b=0.2})
         return
@@ -663,20 +676,25 @@ function charge_declareAbort(player)
     local session = slot and IEF_CHARGE_DECLARE_SESSION[slot]
     if session then
         charge_declareRestorePosition(session)
-        charge_close(slot)
     end
-    UI.setAttribute("confirm_panel_charge", "active", "false")
 end
 
 -- ============================================================
 -- FUNZIONE: charge_btnAbort(player, value, id)
--- onClick 3D del pulsante "Annulla".
 -- ============================================================
 function charge_btnAbort(player, value, id)
     if not player then return end
     charge_declareAbort(player)
 end
-
+-- ============================================================
+-- FUNZIONE: charge_btnClose(player, value, id)
+-- ============================================================
+function charge_btnClose(player, value, id)
+    if not player then return end
+    local slot = main_getArmyByColor(player)
+    charge_close(slot)
+    UI.setAttribute("confirm_panel_charge", "active", "false")
+end
 -- ============================================================
 -- FUNZIONE: charge_declareCancel(player, value, id, buttonConfig)
 -- onClick del pulsante "CANCEL" nel popup 2D confirm_panel_charge.
@@ -1810,8 +1828,8 @@ function charge_executeContact(chargingSlot, elemento)
         end
 
         -- FIX: riallinea la griglia dopo rotazione + traslazione
-        local fronteAttuale = main_detectFormation(chargingBases)
-        main_ricostruisciFormazione(chargingBases, fronteAttuale)
+        --local fronteAttuale = main_detectFormation(chargingBases)
+        --main_ricostruisciFormazione(chargingBases, fronteAttuale)
     end
 
     elemento.outcome = CHARGE_OUTCOME.OK
@@ -1876,13 +1894,33 @@ function charge_executeCounter(elemento)
         end
 
         -- FIX: riallinea la griglia di entrambe le unità dopo rotazione + traslazione
-        local fronte1 = main_detectFormation(army1Bases)
-        main_ricostruisciFormazione(army1Bases, fronte1)
-        local fronte2 = main_detectFormation(army2Bases)
-        main_ricostruisciFormazione(army2Bases, fronte2)
+        --local fronte1 = main_detectFormation(army1Bases)
+        --main_ricostruisciFormazione(army1Bases, fronte1)
+        --local fronte2 = main_detectFormation(army2Bases)
+        --main_ricostruisciFormazione(army2Bases, fronte2)
     end
 
     elemento.outcome = CHARGE_OUTCOME.OK
     elemento.step = CHARGE_STEP.CLO
     warning(string.format("[CARICA] %s e %s sono a contatto", elemento.unitArmy1Key, elemento.unitArmy2Key), "Yellow")
+end
+-- ============================================================
+-- FUNZIONE: charge_btnChargeMove(player, value, id)
+-- STUB: per ora stampa solo i pollici da percorrere per questa
+-- carica (elemento.distInches del lato caricante). Il movimento
+-- vero verrà aggiunto in un secondo momento.
+-- ============================================================
+function charge_btnChargeMove(player, value, id)
+    local unitKey = id:match("^btn_(.+)_ChargeMove$")
+    if not unitKey then return end
+
+    local slot = main_getArmyByColor(player)
+    local elemento = charge_findQueueEntry(slot, unitKey)
+    if not elemento then
+        printToColor("[CARICA] Nessuna carica trovata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local distInches = charge_elementoDistInches(elemento, slot)
+    printToColor(string.format("[CARICA] %s deve percorrere %.1f pollici", unitKey, distInches or 0), player.color, {r=1,g=0.85,b=0.2})
 end

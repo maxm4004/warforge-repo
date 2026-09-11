@@ -236,6 +236,7 @@ end
 -- FUNZIONE: engine_buttonBarClick()
 -- ============================================================
 function engine_buttonBarClick(player, value, id)
+
     engine_buttonBarInit()
 
     local slotNumber = engine_buttonBarParseSlotFromId(id)
@@ -254,6 +255,6 @@ function engine_buttonBarClick(player, value, id)
         printToAll("[BUTTONBAR] slot senza callBack: " .. tostring(slotNumber), {r=1,g=0.6,b=0})
         return false
     end
-
+    print("engine_buttonBarClick")
     return callHandler(slot.callBack, player, value, id, slot)
 end

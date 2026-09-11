@@ -552,14 +552,14 @@ end
 function main_getSelectedObjects(player)
 
     if player then
-        local selected = Player[player.color].getSelectedObjects()
+        local selected = player.getSelectedObjects()
         if selected and #selected > 0 then return selected end
         return {}
     end
 
     -- fallback senza player (comportamento precedente)
     for _, p in ipairs(main_SeatedPlayers()) do
-        local selected = Player[p.color].getSelectedObjects()
+        local selected = player.getSelectedObjects()
         if selected and #selected > 0 then return selected end
     end
     return {}
@@ -1627,6 +1627,7 @@ end
 -- Click sul pulsante 3D "Muovi" attaccato alla base capitana.
 -- ============================================================
 function main_movementOpenFromButton(obj, player_color, alt_click)
+
     local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
     if not slot then return end
 
@@ -2033,7 +2034,10 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.DEPLOY_SPAWN]     = {form},
         [PHASE.DEPLOY_POSITION]  = {form},
         [PHASE.MOVE]             = {form, move},
-        [PHASE.CHARGE_DECLARE]   = {form, move, charge},
+        [PHASE.CHARGE_DECLARE]   = {charge},
+        [PHASE.CHARGE_REACT]     = {charge},
+        [PHASE.CHARGE_STOPFIRE]  = {charge},
+        [PHASE.CHARGE_AUTO]      = {charge},
         [PHASE.SHOOT]            = {shoot},
         [PHASE.MELEE]            = {melee},
         [PHASE.RECOVERY]         = {recovery}
@@ -2047,17 +2051,18 @@ function main_createBaseButtons(obj, phase, unit)
     local funzioni = azioni[phase]
     if not funzioni then return end
 
-    for _, f in ipairs(funzioni) do   
+    for _, f in ipairs(funzioni) do
         f(obj, unit, pos, rot, w, h)
         pos.x = pos.x - 0.8
     end
-
 end
+
 -- ============================================================
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
 function move(obj, unit, pos, rot, w, h)
-    obj.createButton({
+
+      obj.createButton({
         click_function = "main_movementOpenFromButton",
         function_owner = Global,
         label = "MOVIMENTO",
@@ -2072,6 +2077,7 @@ end
 -- FUNZIONE: form(obj, unit, pos, rot, w, h)
 -- ============================================================
 function form(obj, unit, pos, rot, w, h)
+
         obj.createButton({
         click_function = "main_formationOpenFromButton",
         function_owner = Global,
@@ -2085,11 +2091,9 @@ function form(obj, unit, pos, rot, w, h)
 end
 -- ============================================================
 -- FUNZIONE: charge(obj)
--- Crea il pulsante 3D "CARICA" sulla base capitana, usato in
--- CHARGE_DECLARE per dichiarare una carica. Click non ancora
--- collegato: solo scheletro.
 -- ============================================================
 function charge(obj, unit, pos, rot, w, h)
+
     obj.createButton({
         click_function = "charge_declareOpenFromButton",
         function_owner = Global,
@@ -2104,30 +2108,32 @@ end
 -- ============================================================
 -- FUNZIONE: form()
 -- ============================================================
-function shoot(obj, unit, pos, rot)
+function shoot(obj, unit, pos, rot, w, h)
+
         obj.createButton({
-        click_function = "",
+        click_function = "shoot_buttonclick",
         function_owner = Global,
         label = "TIRO",
         position = pos,
         rotation = rot,
-        width = 500, 
-        height = 400, 
+        width = w, 
+        height = h, 
         font_size = 60,
     })
 end
 -- ============================================================
 -- FUNZIONE: melee()
 -- ============================================================
-function melee(obj, unit, pos, rot)
+function melee(obj, unit, pos, rot, w, h)
+
         obj.createButton({
-        click_function = "",
+        click_function = "melee_buttonclick",
         function_owner = Global,
         label = "MISCHIA",
         position = pos,
         rotation = rot,
-        width = 500, 
-        height = 400, 
+        width = w, 
+        height = h, 
         font_size = 60,
     })
 end
@@ -2135,7 +2141,7 @@ end
 -- FUNZIONE: recovery()
 -- ============================================================
 function recovery(obj, unit, pos, rot)
-                
+           
         obj.createButton({
         click_function = "",
         function_owner = Global,
@@ -2148,9 +2154,10 @@ function recovery(obj, unit, pos, rot)
     })
 end
 -- ============================================================
--- FUNZIONE: recovery()
+-- FUNZIONE:  main_decodeUnitTypeLabel(unitKey)
 -- ============================================================
 function main_decodeUnitTypeLabel(unitKey)
+
     if not unitKey then return "Sconosciuto" end
     for segmento in unitKey:gmatch("[^_]+") do
         if UNIT_TYPE_LABELS[segmento] then
@@ -2160,7 +2167,7 @@ function main_decodeUnitTypeLabel(unitKey)
     return "Sconosciuto"
 end
 -- ============================================================
--- FUNZIONE: recovery()
+-- FUNZIONE: main_decodeArmyCodeLabel(unitKey)
 -- ============================================================
 function main_decodeArmyCodeLabel(unitKey)
     if not unitKey then return "Sconosciuto" end

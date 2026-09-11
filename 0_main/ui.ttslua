@@ -292,17 +292,18 @@ function getRulesetUiXml()
     </Panel>
     ]] .. popups .. movePanels ..  [[
     
+    <!-- CONFIRM SHOOT PANEL -->
     <Panel id="confirm_panel_shoot"
-       rectAlignment="UpperCenter"
+       rectAlignment="LowerCenter"
        width="150" height="50"
-       color="rgba(0,0,0,0.35)"
-       offsetXY="0 -350"
+       color="rgba(0,0,0,0.00)"
+       offsetXY="0 0"
        active="false">
     <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter">
         <Button id="btnActionShoot"
-                text="FIRE"
+                text="Tiro"
                 font="warforge_font"
-                fontSize="12" fontStyle="Bold"
+                fontSize="11" 
                 image="Sprites/Layout/Button"
                 color="rgba(0.7,0.15,0.15,1)"
                 textColor="White"
@@ -310,9 +311,9 @@ function getRulesetUiXml()
                 onClick="shoot_shootConfirm"/>
                 
         <Button id="btnCancelShoot"
-                text="CANCEL"
+                text="Annulla"
                 font="warforge_font"
-                fontSize="12" fontStyle="Bold"
+                fontSize="11"
                 image="Sprites/Layout/Button"
                 color="rgba(0.4,0.4,0.4,1)"
                 textColor="White"
@@ -320,36 +321,38 @@ function getRulesetUiXml()
                 onClick="shoot_shootResetLines"/>
     </HorizontalLayout>
     </Panel>
+
+    <!-- CONFIRM MELEE PANEL -->
     <Panel id="confirm_panel_attack"
-       rectAlignment="UpperCenter"
+       rectAlignment="LowerCenter"
        width="150" height="50"
-       color="rgba(0,0,0,0.35)"
-       offsetXY="0 -350"
+       color="rgba(0,0,0,0.00)"
+       offsetXY="0 0"
        active="false">
     <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter">
         <Button id="btnActionAttack"
-                text="CHARGE"
+                text="Attacca"
                 font="warforge_font"
-                fontSize="12" fontStyle="Bold"
+                fontSize="11"
                 image="Sprites/Layout/Button"
                 color="rgba(0.7,0.15,0.15,1)"
                 textColor="White"
                 width="80"
-                onClick="melee_meleeConfirm"/>
+                onClick="melee_Confirm"/>
                 
         <Button id="btnCancelAttack"
-                text="CANCEL"
+                text="Annulla"
                 font="warforge_font"
-                fontSize="12" fontStyle="Bold"
+                fontSize="11" 
                 image="Sprites/Layout/Button"
                 color="rgba(0.4,0.4,0.4,1)"
                 textColor="White"
                 width="80"
-                onClick="melee_meleeCancel"/>
+                onClick="melee_Cancel"/>
     </HorizontalLayout>
     </Panel>
 
-   <!-- MELEE PANEL -->
+ <!-- MELEE PANEL -->  
 <Panel id="melee_panel"
        rectAlignment="LowerCenter"
        width="350" height="400"
@@ -458,7 +461,7 @@ function getRulesetUiXml()
 
 <Panel id="confirm_panel_charge"
    rectAlignment="LowerCenter"
-   width="260" height="60"
+   width="260" height="50"
    color="rgba(0,0,0,0.00)"
    offsetXY="0 100"
    active="false">

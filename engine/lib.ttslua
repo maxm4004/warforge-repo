@@ -7,9 +7,7 @@ function engine_diceCamera(player, position, pitch, yaw, distance)
 end
 
 -- ============================================================
--- FUNZIONE: debug_cameraData2(color, slot, subSlot, cameraName)
--- subSlot è opzionale: serve solo per "Army1Cards" (una posizione
--- per elemento), per le zone a punto fisso passa nil o 1.
+-- FUNZIONE: engine_cameraByNamme(player, subSlot, cameraName)
 -- ============================================================
 function engine_cameraByNamme(player, subSlot, cameraName)
 
@@ -27,6 +25,12 @@ function engine_cameraByNamme(player, subSlot, cameraName)
     engine_diceCamera(player, position, camera.pitch, yaw[slot], camera.distance)
  end
 -- ============================================================
+-- FUNZIONE: engine_cameraByPosition(color, slot, subSlot, cameraName)
+-- ============================================================
+function engine_cameraByPosition(player, position, pitch, yaw, distance)
+    engine_diceCamera(player, position, pitch, yaw, distance)
+ end
+ -- ============================================================
 -- FUNZIONE: engine_diceCameraResetAll()
 -- Riporta la camera di ENTRAMBI i giocatori alla vista home
 -- del proprio slot (equivalente a "spacebar" per tutti insieme).

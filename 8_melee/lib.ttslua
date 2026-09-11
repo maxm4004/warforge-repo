@@ -1,18 +1,35 @@
+function melee_buttonBaseClick(obj, player_color, alt_click)
+
+  local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+    if not slot then return end
+
+    local unitKey = main_getUnitKey(obj)
+    if not unitKey then return end
+
+    local basiObjs = {}
+    for _, o in ipairs(getAllObjects()) do
+        if main_getUnitKey(o) == unitKey then
+            table.insert(basiObjs, o)
+        end
+    end
+
+    if #basiObjs == 0 then return end
+
+    melee_attack(Player[ARMY[slot].color],  basiObjs)
+
+end
 -- ============================================================
--- FUNZIONE: lionheart_melee(player)
+-- FUNZIONE: melee_attack(player)
 -- Entry point dal pulsante buttonbar
 -- ============================================================
-function melee_attack(player, value, id, buttonConfig)
+function melee_attack(player, selection)
+
+    print("melee_attack")
 
     local phase = ENGINE.phases[ENGINE.phase]
     if not phase then print("No phase") return false end
-
-    local selected = main_getSelectedObjects(player)
-    if not selected or #selected < 1 then
-        printToColor("[MISCHIA] Seleziona una o più basi", player.color, {r=1,g=0.6,b=0})
-        return false
-    end
-
+    local selected  = selection
+    
     local attackerSlot = nil
     if selected[1].hasTag("Army1") then attackerSlot = 1 end
     if selected[1].hasTag("Army2") then attackerSlot = 2 end
