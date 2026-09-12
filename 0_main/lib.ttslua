@@ -1087,11 +1087,11 @@ function main_listUnits()
         end
     end
 
-    print("[MOVIMENTO] Unità presenti sul tavolo:")
-    for unitKey, dati in pairs(unita) do
-        print(string.format("  %s  |  %s  |  \"%s\"  (basi=%d)",
-            unitKey, dati.nickname, dati.nomeDisplay ~= "" and dati.nomeDisplay or "?", dati.count))
-    end
+    -- print("[MOVIMENTO] Unità presenti sul tavolo:")
+    -- for unitKey, dati in pairs(unita) do
+    --     print(string.format("  %s  |  %s  |  \"%s\"  (basi=%d)",
+    --         unitKey, dati.nickname, dati.nomeDisplay ~= "" and dati.nomeDisplay or "?", dati.count))
+    -- end
 
     return unita
 end
@@ -2230,13 +2230,25 @@ function main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
 end
 -- ============================================================
 -- FUNZIONE: main_findGenerals(slot)
+-- Trova tutte le basi Generale dell'esercito ARMY{slot}. GEN non
+-- è un valore di unitType nei metadata — compare solo come
+-- segmento dentro l'unitKey (es. "VIK_XXX_GEN_1") — quindi il
+-- riconoscimento passa da main_getUnitKey, non da meta.unitType.
 -- ============================================================
 function main_findGenerals(slot)
     local generali = {}
     for _, obj in ipairs(getAllObjects()) do
         local meta = main_getUnitMeta(obj)
-        if meta and meta.armySlot == slot and meta.unitType == "GEN" then
-            table.insert(generali, obj)
+        if meta and meta.armySlot == slot then
+            local unitKey = main_getUnitKey(obj)
+            if unitKey then
+                for segmento in unitKey:gmatch("[^_]+") do
+                    if segmento == "GEN" then
+                        table.insert(generali, obj)
+                        break
+                    end
+                end
+            end
         end
     end
     return generali
@@ -2249,13 +2261,9 @@ function main_isInCommandRange(baseObj, slot)
     local generali = main_findGenerals(slot)
     if #generali == 0 then return false end
 
-    local rangeUnits = 12 * INCH_TO_TTS
-    local p = baseObj.getPosition()
-
     for _, gen in ipairs(generali) do
-        local gp = gen.getPosition()
-        local dist = Vector(p.x - gp.x, 0, p.z - gp.z):magnitude()
-        if dist <= rangeUnits then return true end
+        local dist = main_distanceInches(baseObj, gen)
+        if dist and dist <= COMMAND_RANGE_INCHES then return true end
     end
     return false
 end
@@ -2326,8 +2334,8 @@ function main_btnShowRange(obj, player_color, alt_click)
         IEF_RANGE_CIRCLE_SHOWN[unitKey] = nil
         IEF_RANGE_HIGHLIGHTED[unitKey] = nil
     else
-        main_drawRangeCircle(obj, 12, {0.2, 0.6, 1})
-        IEF_RANGE_HIGHLIGHTED[unitKey] = main_highlightUnitsInRange(obj, slot, 12, {0.2, 0.6, 1})
+        main_drawRangeCircle(obj, COMMAND_RANGE_INCHES, {0.2, 0.6, 1})
+        IEF_RANGE_HIGHLIGHTED[unitKey] = main_highlightUnitsInRange(obj, slot, COMMAND_RANGE_INCHES, {0.2, 0.6, 1})
         IEF_RANGE_CIRCLE_SHOWN[unitKey] = true
     end
 end
@@ -2367,4 +2375,41 @@ function main_clearHighlightList(lista)
             o.highlightOff()
         end
     end
+end
+-- ============================================================
+-- FUNZIONE: main_distanceInches(objA, objB)
+-- Distanza in pollici fra due oggetti — bordo-a-bordo (bounds),
+-- solo sul piano XZ (ignora l'altezza). Unica fonte di verità per
+-- ogni calcolo di distanza fisica del progetto: raggio di comando,
+-- measure, e qualunque altro controllo di distanza futuro. Se
+-- getBounds() non è disponibile per uno dei due (oggetto non
+-- valido), ricade su centro-centro come fallback.
+-- ============================================================
+function main_distanceInches(objA, objB)
+    if not objA or not objB then return nil end
+
+    local posA = objA.getPosition()
+    local posB = objB.getPosition()
+    if not posA or not posB then return nil end
+
+    local boundsA = objA.getBounds()
+    local boundsB = objB.getBounds()
+
+    local distTTS
+    if boundsA and boundsB then
+        local dirAB = (Vector(posB.x, 0, posB.z) - Vector(posA.x, 0, posA.z))
+        local pianaLen = math.sqrt(dirAB.x*dirAB.x + dirAB.z*dirAB.z)
+        if pianaLen > 0.0001 then
+            local dirNorm = Vector(dirAB.x / pianaLen, 0, dirAB.z / pianaLen)
+            local offsetA = math.abs(boundsA.size.x/2 * dirNorm.x) + math.abs(boundsA.size.z/2 * dirNorm.z)
+            local offsetB = math.abs(boundsB.size.x/2 * dirNorm.x) + math.abs(boundsB.size.z/2 * dirNorm.z)
+            distTTS = math.max(0, pianaLen - offsetA - offsetB)
+        else
+            distTTS = 0
+        end
+    else
+        distTTS = Vector(posA.x - posB.x, 0, posA.z - posB.z):magnitude()
+    end
+
+    return distTTS / INCH_TO_TTS
 end

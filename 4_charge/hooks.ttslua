@@ -10,16 +10,20 @@ function before_charge_declare(phaseName, phase)
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_STOPFIRE_CURRENT = nil
 
-    charge_close(1)
-    charge_close(2)
-
     UI.setAttribute("charge_attack_list_army1", "active", "true")
     UI.setAttribute("charge_attack_list_army2", "active", "true")
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
+    
+    charge_close(1)
+    charge_close(2)
+
+    charge_autoDeclareMandatory(1)
+    charge_autoDeclareMandatory(2)
+
+    callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
-
 -- ============================================================
 -- FUNZIONE: after_charge_declare(phaseName, phase)
 -- ============================================================

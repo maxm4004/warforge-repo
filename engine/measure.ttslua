@@ -77,30 +77,20 @@ function engine_measure(player, value, id, buttonConfig)
     local objA = selected[1]
     local objB = selected[2]
 
+    local distInches = main_distanceInches(objA, objB)
+    if not distInches then return end
+
     local posA = objA.getPosition()
     local posB = objB.getPosition()
 
-    local boundsA = objA.getBounds()
-    local boundsB = objB.getBounds()
-
-    if not posA or not posB or not boundsA or not boundsB then return end
-
-    local dirAB = (Vector(posB.x, posB.y, posB.z) - Vector(posA.x, posA.y, posA.z)):normalized()
-    local offsetA = math.abs(boundsA.size.x/2 * dirAB.x) + math.abs(boundsA.size.z/2 * dirAB.z)
-    local offsetB = math.abs(boundsB.size.x/2 * dirAB.x) + math.abs(boundsB.size.z/2 * dirAB.z)
-
-    local startPoint = Vector(posA.x + dirAB.x * offsetA, posA.y + 0.1, posA.z + dirAB.z * offsetA)
-    local endPoint   = Vector(posB.x - dirAB.x * offsetB, posB.y + 0.1, posB.z - dirAB.z * offsetB)
-
-    local distTTS   = (endPoint - startPoint):magnitude()
-    local distUnit, unitLabel = engine_measure_toUnit(distTTS)
+    local distUnit, unitLabel = engine_measure_toUnit(distInches)
     local msg = string.format("Distanza tra %s e %s: %.1f %s", objA.getName(), objB.getName(), distUnit, unitLabel)
 
     warningToColor(msg, player, "Yellow")
     printToColor(msg, player.color, "Orange")
 
     ENGINE_MEASURE.activeLine = {
-        points    = {startPoint, endPoint},
+        points    = {Vector(posA.x, posA.y + 0.1, posA.z), Vector(posB.x, posB.y + 0.1, posB.z)},
         color     = ENGINE_MEASURE.LINE_COLOR,
         thickness = ENGINE_MEASURE.LINE_THICKNESS,
     }
@@ -110,17 +100,22 @@ function engine_measure(player, value, id, buttonConfig)
     UI.setAttribute("measure_cancel_panel", "active", "true")
     return true
 end
-
+-- ============================================================
+-- FUNZIONE: engine_measure_cancel()
+-- ============================================================
 function engine_measure_cancel()
     ENGINE_MEASURE.activeLine = nil
     UI.setAttribute("measure_cancel_panel", "active", "false")
     callHandler("aggiornaLinee")
 end
-
-function engine_measure_toUnit(distTTS)
+-- ============================================================
+-- FUNZIONE: engine_measure_toUnit(distInches)
+-- ============================================================
+function engine_measure_toUnit(distInches)
     if MEASURE_UNIT == UNIT.INCH then
-        return distTTS / INCH_TO_TTS, "inch"
+        return distInches, "inch"
     else
+        local distTTS = distInches * INCH_TO_TTS
         return distTTS / CM_TO_TTS, "cm"
     end
 end
