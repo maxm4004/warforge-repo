@@ -84,10 +84,10 @@ function engine_measure(player, value, id, buttonConfig)
     local posB = objB.getPosition()
 
     local distUnit, unitLabel = engine_measure_toUnit(distInches)
-    local msg = string.format("Distanza tra %s e %s: %.1f %s", objA.getName(), objB.getName(), distUnit, unitLabel)
+    local msg = string.format("Distanza tra %s e %s: %.2f %s", objA.getName(), objB.getName(), distUnit, unitLabel)
 
     warningToColor(msg, player, "Yellow")
-    printToColor(msg, player.color, "Orange")
+    printToColor(msg, player.color, "Yellow")
 
     ENGINE_MEASURE.activeLine = {
         points    = {Vector(posA.x, posA.y + 0.1, posA.z), Vector(posB.x, posB.y + 0.1, posB.z)},

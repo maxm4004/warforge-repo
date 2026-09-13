@@ -539,6 +539,17 @@ function getRulesetUiXml()
             width="80"
             active="false"
             onClick="charge_responseMorale"/>
+
+    <Button id="btnResponseCharge" 
+            text="Carica" 
+            font="warforge_font"
+            fontSize="11"
+            image="Sprites/Layout/Button"
+            color="rgba(0.7,0.15,0.15,1)"
+            textColor="White"
+            width="80"
+            active="false"
+            onClick="charge_responseChargeMove"/>        
      
     <Button id="btnResponseCancel" 
             text="Annulla"

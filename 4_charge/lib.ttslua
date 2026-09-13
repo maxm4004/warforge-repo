@@ -269,21 +269,16 @@ function charge_findLineTarget(myKey, slot)
 
     local unitTypeData = main_getUnitType(myTipo)
     local moveInches = unitTypeData and unitTypeData.move_inches or 0
-  
+
     local baseHalfWidth = (unitTypeData and unitTypeData.base_width_cm or 4) * CM_TO_TTS / 2 - 0.06
     local baseHalfDepth = (unitTypeData and unitTypeData.base_depth_cm or 3) * CM_TO_TTS / 2 - 0.06
 
-    -- Tolleranza laterale extra sui lati del corridoio (stesso
-    -- valore tarato in debug_chargeRectangle, 0_main/debug.ttslua).
     local SIDE_TOLERANCE = 0.05 * INCH_TO_TTS
     baseHalfWidth = baseHalfWidth + SIDE_TOLERANCE
 
     local fwdXZ, right, frontLeft, frontRight = charge_getFrontLine(myBases)
     local p1, p2 = frontLeft.getPosition(), frontRight.getPosition()
 
-    -- Corridoio IDENTICO a debug_chargeRectangle (0_main/debug.ttslua):
-    -- parte dal bordo fisico reale della base (p1/p2 +
-    -- baseHalfWidth/baseHalfDepth), profondità = move_inches.
     local rangeUnits = moveInches * INCH_TO_TTS
     local y = 1.20
 
@@ -293,22 +288,17 @@ function charge_findLineTarget(myKey, slot)
     local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, y, startRight.z + fwdXZ.z*rangeUnits)
     local corridorWidth = Vector(startRight.x - startLeft.x, 0, startRight.z - startLeft.z):magnitude()
 
-    -- Disegno del corridoio (linee rosse) — unificato qui, non più
-    -- in una funzione a parte (charge_drawCorridor, rimossa: stesso
-    -- calcolo duplicato in due posti rischiava di disallinearsi).
-    frontLeft.setVectorLines({
-        {points = {frontLeft.positionToLocal(startLeft),  frontLeft.positionToLocal(endLeft)},  color={1,0.2,0.2}, thickness=0.03},
-        {points = {frontLeft.positionToLocal(startRight), frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
-        {points = {frontLeft.positionToLocal(endLeft),    frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
-    })
+    -- Nessun disegno qui: charge_findLineTarget è ora PURA (solo
+    -- calcolo). Il disegno del corridoio è responsabilità di chi
+    -- chiama, tramite charge_drawCorridor — così chi cerca il
+    -- bersaglio senza voler mostrare nulla (dichiarazioni
+    -- automatiche, controllo obblighi) non lascia più residui da
+    -- pulire dopo.
 
     local enemyTag = "Army" .. (slot == 1 and 2 or 1)
     local seenKeys = {}
     local best = nil
 
-    -- Un bersaglio può ricevere una sola carica dichiarata per
-    -- turno: unità già bersagliate (dall'altro lato di un elemento
-    -- con request=true, di qualsiasi esercito) sono escluse.
     local targetiGiaPresi = {}
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
         if e.requestArmy1 then targetiGiaPresi[e.unitArmy2Key] = true end
@@ -329,7 +319,7 @@ function charge_findLineTarget(myKey, slot)
                 if myTipo == "FL" and enemyTipo ~= "FL" and enemyTipo ~= "ART" and enemyTipo ~= "EL" then
                     legalTarget = false
                 end
-                
+
                 if targetiGiaPresi[ek] then
                     legalTarget = false
                 end
@@ -350,10 +340,6 @@ function charge_findLineTarget(myKey, slot)
                                     {x=xmax,z=zmin}, {x=xmax,z=zmax},
                                 }
 
-                                -- Bordo VICINO reale = minimo localZ tra i 4
-                                -- angoli del bounding box (non il centro:
-                                -- fermarsi al centro fa sconfinare l'attaccante
-                                -- dentro il nemico).
                                 local anyInside = false
                                 local nearestLocalZ = nil
                                 for _, c in ipairs(corners) do
@@ -383,10 +369,24 @@ function charge_findLineTarget(myKey, slot)
     end
 
     if not best then
-        return nil, "Nessun bersaglio raggiungibile in linea retta", nil, frontLeft
+        return nil, "Nessun bersaglio raggiungibile in linea retta", nil, frontLeft, startLeft, startRight, endLeft, endRight
     end
 
-    return best.targetKey, 0, best.distInches, frontLeft
+    return best.targetKey, 0, best.distInches, frontLeft, startLeft, startRight, endLeft, endRight
+end
+-- ============================================================
+-- FUNZIONE: charge_drawCorridor(frontLeft, startLeft, startRight, endLeft, endRight)
+-- Disegna il corridoio (linee rosse) self-hosted su frontLeft.
+-- Chiamata SOLO da chi vuole davvero mostrarlo (charge_checkTarget
+-- in CHARGE_DECLARE) — mai da charge_findLineTarget stessa.
+-- ============================================================
+function charge_drawCorridor(frontLeft, startLeft, startRight, endLeft, endRight)
+    if not frontLeft then return end
+    frontLeft.setVectorLines({
+        {points = {frontLeft.positionToLocal(startLeft),  frontLeft.positionToLocal(endLeft)},  color={1,0.2,0.2}, thickness=0.03},
+        {points = {frontLeft.positionToLocal(startRight), frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
+        {points = {frontLeft.positionToLocal(endLeft),    frontLeft.positionToLocal(endRight)}, color={1,0.2,0.2}, thickness=0.03},
+    })
 end
 -- ============================================================
 -- FUNZIONE: charge_buildDeclarePanel3DXml(unitKey, x, z, colore, labelText)
@@ -406,7 +406,6 @@ function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText)
                     <Button id="btn_%s_ChargePivotSx" text="Perno Destro"   font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotSx"/>
                     <Button id="btn_%s_ChargePivotDx" text="Perno Sinistro" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotDx"/>
                     <Button id="btn_%s_ChargeCheck"   text="Controlla"      font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.6,0.45,0.1,1)"  textColor="White" width="150" height="30" onClick="Global/charge_btnCheck"/>
-                    <Button id="btn_%s_ChargeMove"    text="Carica"         font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.7,0.15,0.15,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnChargeMove"/>
                 </HorizontalLayout>
                 <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
                     <Button id="btn_%s_ChargeAbort" text="Annulla" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/charge_btnAbort"/>
@@ -630,50 +629,76 @@ function charge_checkTarget(player, unitKey)
     local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if not session then return end
 
-    local targetKey, a, distInches, newHost = charge_findLineTarget(session.attackerKey, slot)
+    if ENGINE.phase == PHASE.CHARGE_DECLARE then
 
-    if newHost then
-        if session.lineHost and session.lineHost ~= newHost then
-            session.lineHost.setVectorLines({})
+        local targetKey, a, distInches, newHost, startLeft, startRight, endLeft, endRight = charge_findLineTarget(session.attackerKey, slot)
+
+        if newHost then
+            if session.lineHost and session.lineHost ~= newHost then
+                session.lineHost.setVectorLines({})
+            end
+            session.lineHost = newHost
         end
-        session.lineHost = newHost
-    end
 
-    if charge_alreadyDeclared(slot, session.attackerKey) then
-        warning("[CARICA] Questa unità ha già dichiarato una carica questo turno", "Yellow")
-        return
-    end
-
-    if not targetKey then
-        printToColor("[CARICA] KO — " .. tostring(a), player.color, {r=1,g=0.5,b=0.2})
-        return
-    end
-
-    local attackerMeta = charge_getUnitMeta(charge_getUnitBases(session.attackerKey)[1])
-    local attackerTipo = attackerMeta and attackerMeta.unitType
-    local attackerCapabilities = attackerMeta and attackerMeta.capabilities or {}
-
-    local targetMeta = charge_getUnitMeta(charge_getUnitBases(targetKey)[1])
-    local targetTipo = targetMeta and targetMeta.unitType
-
-    local obbligatoria = charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
-
-    if not obbligatoria then
-        local myBase = charge_getUnitBases(session.attackerKey)[1]
-        if not main_isInCommandRange(myBase, slot) then
-            printToColor(string.format("[CARICA] KO — Fuori dal raggio di comando (%d\") di un Generale", COMMAND_RANGE_INCHES), player.color, {r=1,g=0.5,b=0.2})
+        if charge_alreadyDeclared(slot, session.attackerKey) then
+            warningToColor("Questa unità ha già dichiarato una carica questo turno", player.color, "Orange")
             return
         end
+
+        charge_drawCorridor(newHost, startLeft, startRight, endLeft, endRight)
+
+        if not targetKey then
+            warningToColor(string.format(tostring(a)), player.color, "Orange", 5)
+            return
+        end
+
+        local attackerMeta = charge_getUnitMeta(charge_getUnitBases(session.attackerKey)[1])
+        local attackerTipo = attackerMeta and attackerMeta.unitType
+        local attackerCapabilities = attackerMeta and attackerMeta.capabilities or {}
+
+        local targetMeta = charge_getUnitMeta(charge_getUnitBases(targetKey)[1])
+        local targetTipo = targetMeta and targetMeta.unitType
+
+        local obbligatoria = charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
+
+        if not obbligatoria then
+            local myBase = charge_getUnitBases(session.attackerKey)[1]
+            if not main_isInCommandRange(myBase, slot) then
+                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale", main_decodeExtendedUnitLabel(targetKey)), player.color, "Orange", 5)
+                return
+            end
+        end
+
+        local myBases = charge_getUnitBases(session.attackerKey)
+        local targetBases = charge_getUnitBases(targetKey)
+        local _, _, distanzaMinima = charge_closestBasePair(myBases, targetBases)
+
+        session.targetKey  = targetKey
+        session.distInches = distInches
+
+        IEF_CHARGE_ACTIVE_CONFIRM[slot] = unitKey
+
+        UI.setAttribute("confirm_panel_charge", "visibility", player.color)
+        UI.setAttribute("confirm_panel_charge", "active", "true")
+        warningToColor(string.format("la %s è ad una distanza di %.2f %s", main_decodeExtendedUnitLabel(targetKey), distanzaMinima, MEASURE_UNIT), player.color, "Yellow", 5)
+       Wait.time(function ()
+                warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(targetKey)), player.color, "Yellow", 5)
+       end, 5)
+    elseif ENGINE.phase == PHASE.CHARGE_AUTO then
+        local myBase = charge_getUnitBases(session.attackerKey)[1]
+        local inRange = main_isInCommandRange(myBase, slot)
+
+        local elemento = charge_findQueueEntry(slot, session.attackerKey)
+        local distanzaMinima = nil
+        if elemento then
+            local otherSlot = charge_elementoOtherSlot(slot)
+            local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+            local myBases = charge_getUnitBases(session.attackerKey)
+            local otherBases = charge_getUnitBases(otherKey)
+            local _, _, dist = charge_closestBasePair(myBases, otherBases)
+            distanzaMinima = dist
+        end
     end
-
-    session.targetKey  = targetKey
-    session.distInches = distInches
-
-    IEF_CHARGE_ACTIVE_CONFIRM[slot] = unitKey
-
-    UI.setAttribute("confirm_panel_charge", "visibility", player.color)
-    UI.setAttribute("confirm_panel_charge", "active", "true")
-    printToColor("[CARICA] OK — bersaglio raggiungibile", player.color, {r=0.3,g=1,b=0.3})
 end
 
 -- ============================================================
@@ -949,17 +974,6 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_attackRowClick(player, value, id)
--- onClick di una riga del pannello "LE TUE CARICHE": naviga la
--- telecamera sul punto della carica e avanza di uno step
--- (check > move > resolved), poi ricostruisce l'intera UI globale
--- (callHandler("buildUI")) così la lista riflette il nuovo stato
--- — stesso schema già in uso per il numero di carte in 2_field.
--- ============================================================
--- ============================================================
--- FUNZIONE: charge_attackRowClick(player, value, id)
--- id = "charge_attack_row_btn_<slot>_<otherKey>", dove slot è
--- il VIEWER (chi guarda il proprio pannello Attacco) e otherKey
--- l'unità nemica bersagliata.
 -- ============================================================
 function charge_attackRowClick(player, value, id)
     local slotStr, otherKey = id:match("^charge_attack_row_btn_(%d)_(.+)$")
@@ -978,19 +992,27 @@ function charge_attackRowClick(player, value, id)
         local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
         charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
     end
+
+    if ENGINE.phase ~= PHASE.CHARGE_AUTO then return end
+
+    if elemento.step == CHARGE_STEP.CLO then
+        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    IEF_CHARGE_RESPONSE_PENDING[slot] = { elemento = elemento, unitKey = myKey }
+
+    local buttonIds = { "btnResponseCounter", "btnResponseEvade", "btnResponseStopfire", "btnResponseHold" }
+    for _, bid in ipairs(buttonIds) do
+        UI.setAttribute(bid, "active", "false")
+    end
+    UI.setAttribute("btnResponseCharge", "active", "true")
+    UI.setAttribute("btnResponseCharge", "textColor", "white")
+    UI.setAttribute("charge_response_panel", "visibility", player.color)
+    UI.setAttribute("charge_response_panel", "active", "true")
 end
 -- ============================================================
 -- FUNZIONE: charge_defenseRowClick(player, value, id)
--- onClick di una riga del pannello "CARICHE SUBITE": naviga la
--- telecamera e apre il popup di risposta (charge_response_panel)
--- con solo le opzioni legali attive, in base al tipo/capacità del
--- bersaglio e al tipo dell'attaccante.
--- ============================================================
--- ============================================================
--- FUNZIONE: charge_defenseRowClick(player, value, id)
--- id = "charge_defense_row_btn_<slot>_<otherKey>", dove slot è
--- il VIEWER (chi subisce, guarda il proprio pannello Difesa) e
--- otherKey l'unità nemica che lo sta caricando.
 -- ============================================================
 function charge_defenseRowClick(player, value, id)
     local slotStr, otherKey = id:match("^charge_defense_row_btn_(%d)_(.+)$")
@@ -1069,13 +1091,6 @@ function charge_defenseRowClick(player, value, id)
 end
 -- ============================================================
 -- FUNZIONE: charge_resolveConflicts()
--- Con la coda condivisa la reciprocità è già derivata di suo
--- (charge_elementoIsReciprocal) — questa funzione si occupa solo
--- del conflitto di DOPPIO RUOLO: un'unità che ha dichiarato una
--- carica (è "richiedente" in un elemento) ed è ALLO STESSO TEMPO
--- bersaglio puro di un'altra carica (in un elemento diverso, non
--- reciproco). Vince chi ha la distanza minore; l'altro elemento
--- viene scartato dalla coda.
 -- ============================================================
 function charge_resolveConflicts()
     -- Per ogni unitKey: l'elemento dove è richiedente (asAttacker)
@@ -1939,108 +1954,83 @@ end
 -- ============================================================
 -- FUNZIONE: charge_btnChargeMove(player, value, id)
 -- ============================================================
-function charge_btnChargeMove(player, value, id)
-    local unitKey = id:match("^btn_(.+)_ChargeMove$")
-    if not unitKey then return end
+-- function charge_btnChargeMove(player, value, id)
+--     local unitKey = id:match("^btn_(.+)_ChargeMove$")
+--     if not unitKey then return end
 
-    local slot = main_getArmyByColor(player)
-    print(string.format("[DEBUG CHARGEMOVE] player=%s slot=%s unitKey=%s", tostring(player and player.color), tostring(slot), tostring(unitKey)))
+--     local slot = main_getArmyByColor(player)
+--     print(string.format("[DEBUG CHARGEMOVE] player=%s slot=%s unitKey=%s", tostring(player and player.color), tostring(slot), tostring(unitKey)))
 
-    local elemento = charge_findQueueEntry(slot, unitKey)
-    if elemento then
-        print(string.format("[DEBUG CHARGEMOVE] trovato elemento id=%s unitArmy1=%s unitArmy2=%s step=%s", tostring(elemento.id), tostring(elemento.unitArmy1Key), tostring(elemento.unitArmy2Key), tostring(elemento.step)))
-    else
-        print("[DEBUG CHARGEMOVE] nessun elemento trovato")
-    end
+--     local elemento = charge_findQueueEntry(slot, unitKey)
+--     if elemento then
+--         print(string.format("[DEBUG CHARGEMOVE] trovato elemento id=%s unitArmy1=%s unitArmy2=%s step=%s", tostring(elemento.id), tostring(elemento.unitArmy1Key), tostring(elemento.unitArmy2Key), tostring(elemento.step)))
+--     else
+--         print("[DEBUG CHARGEMOVE] nessun elemento trovato")
+--     end
 
-    if not elemento then
-        printToColor("[CARICA] Nessuna carica trovata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
-        return
-    end
-    if elemento.step == CHARGE_STEP.CLO then
-        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
-        return
-    end
+--     if not elemento then
+--         printToColor("[CARICA] Nessuna carica trovata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+--         return
+--     end
+--     if elemento.step == CHARGE_STEP.CLO then
+--         printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
+--         return
+--     end
 
-    local otherSlot = charge_elementoOtherSlot(slot)
-    local otherKey = charge_elementoUnitKey(elemento, otherSlot)
-    local myBases = charge_getUnitBases(unitKey)
-    local otherBases = charge_getUnitBases(otherKey)
-    if #myBases == 0 or #otherBases == 0 then return end
+--     local otherSlot = charge_elementoOtherSlot(slot)
+--     local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+--     local myBases = charge_getUnitBases(unitKey)
+--     local otherBases = charge_getUnitBases(otherKey)
+--     if #myBases == 0 or #otherBases == 0 then return end
 
-    -- Distanza TOTALE al contatto: proiettata sul PROPRIO fronte
-    -- attuale (non la distanza euclidea pura) — nessuna rotazione
-    -- viene ricalcolata, si muove solo in avanti lungo il perno già
-    -- fatto in Dichiarazione.
-    local _, _, myFrontLeft, myFrontRight = charge_getFrontLine(myBases)
-    local _, _, otherFrontLeft, otherFrontRight = charge_getFrontLine(otherBases)
-    local mp1, mp2 = myFrontLeft.getPosition(), myFrontRight.getPosition()
-    local op1, op2 = otherFrontLeft.getPosition(), otherFrontRight.getPosition()
-    local myFrontCenter = Vector((mp1.x+mp2.x)/2, 0, (mp1.z+mp2.z)/2)
-    local otherFrontCenter = Vector((op1.x+op2.x)/2, 0, (op1.z+op2.z)/2)
+--     local _, _, distanzaTotaleInch = charge_closestBasePair(myBases, otherBases)
+--     if not distanzaTotaleInch then return end
 
-    local myFwd = myBases[1].getTransformForward()
-    local myFwdXZ = Vector(myFwd.x, 0, myFwd.z):normalized()
-    local toTarget = Vector(otherFrontCenter.x - myFrontCenter.x, 0, otherFrontCenter.z - myFrontCenter.z)
-    local distanzaTotaleTTS = toTarget.x * myFwdXZ.x + toTarget.z * myFwdXZ.z
-    local distanzaTotaleInch = distanzaTotaleTTS / INCH_TO_TTS
+--     local distanzaDaPercorrere = distanzaTotaleInch
+--     local reciproca = charge_elementoIsReciprocal(elemento)
+--     local otherResponse = charge_elementoResponse(elemento, otherSlot)
 
+--     if reciproca or otherResponse == REACTION_TYPE.COC then
+--         local otherGiaMosso = (slot == 1 and elemento.movedArmy2) or (slot == 2 and elemento.movedArmy1)
+--         if otherGiaMosso then
+--             distanzaDaPercorrere = distanzaTotaleInch
+--         else
+--             distanzaDaPercorrere = distanzaTotaleInch / 2
+--         end
+--     elseif elemento.outcome == CHARGE_OUTCOME.ANN then
+--         distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
+--     end
 
+--     print("distanzaTotaleInch: ", string.format("%.2f",distanzaTotaleInch))
+--     print("distanzaDaPercorrere: ", string.format("%.2f",distanzaDaPercorrere))
 
+--     IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
+--     IEF_MOVE_BUDGET[unitKey] = distanzaDaPercorrere
+--     move_avanti_apply(unitKey, distanzaDaPercorrere)
+--     IEF_MOVE_UNITS[unitKey] = nil
+--     IEF_MOVE_BUDGET[unitKey] = nil
 
+--     if otherResponse == REACTION_TYPE.EVA then
+--         elemento.outcome = CHARGE_OUTCOME.EVI
+--     else
+--         elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
+--     end
 
+--     if reciproca or otherResponse == REACTION_TYPE.COC then
+--         -- Reciproca/contro-carica: chiude solo quando ENTRAMBI i
+--         -- lati hanno eseguito il proprio movimento — un solo click
+--         -- su "Carica" muove solo la propria metà.
+--         if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+--         if elemento.movedArmy1 and elemento.movedArmy2 then
+--             elemento.step = CHARGE_STEP.CLO
+--         end
+--     else
+--         -- Tutti gli altri casi: un solo lato si muove, chiude subito.
+--         elemento.step = CHARGE_STEP.CLO
+--     end
 
-
-    local distanzaDaPercorrere = distanzaTotaleInch
-    local reciproca = charge_elementoIsReciprocal(elemento)
-    local otherResponse = charge_elementoResponse(elemento, otherSlot)
-
-    if reciproca or otherResponse == REACTION_TYPE.COC then
-        local otherGiaMosso = (slot == 1 and elemento.movedArmy2) or (slot == 2 and elemento.movedArmy1)
-        if otherGiaMosso then
-            -- L'altro lato ha già percorso la sua metà: questo click
-            -- chiude TUTTO il gap residuo (misurato ora, live), non
-            -- lo divide ancora — altrimenti i due movimenti calcolati
-            -- in momenti diversi possono non coincidere esattamente
-            -- nel punto di contatto.
-            distanzaDaPercorrere = distanzaTotaleInch
-        else
-            distanzaDaPercorrere = distanzaTotaleInch / 2
-        end
-    elseif elemento.outcome == CHARGE_OUTCOME.ANN then
-        distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
-    end
-
-    print("distanzaTotaleInch: ", string.format("%.2f",distanzaTotaleInch))
-    print("distanzaDaPercorrere: ", string.format("%.2f",distanzaDaPercorrere))
-
-    IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
-    IEF_MOVE_BUDGET[unitKey] = distanzaDaPercorrere
-    move_avanti_apply(unitKey, distanzaDaPercorrere)
-    IEF_MOVE_UNITS[unitKey] = nil
-    IEF_MOVE_BUDGET[unitKey] = nil
-
-    if otherResponse == REACTION_TYPE.EVA then
-        elemento.outcome = CHARGE_OUTCOME.EVI
-    else
-        elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
-    end
-
-    if reciproca or otherResponse == REACTION_TYPE.COC then
-        -- Reciproca/contro-carica: chiude solo quando ENTRAMBI i
-        -- lati hanno eseguito il proprio movimento — un solo click
-        -- su "Carica" muove solo la propria metà.
-        if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
-        if elemento.movedArmy1 and elemento.movedArmy2 then
-            elemento.step = CHARGE_STEP.CLO
-        end
-    else
-        -- Tutti gli altri casi: un solo lato si muove, chiude subito.
-        elemento.step = CHARGE_STEP.CLO
-    end
-
-    printToColor(string.format("[CARICA] %s percorre %.1f\" (di %.1f\" totali)", unitKey, distanzaDaPercorrere, distanzaTotaleInch), player.color, {r=1,g=0.85,b=0.2})
-end
+--     printToColor(string.format("[CARICA] %s percorre %.1f\" (di %.1f\" totali)", unitKey, distanzaDaPercorrere, distanzaTotaleInch), player.color, {r=1,g=0.85,b=0.2})
+-- end
 -- ============================================================
 -- FUNZIONE: charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
 -- ============================================================
@@ -2073,10 +2063,6 @@ function charge_checkMandatoryObligations(slot)
                 local capabilities = meta and meta.capabilities or {}
 
                 local targetKey, _, _, lineHost = charge_findLineTarget(unitKey, slot)
-
-                if lineHost then
-                    lineHost.setVectorLines({})
-                end
 
                 if targetKey then
                     local targetBases = charge_getUnitBases(targetKey)
@@ -2115,15 +2101,6 @@ function charge_autoDeclareMandatory(slot)
 
                     local targetKey, _, distInches, lineHost = charge_findLineTarget(unitKey, slot)
 
-                    -- charge_findLineTarget disegna SEMPRE il
-                    -- corridoio come side-effect — qui non c'è
-                    -- nessuna sessione interattiva che lo pulisca
-                    -- alla chiusura, quindi lo tolgo subito dopo
-                    -- averlo letto, per ogni unità controllata.
-                    if lineHost then
-                        lineHost.setVectorLines({})
-                    end
-
                     if targetKey then
                         local targetBases = charge_getUnitBases(targetKey)
                         local targetMeta = targetBases[1] and charge_getUnitMeta(targetBases[1])
@@ -2141,4 +2118,126 @@ function charge_autoDeclareMandatory(slot)
             end
         end
     end
+end
+-- ============================================================
+-- FUNZIONE: charge_closestBasePair(basesA, basesB)
+-- Trova la coppia di basi (una da basesA, una da basesB) con la
+-- distanza bordo-a-bordo minima (main_distanceInches). Ritorna
+-- baseA, baseB, distanzaInch.
+-- ============================================================
+function charge_closestBasePair(basesA, basesB)
+    local migliorA, migliorB, migliorDist = nil, nil, nil
+
+    for _, a in ipairs(basesA) do
+        for _, b in ipairs(basesB) do
+            local d = main_distanceInches(a, b)
+            if d and (migliorDist == nil or d < migliorDist) then
+                migliorDist = d
+                migliorA = a
+                migliorB = b
+            end
+        end
+    end
+
+    return migliorA, migliorB, migliorDist
+end
+-- ============================================================
+-- FUNZIONE: charge_executeChargeMove(player, unitKey)
+-- Cuore del movimento di carica (proiezione/riduzione/move_avanti_apply),
+-- condiviso fra il vecchio bottone 3D e il nuovo bottone nel popup
+-- charge_response_panel (aperto da charge_attackRowClick).
+-- ============================================================
+function charge_executeChargeMove(player, unitKey)
+    local slot = main_getArmyByColor(player)
+    local elemento = charge_findQueueEntry(slot, unitKey)
+    if not elemento then
+        printToColor("[CARICA] Nessuna carica trovata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+        return
+    end
+    if elemento.step == CHARGE_STEP.CLO then
+        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
+    if giaMossoIoStesso then
+        warningToColor("L'unità ha già eseguito il movimento di carica", player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local otherSlot = charge_elementoOtherSlot(slot)
+    local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+    local myBases = charge_getUnitBases(unitKey)
+    local otherBases = charge_getUnitBases(otherKey)
+    if #myBases == 0 or #otherBases == 0 then return end
+
+    local _, _, distanzaTotaleInch = charge_closestBasePair(myBases, otherBases)
+    if not distanzaTotaleInch then return end
+
+    local distanzaDaPercorrere = distanzaTotaleInch
+    local reciproca = charge_elementoIsReciprocal(elemento)
+    local otherResponse = charge_elementoResponse(elemento, otherSlot)
+
+    if reciproca or otherResponse == REACTION_TYPE.COC then
+        local otherGiaMosso = (slot == 1 and elemento.movedArmy2) or (slot == 2 and elemento.movedArmy1)
+        if otherGiaMosso then
+            distanzaDaPercorrere = distanzaTotaleInch
+        else
+            distanzaDaPercorrere = distanzaTotaleInch / 2
+        end
+    elseif elemento.outcome == CHARGE_OUTCOME.ANN then
+        distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
+    end
+
+    IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
+    IEF_MOVE_BUDGET[unitKey] = distanzaDaPercorrere
+    move_avanti_apply(unitKey, distanzaDaPercorrere)
+    IEF_MOVE_UNITS[unitKey] = nil
+    IEF_MOVE_BUDGET[unitKey] = nil
+
+    if otherResponse == REACTION_TYPE.EVA then
+        elemento.outcome = CHARGE_OUTCOME.EVI
+    else
+        elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
+    end
+
+    if reciproca or otherResponse == REACTION_TYPE.COC then
+        if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+        if elemento.movedArmy1 and elemento.movedArmy2 then
+            elemento.step = CHARGE_STEP.CLO
+        end
+    else
+        elemento.step = CHARGE_STEP.CLO
+    end
+
+    print(elemento.step)
+    printToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", unitKey, distanzaDaPercorrere, distanzaTotaleInch), player.color, {r=1,g=0.85,b=0.2})
+end
+
+-- ============================================================
+-- FUNZIONE: charge_btnChargeMove(player, value, id)
+-- Vecchio bottone 3D — resta per compatibilità, delega al cuore
+-- condiviso.
+-- ============================================================
+-- function charge_btnChargeMove(player, value, id)
+--     local unitKey = id:match("^btn_(.+)_ChargeMove$")
+--     if not unitKey then return end
+--     charge_executeChargeMove(player, unitKey)
+-- end
+
+-- ============================================================
+-- FUNZIONE: charge_responseChargeMove(player, value, id)
+-- Nuovo bottone dentro charge_response_panel, aperto da
+-- charge_attackRowClick in CHARGE_AUTO. unitKey letto da
+-- IEF_CHARGE_RESPONSE_PENDING[slot] (nessun id per-unità qui,
+-- popup condiviso).
+-- ============================================================
+function charge_responseChargeMove(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending or not pending.unitKey then return end
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    charge_executeChargeMove(player, pending.unitKey)
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end

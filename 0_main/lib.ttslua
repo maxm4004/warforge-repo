@@ -2030,13 +2030,13 @@ function main_createBaseButtons(obj, phase, unit)
     obj.clearButtons()
 
     local azioni = {
-        [PHASE.DEPLOY_SPAWN]     = {form},
-        [PHASE.DEPLOY_POSITION]  = {form},
-        [PHASE.MOVE]             = {form, move},
-        [PHASE.CHARGE_DECLARE]   = {range, form, move, charge},
-        [PHASE.CHARGE_REACT]     = {charge},
-        [PHASE.CHARGE_STOPFIRE]  = {charge},
+        [PHASE.DEPLOY_SPAWN]     = {},
+        [PHASE.DEPLOY_POSITION]  = {form, range},
+        [PHASE.CHARGE_DECLARE]   = {range, charge},
+        [PHASE.CHARGE_REACT]     = {},
+        [PHASE.CHARGE_STOPFIRE]  = {},
         [PHASE.CHARGE_AUTO]      = {charge},
+        [PHASE.MOVE]             = {form, move, range},
         [PHASE.SHOOT]            = {shoot},
         [PHASE.MELEE]            = {melee},
         [PHASE.RECOVERY]         = {recovery}
@@ -2206,12 +2206,15 @@ function main_decodeArmyCodeLabel(unitKey)
     if not codice then return "Sconosciuto" end
     return ARMIES_LABELS[codice] or codice
 end
+
+-- ============================================================
+-- FUNZIONE: main_decodeExtendedUnitLabel(unitKey)
+-- ============================================================
+function main_decodeExtendedUnitLabel(unitKey)
+    return main_decodeUnitTypeLabel(unitKey).. " ".. main_decodeArmyCodeLabel(unitKey)
+end
 -- ============================================================
 -- FUNZIONE: main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
--- Centra la camera sul CENTRO della formazione (media di tutte le
--- basi, non solo quella cliccata) più un offset verticale per
--- includere il pannello 3D (che sta sopra la base) nell'inquadratura.
--- Condivisa da tutti i pannelli 3D-su-base (Carica, Manovra, Formazione).
 -- ============================================================
 function main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
     if #basiObjs == 0 then return end
