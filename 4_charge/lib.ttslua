@@ -813,26 +813,32 @@ function charge_declareConfirm(player, value, id, buttonConfig)
     charge_elementoSetRequest(elemento, slot, true)
     charge_elementoSetDeclareData(elemento, slot, session.pivotUsed, session.distInches)
 
+    local myBases = charge_getUnitBases(session.attackerKey)
+    local targetBases = charge_getUnitBases(session.targetKey)
+
+    if not elemento.moveTargetArmy1 and not elemento.moveTargetArmy2 then
+        -- Nessuno ha ancora salvato un punto per questo elemento:
+        -- lo calcolo ora, UNA SOLA VOLTA, e lo salvo per ENTRAMBI
+        -- i lati — non uno snapshot separato a testa.
+        local closestMine, closestTheirs = charge_closestBasePair(myBases, targetBases)
+        if closestMine and closestTheirs then
+            local pMine = closestMine.getPosition()
+            local pTheirs = closestTheirs.getPosition()
+            if slot == 1 then
+                elemento.moveTargetArmy2 = Vector(pMine.x, pMine.y, pMine.z)
+                elemento.moveTargetArmy1 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+            else
+                elemento.moveTargetArmy1 = Vector(pMine.x, pMine.y, pMine.z)
+                elemento.moveTargetArmy2 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+            end
+        end
+    end
+
     printToColor(string.format("[CARICA] Dichiarazione: %s carica %s", session.attackerKey, session.targetKey), player.color, {r=0.3,g=1,b=0.3})
     UI.setAttribute("confirm_panel_charge", "active", "false")
     charge_close(unitKey)
     callHandler("buildUI")
     callHandler("updateCenterPanel")
-end
-function charge_hasArmaDaTiro(armi)
-    if not armi then return false end
-    local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
-    if not weaponsDict then return false end
-
-    for _, nomeArma in ipairs(armi) do
-        if nomeArma ~= "GIAVELLOTTO" then
-            local w = weaponsDict[nomeArma]
-            if w and w.range_inches and w.range_inches > 0 then
-                return true
-            end
-        end
-    end
-    return false
 end
 -- ============================================================
 -- FUNZIONE: charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
@@ -873,6 +879,30 @@ function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
         return nil, { REACTION_TYPE.TIR, REACTION_TYPE.FER }
     end
     return nil, {}
+end
+-- ============================================================
+-- FUNZIONE: charge_hasArmaDaTiro(armi)
+-- Vero se la lista di armi contiene almeno un'arma da tiro
+-- utilizzabile per il Tiro d'Arresto (esclude il GIAVELLOTTO,
+-- regolamento: "Può essere usata solo per effettuare un Tiro
+-- d'Arresto" — cioè il contrario, è l'UNICA arma che NON dà
+-- diritto al Tiro d'Arresto standard qui, verificare comunque
+-- la regola esatta se serve).
+-- ============================================================
+function charge_hasArmaDaTiro(armi)
+    if not armi then return false end
+    local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
+    if not weaponsDict then return false end
+
+    for _, nomeArma in ipairs(armi) do
+        if nomeArma ~= "GIAVELLOTTO" then
+            local w = weaponsDict[nomeArma]
+            if w and w.range_inches and w.range_inches > 0 then
+                return true
+            end
+        end
+    end
+    return false
 end
 -- ============================================================
 -- FUNZIONE: charge_cameraToPoint(player, slot, position)
@@ -1228,20 +1258,34 @@ function charge_responseCounter(player, value, id)
     if not pending then return end
     charge_elementoSetResponse(pending.elemento, slot, REACTION_TYPE.COC)
 
-    local otherSlot = charge_elementoOtherSlot(slot)
-    local myKey = charge_elementoUnitKey(pending.elemento, slot)
-    local otherKey = charge_elementoUnitKey(pending.elemento, otherSlot)
-    local myBases = charge_getUnitBases(myKey)
-    local otherBases = charge_getUnitBases(otherKey)
-    local _, closestOtherBase = charge_closestBasePair(myBases, otherBases)
-    if closestOtherBase then
-        local p = closestOtherBase.getPosition()
-        if slot == 1 then pending.elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
-        else pending.elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
+    local elemento = pending.elemento
+
+    if not elemento.moveTargetArmy1 and not elemento.moveTargetArmy2 then
+        -- Nessuno ha ancora salvato un punto per questo elemento:
+        -- lo calcolo ora, UNA SOLA VOLTA, e lo salvo per ENTRAMBI
+        -- i lati — non uno snapshot separato a testa.
+        local otherSlot = charge_elementoOtherSlot(slot)
+        local myKey = charge_elementoUnitKey(elemento, slot)
+        local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+        local myBases = charge_getUnitBases(myKey)
+        local otherBases = charge_getUnitBases(otherKey)
+
+        local closestMine, closestTheirs = charge_closestBasePair(myBases, otherBases)
+        if closestMine and closestTheirs then
+            local pMine = closestMine.getPosition()
+            local pTheirs = closestTheirs.getPosition()
+            if slot == 1 then
+                elemento.moveTargetArmy2 = Vector(pMine.x, pMine.y, pMine.z)
+                elemento.moveTargetArmy1 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+            else
+                elemento.moveTargetArmy1 = Vector(pMine.x, pMine.y, pMine.z)
+                elemento.moveTargetArmy2 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+            end
+        end
     end
 
     UI.setAttribute("charge_response_panel", "active", "false")
-    charge_refreshDefenseRowText(slot, pending.elemento)
+    charge_refreshDefenseRowText(slot, elemento)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
 -- ============================================================

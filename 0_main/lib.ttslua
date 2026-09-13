@@ -428,7 +428,6 @@ end
 -- ============================================================
 function main_canUseButton(slot, player, value, id, button, phase)
 
-    print("main_canUseButton")
     local mode = phase and phase.inputMode or "FREE"
 
     -- ========================================================
@@ -2032,7 +2031,7 @@ function main_createBaseButtons(obj, phase, unit)
     local azioni = {
         [PHASE.DEPLOY_SPAWN]     = {},
         [PHASE.DEPLOY_POSITION]  = {form, range},
-        [PHASE.CHARGE_DECLARE]   = {range, charge, move},
+        [PHASE.CHARGE_DECLARE]   = {range, charge},
         [PHASE.CHARGE_REACT]     = {},
         [PHASE.CHARGE_STOPFIRE]  = {},
         [PHASE.CHARGE_AUTO]      = {},
