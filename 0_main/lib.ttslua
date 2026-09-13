@@ -2032,10 +2032,10 @@ function main_createBaseButtons(obj, phase, unit)
     local azioni = {
         [PHASE.DEPLOY_SPAWN]     = {},
         [PHASE.DEPLOY_POSITION]  = {form, range},
-        [PHASE.CHARGE_DECLARE]   = {range, charge},
+        [PHASE.CHARGE_DECLARE]   = {range, charge, move},
         [PHASE.CHARGE_REACT]     = {},
         [PHASE.CHARGE_STOPFIRE]  = {},
-        [PHASE.CHARGE_AUTO]      = {charge},
+        [PHASE.CHARGE_AUTO]      = {},
         [PHASE.MOVE]             = {form, move, range},
         [PHASE.SHOOT]            = {shoot},
         [PHASE.MELEE]            = {melee},
@@ -2412,6 +2412,30 @@ function main_distanceInches(objA, objB)
         end
     else
         distTTS = Vector(posA.x - posB.x, 0, posA.z - posB.z):magnitude()
+    end
+
+    return distTTS / INCH_TO_TTS
+end
+-- ============================================================
+-- FUNZIONE: main_distanceInchesToPoint(obj, point)
+-- Distanza in pollici da un oggetto (bordo, bounds) a un punto
+-- fisso (non un altro oggetto) — solo XZ. Stessa filosofia di
+-- main_distanceInches, ma per un punto salvato/snapshot.
+-- ============================================================
+function main_distanceInchesToPoint(obj, point)
+    if not obj or not point then return nil end
+    local pos = obj.getPosition()
+    local bounds = obj.getBounds()
+
+    local dirAB = Vector(point.x - pos.x, 0, point.z - pos.z)
+    local pianaLen = math.sqrt(dirAB.x*dirAB.x + dirAB.z*dirAB.z)
+    if pianaLen < 0.0001 then return 0 end
+
+    local distTTS = pianaLen
+    if bounds then
+        local dirNorm = Vector(dirAB.x / pianaLen, 0, dirAB.z / pianaLen)
+        local offset = math.abs(bounds.size.x/2 * dirNorm.x) + math.abs(bounds.size.z/2 * dirNorm.z)
+        distTTS = math.max(0, pianaLen - offset)
     end
 
     return distTTS / INCH_TO_TTS

@@ -144,6 +144,8 @@ function charge_findOrCreateElement(mySlot, myKey, otherSlot, otherKey)
         movedArmy1 = false,
         movedArmy2 = false,
         stopfireResolved = false,
+        moveTargetArmy1 = nil,
+        moveTargetArmy2 = nil,
     }
     table.insert(IEF_CHARGE_QUEUE, nuovo)
     return nuovo, true
@@ -692,11 +694,18 @@ function charge_checkTarget(player, unitKey)
         local distanzaMinima = nil
         if elemento then
             local otherSlot = charge_elementoOtherSlot(slot)
-            local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+            local elemento = charge_findOrCreateElement(slot, session.attackerKey, otherSlot, session.targetKey)
+            charge_elementoSetRequest(elemento, slot, true)
+            charge_elementoSetDeclareData(elemento, slot, session.pivotUsed, session.distInches)
+
             local myBases = charge_getUnitBases(session.attackerKey)
-            local otherBases = charge_getUnitBases(otherKey)
-            local _, _, dist = charge_closestBasePair(myBases, otherBases)
-            distanzaMinima = dist
+            local targetBases = charge_getUnitBases(session.targetKey)
+            local _, closestTargetBase = charge_closestBasePair(myBases, targetBases)
+            if closestTargetBase then
+                local p = closestTargetBase.getPosition()
+                if slot == 1 then elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
+                else elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
+            end
         end
     end
 end
@@ -1203,9 +1212,6 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_turnAround180(basiObjs)
--- Gira ogni base di 180° sul posto (evasione: "gira di 180° e
--- muove dritto in avanti", nessun perno/arco — a differenza del
--- perno di carica, qui non c'è rotazione attorno a un punto).
 -- ============================================================
 function charge_turnAround180(basiObjs)
     for _, obj in ipairs(basiObjs) do
@@ -1213,20 +1219,33 @@ function charge_turnAround180(basiObjs)
         obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
     end
 end
+-- ============================================================
+-- FUNZIONE: charge_responseCounter(player, value, id)
+-- ============================================================
 function charge_responseCounter(player, value, id)
     local slot = main_getArmyByColor(player)
     local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
     if not pending then return end
     charge_elementoSetResponse(pending.elemento, slot, REACTION_TYPE.COC)
+
+    local otherSlot = charge_elementoOtherSlot(slot)
+    local myKey = charge_elementoUnitKey(pending.elemento, slot)
+    local otherKey = charge_elementoUnitKey(pending.elemento, otherSlot)
+    local myBases = charge_getUnitBases(myKey)
+    local otherBases = charge_getUnitBases(otherKey)
+    local _, closestOtherBase = charge_closestBasePair(myBases, otherBases)
+    if closestOtherBase then
+        local p = closestOtherBase.getPosition()
+        if slot == 1 then pending.elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
+        else pending.elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
+    end
+
     UI.setAttribute("charge_response_panel", "active", "false")
     charge_refreshDefenseRowText(slot, pending.elemento)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
 -- ============================================================
 -- FUNZIONE: charge_responseEvade(player, value, id)
--- Reazione "Evasione" (FL obbligatoria salvo bersaglio FL/EL,
--- CL opzionale). Registra SOLO la response del mio lato — nessuna
--- fisica qui, eseguita in CHARGE_AUTO (charge_executeEvade).
 -- ============================================================
 function charge_responseEvade(player, value, id)
     local slot = main_getArmyByColor(player)
@@ -2101,6 +2120,10 @@ function charge_autoDeclareMandatory(slot)
 
                     local targetKey, _, distInches, lineHost = charge_findLineTarget(unitKey, slot)
 
+                    if lineHost then
+                        lineHost.setVectorLines({})
+                    end
+
                     if targetKey then
                         local targetBases = charge_getUnitBases(targetKey)
                         local targetMeta = targetBases[1] and charge_getUnitMeta(targetBases[1])
@@ -2111,6 +2134,14 @@ function charge_autoDeclareMandatory(slot)
                             local elemento = charge_findOrCreateElement(slot, unitKey, otherSlot, targetKey)
                             charge_elementoSetRequest(elemento, slot, true)
                             charge_elementoSetDeclareData(elemento, slot, 0, distInches)
+
+                            local _, closestTargetBase = charge_closestBasePair(bases, targetBases)
+                            if closestTargetBase then
+                                local p = closestTargetBase.getPosition()
+                                if slot == 1 then elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
+                                else elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
+                            end
+
                             printToAll(string.format("[CARICA] %s è obbligata a caricare %s (dichiarazione automatica)", unitKey, targetKey), {r=1,g=0.7,b=0.2})
                         end
                     end
@@ -2143,9 +2174,12 @@ function charge_closestBasePair(basesA, basesB)
 end
 -- ============================================================
 -- FUNZIONE: charge_executeChargeMove(player, unitKey)
--- Cuore del movimento di carica (proiezione/riduzione/move_avanti_apply),
--- condiviso fra il vecchio bottone 3D e il nuovo bottone nel popup
--- charge_response_panel (aperto da charge_attackRowClick).
+-- Cuore del movimento di carica: muove in LINEA RETTA (sola
+-- traslazione, nessuna rotazione) verso il punto fisso salvato al
+-- momento della dichiarazione/reazione (elemento.moveTargetArmy1/2
+-- — la base nemica più vicina snapshottata allora, non ricalcolata
+-- live ad ogni click). Condiviso fra il vecchio bottone 3D e il
+-- bottone nel popup charge_response_panel.
 -- ============================================================
 function charge_executeChargeMove(player, unitKey)
     local slot = main_getArmyByColor(player)
@@ -2165,18 +2199,23 @@ function charge_executeChargeMove(player, unitKey)
         return
     end
 
-    local otherSlot = charge_elementoOtherSlot(slot)
-    local otherKey = charge_elementoUnitKey(elemento, otherSlot)
-    local myBases = charge_getUnitBases(unitKey)
-    local otherBases = charge_getUnitBases(otherKey)
-    if #myBases == 0 or #otherBases == 0 then return end
+    local moveTarget = (slot == 1) and elemento.moveTargetArmy1 or elemento.moveTargetArmy2
+    if not moveTarget then
+        printToColor("[CARICA] Nessun punto di contatto salvato per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+        return
+    end
 
-    local _, _, distanzaTotaleInch = charge_closestBasePair(myBases, otherBases)
+    local myBases = charge_getUnitBases(unitKey)
+    if #myBases == 0 then return end
+
+    local distanzaTotaleInch = main_distanceInchesToPoint(myBases[1], moveTarget)
     if not distanzaTotaleInch then return end
 
-    local distanzaDaPercorrere = distanzaTotaleInch
+    local otherSlot = charge_elementoOtherSlot(slot)
     local reciproca = charge_elementoIsReciprocal(elemento)
     local otherResponse = charge_elementoResponse(elemento, otherSlot)
+
+    local distanzaDaPercorrere = distanzaTotaleInch
 
     if reciproca or otherResponse == REACTION_TYPE.COC then
         local otherGiaMosso = (slot == 1 and elemento.movedArmy2) or (slot == 2 and elemento.movedArmy1)
@@ -2189,11 +2228,7 @@ function charge_executeChargeMove(player, unitKey)
         distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
     end
 
-    IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
-    IEF_MOVE_BUDGET[unitKey] = distanzaDaPercorrere
-    move_avanti_apply(unitKey, distanzaDaPercorrere)
-    IEF_MOVE_UNITS[unitKey] = nil
-    IEF_MOVE_BUDGET[unitKey] = nil
+    charge_moveTowardPoint(myBases, moveTarget, distanzaDaPercorrere)
 
     if otherResponse == REACTION_TYPE.EVA then
         elemento.outcome = CHARGE_OUTCOME.EVI
@@ -2210,27 +2245,10 @@ function charge_executeChargeMove(player, unitKey)
         elemento.step = CHARGE_STEP.CLO
     end
 
-    print(elemento.step)
     printToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", unitKey, distanzaDaPercorrere, distanzaTotaleInch), player.color, {r=1,g=0.85,b=0.2})
 end
-
--- ============================================================
--- FUNZIONE: charge_btnChargeMove(player, value, id)
--- Vecchio bottone 3D — resta per compatibilità, delega al cuore
--- condiviso.
--- ============================================================
--- function charge_btnChargeMove(player, value, id)
---     local unitKey = id:match("^btn_(.+)_ChargeMove$")
---     if not unitKey then return end
---     charge_executeChargeMove(player, unitKey)
--- end
-
 -- ============================================================
 -- FUNZIONE: charge_responseChargeMove(player, value, id)
--- Nuovo bottone dentro charge_response_panel, aperto da
--- charge_attackRowClick in CHARGE_AUTO. unitKey letto da
--- IEF_CHARGE_RESPONSE_PENDING[slot] (nessun id per-unità qui,
--- popup condiviso).
 -- ============================================================
 function charge_responseChargeMove(player, value, id)
     local slot = main_getArmyByColor(player)
@@ -2240,4 +2258,28 @@ function charge_responseChargeMove(player, value, id)
     UI.setAttribute("charge_response_panel", "active", "false")
     charge_executeChargeMove(player, pending.unitKey)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+end
+-- ============================================================
+-- FUNZIONE: charge_moveTowardPoint(unitKey, basiObjs, targetPos, distanzaInch)
+-- Trasla TUTTE le basi in blocco verso targetPos, per una distanza
+-- massima di distanzaInch — SOLA traslazione (nessuna rotazione),
+-- nella direzione REALE verso il punto trovato da
+-- charge_closestBasePair, non lungo il fronte generico dell'unità
+-- (a differenza di move_avanti_apply).
+-- ============================================================
+function charge_moveTowardPoint(basiObjs, targetPos, distanzaInch)
+    if #basiObjs == 0 then return end
+
+    local origin = basiObjs[1].getPosition()
+    local dir = Vector(targetPos.x - origin.x, 0, targetPos.z - origin.z)
+    local len = math.sqrt(dir.x*dir.x + dir.z*dir.z)
+    if len < 0.0001 then return end
+
+    local dirNorm = Vector(dir.x / len, 0, dir.z / len)
+    local deltaUnits = distanzaInch * INCH_TO_TTS
+
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        obj.setPosition(Vector(p.x + dirNorm.x*deltaUnits, p.y, p.z + dirNorm.z*deltaUnits))
+    end
 end

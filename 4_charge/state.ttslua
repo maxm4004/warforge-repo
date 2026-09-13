@@ -84,6 +84,8 @@ UNIT_TYPES = {
 --                                       -- entrambi muovono indipendentemente)
 --   movedArmy2    = false,
 --   stopfireResolved = false,
+ --  moveTargetArmy1 = nil,   -- Vector: punto fisso verso cui Army1 deve muovere (snapshot della base nemica più vicina al momento della dichiarazione/reazione)
+--   moveTargetArmy2 = nil,
 -- }
 --
 -- Deduplicazione: se Army1 dichiara carica su un'unità che a sua
