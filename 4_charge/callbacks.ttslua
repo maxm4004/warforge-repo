@@ -83,9 +83,11 @@ end
 -- ============================================================
 function charge_auto_btn_army1(player, value, id, buttonConfig)
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        charge_processAutoForSlot(1, e)
+        if e.step ~= CHARGE_STEP.CLO then
+            printToColor("[CARICA] Ci sono ancora cariche da risolvere prima di chiudere la fase", player.color, {r=1,g=0.6,b=0})
+            return false
+        end
     end
-    callHandler("buildUI")
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
 end
@@ -94,12 +96,13 @@ end
 -- ============================================================
 function charge_auto_btn_army2(player, value, id, buttonConfig)
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        charge_processAutoForSlot(2, e)
+        if e.step ~= CHARGE_STEP.CLO then
+            printToColor("[CARICA] Ci sono ancora cariche da risolvere prima di chiudere la fase", player.color, {r=1,g=0.6,b=0})
+            return false
+        end
     end
-    callHandler("buildUI")
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
-    --callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
 end
 
 

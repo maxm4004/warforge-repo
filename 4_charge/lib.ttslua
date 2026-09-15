@@ -643,14 +643,14 @@ function charge_checkTarget(player, unitKey)
         end
 
         if charge_alreadyDeclared(slot, session.attackerKey) then
-            warningToColor("Questa unità ha già dichiarato una carica questo turno", player.color, "Orange")
+            warningToColor("Questa unità ha già dichiarato una carica questo turno", player.color, "Yellow", 5)
             return
         end
 
         charge_drawCorridor(newHost, startLeft, startRight, endLeft, endRight)
 
         if not targetKey then
-            warningToColor(string.format(tostring(a)), player.color, "Orange", 5)
+            warningToColor(string.format(tostring(a)), player.color, "Yellow", 5)
             return
         end
 
@@ -666,7 +666,7 @@ function charge_checkTarget(player, unitKey)
         if not obbligatoria then
             local myBase = charge_getUnitBases(session.attackerKey)[1]
             if not main_isInCommandRange(myBase, slot) then
-                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale", main_decodeExtendedUnitLabel(targetKey)), player.color, "Orange", 5)
+                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale, \n non è posiibile caricare", main_decodeExtendedUnitLabel(session.attackerKey)), player.color, "Yellow", 5)
                 return
             end
         end
@@ -682,9 +682,9 @@ function charge_checkTarget(player, unitKey)
 
         UI.setAttribute("confirm_panel_charge", "visibility", player.color)
         UI.setAttribute("confirm_panel_charge", "active", "true")
-        warningToColor(string.format("la %s è ad una distanza di %.2f %s", main_decodeExtendedUnitLabel(targetKey), distanzaMinima, MEASURE_UNIT), player.color, "Yellow", 5)
+        warningToColor(string.format("la %s è ad una distanza di %.2f %s dalla %s", main_decodeExtendedUnitLabel(session.attackerKey), distanzaMinima, MEASURE_UNIT, main_decodeExtendedUnitLabel(session.targetKey)), player.color, "Yellow", 5)
        Wait.time(function ()
-                warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(targetKey)), player.color, "Yellow", 5)
+                warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(session.attackerKey)), player.color, "Yellow", 5)
        end, 5)
     elseif ENGINE.phase == PHASE.CHARGE_AUTO then
         local myBase = charge_getUnitBases(session.attackerKey)[1]
@@ -813,23 +813,17 @@ function charge_declareConfirm(player, value, id, buttonConfig)
     charge_elementoSetRequest(elemento, slot, true)
     charge_elementoSetDeclareData(elemento, slot, session.pivotUsed, session.distInches)
 
-    local myBases = charge_getUnitBases(session.attackerKey)
-    local targetBases = charge_getUnitBases(session.targetKey)
-
-    if not elemento.moveTargetArmy1 and not elemento.moveTargetArmy2 then
-        -- Nessuno ha ancora salvato un punto per questo elemento:
-        -- lo calcolo ora, UNA SOLA VOLTA, e lo salvo per ENTRAMBI
-        -- i lati — non uno snapshot separato a testa.
+    if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
+        local myBases = charge_getUnitBases(session.attackerKey)
+        local targetBases = charge_getUnitBases(session.targetKey)
         local closestMine, closestTheirs = charge_closestBasePair(myBases, targetBases)
         if closestMine and closestTheirs then
-            local pMine = closestMine.getPosition()
-            local pTheirs = closestTheirs.getPosition()
             if slot == 1 then
-                elemento.moveTargetArmy2 = Vector(pMine.x, pMine.y, pMine.z)
-                elemento.moveTargetArmy1 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+                elemento.closestBaseArmy1 = closestMine.getGUID()
+                elemento.closestBaseArmy2 = closestTheirs.getGUID()
             else
-                elemento.moveTargetArmy1 = Vector(pMine.x, pMine.y, pMine.z)
-                elemento.moveTargetArmy2 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+                elemento.closestBaseArmy2 = closestMine.getGUID()
+                elemento.closestBaseArmy1 = closestTheirs.getGUID()
             end
         end
     end
@@ -923,7 +917,10 @@ function charge_getAttackListPanelXml(slot)
 
     local righe = {}
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if charge_elementoRequest(e, slot) then table.insert(righe, e) end
+        local mioResponse = charge_elementoResponse(e, slot)
+        if charge_elementoRequest(e, slot) or mioResponse == REACTION_TYPE.COC then
+            table.insert(righe, e)
+        end
     end
 
     local colore = ARMY[slot] and ARMY[slot].color or "White"
@@ -936,7 +933,7 @@ function charge_getAttackListPanelXml(slot)
         rows = rows .. string.format(
             '<Row preferredHeight="25">' ..
                 '<Cell>' ..
-                    '<Button id="charge_attack_row_%d_%s" text="  %s %s carica %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
+                    '<Button id="charge_attack_row_%d_%s" text="  %s %s carica %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" />' ..
                 '</Cell>' ..
                 '<Cell>' ..
                     '<Button id="charge_attack_row_btn_%d_%s" text="" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_attackRowClick"/>' ..
@@ -983,7 +980,7 @@ function charge_getDefenseListPanelXml(slot)
         rows = rows .. string.format(
             '<Row preferredHeight="25">' ..
                 '<Cell>' ..
-                    '<Button id="charge_defense_row_%d_%s" text="  %s %s è caricata da %s %s | %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
+                    '<Button id="charge_defense_row_%d_%s" text="  %s %s è caricata da %s %s - %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475"/>' ..
                 '</Cell>' ..
                 '<Cell>' ..
                     '<Button id="charge_defense_row_btn_%d_%s" tooltip="charge_defense_row_btn_%d_%s" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_defenseRowClick"/>' ..
@@ -1223,23 +1220,23 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_moveToward(basiObjs, targetPoint, distInches)
--- Muove tutte le basi di distInches pollici verso un punto
--- qualsiasi (non necessariamente lungo il fronte attuale) —
--- usato per la contro-carica, dove le due unità si muovono
--- l'una verso l'altra, non lungo la propria direzione di marcia.
 -- ============================================================
-function charge_moveToward(basiObjs, targetPoint, distInches)
-    if #basiObjs == 0 then return end
-    local p0 = basiObjs[1].getPosition()
-    local dir = Vector(targetPoint.x - p0.x, 0, targetPoint.z - p0.z):normalized()
-    local deltaUnits = distInches * INCH_TO_TTS
+function charge_moveTowardPoint(basiObjs, originBase, targetPos, distanzaInch)
+    if #basiObjs == 0 or not originBase then return end
+
+    local origin = originBase.getPosition()
+    local dir = Vector(targetPos.x - origin.x, 0, targetPos.z - origin.z)
+    local len = math.sqrt(dir.x*dir.x + dir.z*dir.z)
+    if len < 0.0001 then return end
+
+    local dirNorm = Vector(dir.x / len, 0, dir.z / len)
+    local deltaUnits = distanzaInch * INCH_TO_TTS
 
     for _, obj in ipairs(basiObjs) do
         local p = obj.getPosition()
-        obj.setPosition(Vector(p.x + dir.x*deltaUnits, p.y, p.z + dir.z*deltaUnits))
+        obj.setPosition(Vector(p.x + dirNorm.x*deltaUnits, p.y, p.z + dirNorm.z*deltaUnits))
     end
 end
-
 -- ============================================================
 -- FUNZIONE: charge_turnAround180(basiObjs)
 -- ============================================================
@@ -1256,30 +1253,41 @@ function charge_responseCounter(player, value, id)
     local slot = main_getArmyByColor(player)
     local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
     if not pending then return end
-    charge_elementoSetResponse(pending.elemento, slot, REACTION_TYPE.COC)
 
     local elemento = pending.elemento
+    local myKey = charge_elementoUnitKey(elemento, slot)
+    local otherSlot = charge_elementoOtherSlot(slot)
+    local otherKey = charge_elementoUnitKey(elemento, otherSlot)
 
-    if not elemento.moveTargetArmy1 and not elemento.moveTargetArmy2 then
-        -- Nessuno ha ancora salvato un punto per questo elemento:
-        -- lo calcolo ora, UNA SOLA VOLTA, e lo salvo per ENTRAMBI
-        -- i lati — non uno snapshot separato a testa.
-        local otherSlot = charge_elementoOtherSlot(slot)
-        local myKey = charge_elementoUnitKey(elemento, slot)
-        local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+    local myMeta = charge_getUnitMeta(charge_getUnitBases(myKey)[1])
+    local myTipo = myMeta and myMeta.unitType
+    local myCapabilities = myMeta and myMeta.capabilities or {}
+    local otherMeta = charge_getUnitMeta(charge_getUnitBases(otherKey)[1])
+    local otherTipo = otherMeta and otherMeta.unitType
+
+    local obbligatoria = charge_isMandatoryCharge(myTipo, myCapabilities, otherTipo)
+
+    if not obbligatoria then
+        local myBase = charge_getUnitBases(myKey)[1]
+        if not main_isInCommandRange(myBase, slot) then
+            warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale,\n non è possibile contro caricare", main_decodeExtendedUnitLabel(myKey)), player.color, "Yellow", 5)
+            return
+        end
+    end
+
+    charge_elementoSetResponse(elemento, slot, REACTION_TYPE.COC)
+
+    if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
         local myBases = charge_getUnitBases(myKey)
         local otherBases = charge_getUnitBases(otherKey)
-
         local closestMine, closestTheirs = charge_closestBasePair(myBases, otherBases)
         if closestMine and closestTheirs then
-            local pMine = closestMine.getPosition()
-            local pTheirs = closestTheirs.getPosition()
             if slot == 1 then
-                elemento.moveTargetArmy2 = Vector(pMine.x, pMine.y, pMine.z)
-                elemento.moveTargetArmy1 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+                elemento.closestBaseArmy1 = closestMine.getGUID()
+                elemento.closestBaseArmy2 = closestTheirs.getGUID()
             else
-                elemento.moveTargetArmy1 = Vector(pMine.x, pMine.y, pMine.z)
-                elemento.moveTargetArmy2 = Vector(pTheirs.x, pTheirs.y, pTheirs.z)
+                elemento.closestBaseArmy2 = closestMine.getGUID()
+                elemento.closestBaseArmy1 = closestTheirs.getGUID()
             end
         end
     end
@@ -1745,115 +1753,6 @@ function charge_stopfireExitClick(player, value, id)
     charge_stopfireEnd()
 end
 -- ============================================================
--- FUNZIONE: charge_executeCounterHalf(slot, elemento)
--- Contro-carica: muove SOLO le basi di ARMY{slot} verso il punto
--- medio, calcolato al momento del click con le posizioni ATTUALI
--- di entrambe le unità (nessuno snapshot). Chiamata una volta per
--- ciascun esercito, indipendentemente, dal proprio bottone.
--- ============================================================
-function charge_executeCounterHalf(slot, elemento)
-
-    print("charge_executeCounterHalf")
-    
-    local myKey = charge_elementoUnitKey(elemento, slot)
-    local otherKey = charge_elementoOtherKey(elemento, slot)
-    local myBases = charge_getUnitBases(myKey)
-    local otherBases = charge_getUnitBases(otherKey)
-
-    if #myBases > 0 and #otherBases > 0 then
-        local _, _, mFrontLeft, mFrontRight = charge_getFrontLine(myBases)
-        local _, _, oFrontLeft, oFrontRight = charge_getFrontLine(otherBases)
-
-        local mp1, mp2 = mFrontLeft.getPosition(), mFrontRight.getPosition()
-        local op1, op2 = oFrontLeft.getPosition(), oFrontRight.getPosition()
-
-        local myFrontCenter = Vector((mp1.x + mp2.x) / 2, 0, (mp1.z + mp2.z) / 2)
-        local otherFrontCenter = Vector((op1.x + op2.x) / 2, 0, (op1.z + op2.z) / 2)
-
-        local midY = myBases[1].getPosition().y
-        local midpoint = Vector(
-            (myFrontCenter.x + otherFrontCenter.x) / 2,
-            midY,
-            (myFrontCenter.z + otherFrontCenter.z) / 2
-        )
-        
-        local dir = Vector(myFrontCenter.x - otherFrontCenter.x, 0, myFrontCenter.z - otherFrontCenter.z):normalized()
-        local yaw = math.deg(math.atan(dir.x, dir.z))
-
-        for _, obj in ipairs(myBases) do
-            local rot = obj.getRotation()
-            obj.setRotation(Vector(rot.x, yaw, rot.z))
-        end
-
-        local delta = Vector(midpoint.x - myFrontCenter.x, 0, midpoint.z - myFrontCenter.z)
-        for _, obj in ipairs(myBases) do
-            local p = obj.getPosition()
-            obj.setPosition(Vector(p.x + delta.x, p.y, p.z + delta.z))
-        end
-    end
-end
-
--- ============================================================
--- FUNZIONE: charge_processAutoForSlot(slot, elemento)
--- Elabora UN elemento per conto di ARMY{slot}, agendo solo sulle
--- proprie basi. Chiamata in loop da charge_auto_btn_army1/2, una
--- per esercito. Ogni caso (reciproca/COC, EVA, TIR, Ferma) gestito
--- esplicitamente; chiusura garantita in ogni ramo.
--- ============================================================
-function charge_processAutoForSlot(slot, elemento)
-    if elemento.step == CHARGE_STEP.CLO then return end
-
-    if charge_elementoIsReciprocal(elemento)
-       or elemento.responseArmy1 == REACTION_TYPE.COC
-       or elemento.responseArmy2 == REACTION_TYPE.COC then
-        if slot == 1 and not elemento.movedArmy1 then
-            charge_executeCounterHalf(1, elemento)
-            elemento.movedArmy1 = true
-        elseif slot == 2 and not elemento.movedArmy2 then
-            charge_executeCounterHalf(2, elemento)
-            elemento.movedArmy2 = true
-        end
-        if elemento.movedArmy1 and elemento.movedArmy2 then
-            elemento.outcome = CHARGE_OUTCOME.OK
-            elemento.step = CHARGE_STEP.CLO
-        end
-        return
-    end
-
-    if elemento.responseArmy1 == REACTION_TYPE.EVA and slot == 1 then
-        charge_executeEvade(1, elemento)
-        return
-    end
-    if elemento.responseArmy2 == REACTION_TYPE.EVA and slot == 2 then
-        charge_executeEvade(2, elemento)
-        return
-    end
-
-    if elemento.responseArmy1 == REACTION_TYPE.TIR or elemento.responseArmy2 == REACTION_TYPE.TIR then
-        -- Già risolto in CHARGE_STOPFIRE (colpi/morale). Qui resta
-        -- solo l'eventuale movimento di contatto, a carico di chi
-        -- ha dichiarato (request=true) — se l'esito è OK deve
-        -- ancora muoversi fino al bersaglio; se ANN (morale fallito)
-        -- resta dov'è, si chiude senza movimento.
-        local chargingSlot = elemento.requestArmy1 and 1 or 2
-        if slot == chargingSlot then
-            if elemento.outcome == CHARGE_OUTCOME.OK then
-                charge_executeContact(chargingSlot, elemento)
-            else
-                elemento.step = CHARGE_STEP.CLO
-            end
-        end
-        return
-    end
-
-    -- Ferma (nessuna risposta, o FER esplicito): solo chi ha
-    -- dichiarato la carica si muove fino al contatto.
-    local chargingSlot = elemento.requestArmy1 and 1 or (elemento.requestArmy2 and 2 or nil)
-    if chargingSlot and slot == chargingSlot then
-        charge_executeContact(chargingSlot, elemento)
-    end
-end
--- ============================================================
 -- FUNZIONE: charge_rigidRotate(basiObjs, deltaYawDeg)
 -- Ruota l'INTERA formazione come corpo rigido di deltaYawDeg,
 -- usando basiObjs[1] come ANCORA REALE che non si sposta (stessa
@@ -2239,40 +2138,72 @@ function charge_executeChargeMove(player, unitKey)
 
     local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
     if giaMossoIoStesso then
-        warningToColor("L'unità ha già eseguito il movimento di carica", player.color, {r=1,g=0.6,b=0})
+        warningToColor("L'unità ha già eseguito il movimento di carica", player.color, "Yellow", 5)
         return
     end
 
-    local moveTarget = (slot == 1) and elemento.moveTargetArmy1 or elemento.moveTargetArmy2
-    if not moveTarget then
-        printToColor("[CARICA] Nessun punto di contatto salvato per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+    local myBaseGUID = (slot == 1) and elemento.closestBaseArmy1 or elemento.closestBaseArmy2
+    local otherBaseGUID = (slot == 1) and elemento.closestBaseArmy2 or elemento.closestBaseArmy1
+    if not myBaseGUID or not otherBaseGUID then
+        printToColor("[CARICA] Nessuna base di riferimento salvata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myBase = getObjectFromGUID(myBaseGUID)
+    local otherBase = getObjectFromGUID(otherBaseGUID)
+    if not myBase or not otherBase then
+        printToColor("[CARICA] Base di riferimento non più presente sul tavolo per " .. unitKey, player.color, {r=1,g=0.6,b=0})
         return
     end
 
     local myBases = charge_getUnitBases(unitKey)
     if #myBases == 0 then return end
 
-    local distanzaTotaleInch = main_distanceInchesToPoint(myBases[1], moveTarget)
+    local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
     local otherSlot = charge_elementoOtherSlot(slot)
     local reciproca = charge_elementoIsReciprocal(elemento)
     local otherResponse = charge_elementoResponse(elemento, otherSlot)
 
+    local isCounterCharge = reciproca
+        or elemento.responseArmy1 == REACTION_TYPE.COC
+        or elemento.responseArmy2 == REACTION_TYPE.COC
+
+    local myBaseGUID = (slot == 1) and elemento.closestBaseArmy1 or elemento.closestBaseArmy2
+    local otherBaseGUID = (slot == 1) and elemento.closestBaseArmy2 or elemento.closestBaseArmy1
+    if not myBaseGUID or not otherBaseGUID then
+        printToColor("[CARICA] Nessuna base di riferimento salvata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myBase = getObjectFromGUID(myBaseGUID)
+    local otherBase = getObjectFromGUID(otherBaseGUID)
+    if not myBase or not otherBase then
+        printToColor("[CARICA] Base di riferimento non più presente sul tavolo per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+        return
+    end
+
+    local myBases = charge_getUnitBases(unitKey)
+    if #myBases == 0 then return end
+
+    local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
+    if not distanzaTotaleInch then return end
+
     local distanzaDaPercorrere = distanzaTotaleInch
 
-    if reciproca or otherResponse == REACTION_TYPE.COC then
+    if isCounterCharge then
         local otherGiaMosso = (slot == 1 and elemento.movedArmy2) or (slot == 2 and elemento.movedArmy1)
-        if otherGiaMosso then
-            distanzaDaPercorrere = distanzaTotaleInch
-        else
+        if not otherGiaMosso then
             distanzaDaPercorrere = distanzaTotaleInch / 2
         end
     elseif elemento.outcome == CHARGE_OUTCOME.ANN then
         distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
     end
 
-    charge_moveTowardPoint(myBases, moveTarget, distanzaDaPercorrere)
+    local myOriginBase = charge_closestBaseToPoint(myBases, otherBase.getPosition())
+    if not myOriginBase then return end
+    charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
 
     if otherResponse == REACTION_TYPE.EVA then
         elemento.outcome = CHARGE_OUTCOME.EVI
@@ -2280,7 +2211,7 @@ function charge_executeChargeMove(player, unitKey)
         elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
     end
 
-    if reciproca or otherResponse == REACTION_TYPE.COC then
+    if isCounterCharge then
         if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
         if elemento.movedArmy1 and elemento.movedArmy2 then
             elemento.step = CHARGE_STEP.CLO
@@ -2305,16 +2236,18 @@ function charge_responseChargeMove(player, value, id)
 end
 -- ============================================================
 -- FUNZIONE: charge_moveTowardPoint(unitKey, basiObjs, targetPos, distanzaInch)
--- Trasla TUTTE le basi in blocco verso targetPos, per una distanza
--- massima di distanzaInch — SOLA traslazione (nessuna rotazione),
--- nella direzione REALE verso il punto trovato da
--- charge_closestBasePair, non lungo il fronte generico dell'unità
--- (a differenza di move_avanti_apply).
 -- ============================================================
-function charge_moveTowardPoint(basiObjs, targetPos, distanzaInch)
-    if #basiObjs == 0 then return end
+function charge_moveTowardPoint(basiObjs, originBase, targetPos, distanzaInch)
+    if #basiObjs == 0 or not originBase then return end
 
-    local origin = basiObjs[1].getPosition()
+    -- Difensivo: se targetPos è un oggetto TTS (per un salvataggio
+    -- fatto senza .getPosition() da qualche parte) invece di un
+    -- Vector, lo converto qui invece di rompere tutto.
+    if type(targetPos) == "userdata" and targetPos.getPosition then
+        targetPos = targetPos.getPosition()
+    end
+
+    local origin = originBase.getPosition()
     local dir = Vector(targetPos.x - origin.x, 0, targetPos.z - origin.z)
     local len = math.sqrt(dir.x*dir.x + dir.z*dir.z)
     if len < 0.0001 then return end
@@ -2326,4 +2259,18 @@ function charge_moveTowardPoint(basiObjs, targetPos, distanzaInch)
         local p = obj.getPosition()
         obj.setPosition(Vector(p.x + dirNorm.x*deltaUnits, p.y, p.z + dirNorm.z*deltaUnits))
     end
+end
+-- ============================================================
+-- FUNZIONE: charge_closestBaseToPoint(basiObjs, point)
+-- ============================================================
+function charge_closestBaseToPoint(basiObjs, point)
+    local migliore, migliorDist = nil, nil
+    for _, obj in ipairs(basiObjs) do
+        local d = main_distanceInchesToPoint(obj, point)
+        if d and (migliorDist == nil or d < migliorDist) then
+            migliorDist = d
+            migliore = obj
+        end
+    end
+    return migliore, migliorDist
 end

@@ -2053,7 +2053,6 @@ function main_createBaseButtons(obj, phase, unit)
         f(obj, unit, pos, rot, w, h)
     end
 end
-
 -- ============================================================
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
@@ -2399,12 +2398,20 @@ function main_distanceInches(objA, objB)
 
     local distTTS
     if boundsA and boundsB then
-        local dirAB = (Vector(posB.x, 0, posB.z) - Vector(posA.x, 0, posA.z))
+        local dirAB = Vector(posB.x - posA.x, 0, posB.z - posA.z)
         local pianaLen = math.sqrt(dirAB.x*dirAB.x + dirAB.z*dirAB.z)
         if pianaLen > 0.0001 then
             local dirNorm = Vector(dirAB.x / pianaLen, 0, dirAB.z / pianaLen)
-            local offsetA = math.abs(boundsA.size.x/2 * dirNorm.x) + math.abs(boundsA.size.z/2 * dirNorm.z)
-            local offsetB = math.abs(boundsB.size.x/2 * dirNorm.x) + math.abs(boundsB.size.z/2 * dirNorm.z)
+
+            local function rayBoxExit(halfWidth, halfDepth, dx, dz)
+                local tx = (math.abs(dx) > 0.0001) and (halfWidth / math.abs(dx)) or math.huge
+                local tz = (math.abs(dz) > 0.0001) and (halfDepth / math.abs(dz)) or math.huge
+                return math.min(tx, tz)
+            end
+
+            local offsetA = rayBoxExit(boundsA.size.x/2, boundsA.size.z/2, dirNorm.x, dirNorm.z)
+            local offsetB = rayBoxExit(boundsB.size.x/2, boundsB.size.z/2, dirNorm.x, dirNorm.z)
+
             distTTS = math.max(0, pianaLen - offsetA - offsetB)
         else
             distTTS = 0

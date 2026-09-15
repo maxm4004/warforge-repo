@@ -120,7 +120,7 @@ function field_doRollFieldElement(player, slot)
             local tipo = field_sommaToTipo(somma)
 
             if tipo == "Fiume" and FIELD_STATE.fiumeUsato then
-                warningToColor("La carta '" .. tipo:upper() .. "' ha raggiunto il numero massimo consentito, ritira", player, "Orange", 8)
+                warningToColor("La carta '" .. tipo:upper() .. "' ha raggiunto il numero massimo consentito, ritira", player, "Yellow", 8)
                 engine_diceClearLastRoll(slot)
                 field_doRollFieldElement(player, slot)
                 return
@@ -351,7 +351,7 @@ function field_doRollBlock(player, slot)
         if #FIELD_STATE.blockCards[slot][blocco] >= 2 then
             local liberi = field_blocchiLiberi(slot)
             if #liberi > 0 then
-                    warningToColor("Il blocco '" .. blocco:upper() .. "' ha raggiunto il numero massimo di elementi consentiti, ritira", player, "Orange", 8)
+                    warningToColor("Il blocco '" .. blocco:upper() .. "' ha raggiunto il numero massimo di elementi consentiti, ritira", player, "Yellow", 8)
                     engine_diceClearLastRoll(slot)
                 return
             end

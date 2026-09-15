@@ -713,3 +713,43 @@ function debug_chargePrintQueue()
         print("")
     end
 end
+-- ============================================================
+-- FUNZIONE: charge_moveUnitInches(distanzaInch)
+-- DEBUG/TEST: muove in linea retta (sola traslazione) l'unità
+-- della PRIMA base selezionata verso la SECONDA base selezionata,
+-- per distanzaInch — usando come origine la base più vicina al
+-- bersaglio (non una base arbitraria). Richiamabile da console.
+-- ============================================================
+function debug_moveUnit(distanzaInch)
+    
+    local selected = main_SelectedObjects()
+    if not selected or #selected < 2 then
+        print("[CARICA] charge_moveUnitInches: seleziona 2 basi (la tua unità e il bersaglio) prima di lanciare il comando")
+        return false
+    end
+
+    local myObj = selected[1]
+    local targetObj = selected[2]
+
+    local unitKey = main_getUnitKey(myObj)
+    if not unitKey then
+        print("[CARICA] charge_moveUnitInches: impossibile identificare l'unità dalla prima base selezionata")
+        return false
+    end
+
+    local basiObjs = charge_getUnitBases(unitKey)
+    if #basiObjs == 0 then
+        print("[CARICA] charge_moveUnitInches: nessuna base trovata per " .. unitKey)
+        return false
+    end
+
+    local originBase = charge_closestBaseToPoint(basiObjs, targetObj.getPosition())
+    if not originBase then
+        print("[CARICA] charge_moveUnitInches: impossibile determinare la base d'origine")
+        return false
+    end
+
+    charge_moveTowardPoint(basiObjs, originBase, targetObj.getPosition(), distanzaInch)
+    print(string.format("[CARICA] %s mosso di %.2f\" verso %s", unitKey, distanzaInch, targetObj.getName()))
+    return true
+end
