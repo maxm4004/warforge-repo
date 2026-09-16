@@ -828,7 +828,7 @@ function charge_declareConfirm(player, value, id, buttonConfig)
         end
     end
 
-    printToColor(string.format("[CARICA] Dichiarazione: %s carica %s", session.attackerKey, session.targetKey), player.color, {r=0.3,g=1,b=0.3})
+    warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(session.attackerKey), main_decodeExtendedUnitLabel(session.targetKey)), player.color, "Yellow", 5)
     UI.setAttribute("confirm_panel_charge", "active", "false")
     charge_close(unitKey)
     callHandler("buildUI")
@@ -918,32 +918,43 @@ function charge_getAttackListPanelXml(slot)
     local righe = {}
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
         local mioResponse = charge_elementoResponse(e, slot)
-        if charge_elementoRequest(e, slot) or mioResponse == REACTION_TYPE.COC then
+        if charge_elementoRequest(e, slot) or mioResponse == REACTION_TYPE.COC or mioResponse == REACTION_TYPE.EVA then
             table.insert(righe, e)
         end
     end
-
+    
     local colore = ARMY[slot] and ARMY[slot].color or "White"
     local attivo = (ENGINE.phase == PHASE.CHARGE_DECLARE and #righe > 0) and "true" or "false"
 
-    local rows = ""
+    local rows = ""    
     for i, e in ipairs(righe) do
+
         local myKey = charge_elementoUnitKey(e, slot)
         local otherKey = charge_elementoOtherKey(e, slot)
+        local mioResponse = charge_elementoResponse(e, slot)
+       
+        local risposta = "carica la"
+
+        if mioResponse == REACTION_TYPE.EVA then
+            risposta = "evade la"
+        elseif mioResponse == REACTION_TYPE.COC then
+            risposta = "contro carica la"
+        end        
+
         rows = rows .. string.format(
             '<Row preferredHeight="25">' ..
                 '<Cell>' ..
-                    '<Button id="charge_attack_row_%d_%s" text="  %s %s carica %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" />' ..
+                    '<Button id="charge_attack_row_%d_%s" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" />' ..
                 '</Cell>' ..
                 '<Cell>' ..
                     '<Button id="charge_attack_row_btn_%d_%s" text="" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_attackRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
+
             slot, otherKey,
-            main_decodeUnitTypeLabel(myKey),
-            main_decodeArmyCodeLabel(myKey),
-            main_decodeUnitTypeLabel(otherKey),
-            main_decodeArmyCodeLabel(otherKey),
+            main_decodeExtendedUnitLabel(myKey),
+            risposta,
+            main_decodeExtendedUnitLabel(otherKey),
             slot, otherKey
         )
     end
@@ -951,7 +962,7 @@ function charge_getAttackListPanelXml(slot)
     return string.format(
         '<Panel id="charge_attack_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
         '<Text text="CARICHE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
-        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="475 25" position="0 -5 0">' ..
+        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
@@ -969,6 +980,8 @@ function charge_getDefenseListPanelXml(slot)
         if charge_elementoRequest(e, otherSlot) then table.insert(righe, e) end
     end
 
+
+
     local colore = ARMY[slot] and ARMY[slot].color or "White"
     local attivo = ((ENGINE.phase == PHASE.CHARGE_REACT or ENGINE.phase == PHASE.CHARGE_AUTO) and #righe > 0) and "true" or "false"
 
@@ -976,22 +989,23 @@ function charge_getDefenseListPanelXml(slot)
     for i, e in ipairs(righe) do
         local myKey = charge_elementoUnitKey(e, slot)
         local otherKey = charge_elementoOtherKey(e, slot)
-        local statoReazione = charge_elementoIsReciprocal(e) and REACTION_TYPE.COC or (charge_elementoResponse(e, slot) or "nessuna reazione")
+        local statoReazione = charge_elementoIsReciprocal(e) and REACTION_TYPE.COC or (charge_elementoResponse(e, slot))
+
+        local risposta = "è caricata" 
+
         rows = rows .. string.format(
             '<Row preferredHeight="25">' ..
                 '<Cell>' ..
-                    '<Button id="charge_defense_row_%d_%s" text="  %s %s è caricata da %s %s - %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475"/>' ..
+                    '<Button id="charge_defense_row_%d_%s" text="La %s %s dalla %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475"/>' ..
                 '</Cell>' ..
                 '<Cell>' ..
                     '<Button id="charge_defense_row_btn_%d_%s" tooltip="charge_defense_row_btn_%d_%s" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_defenseRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
             slot, otherKey,
-            main_decodeUnitTypeLabel(myKey),
-            main_decodeArmyCodeLabel(myKey),
-            main_decodeUnitTypeLabel(otherKey),
-            main_decodeArmyCodeLabel(otherKey),
-            statoReazione,
+            main_decodeExtendedUnitLabel(myKey),
+            risposta,
+            main_decodeExtendedUnitLabel(otherKey),
             slot, otherKey,
             slot, otherKey
         )
@@ -1000,7 +1014,7 @@ function charge_getDefenseListPanelXml(slot)
     return string.format(
         '<Panel id="charge_defense_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
         '<Text text="REAZIONI %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
-        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="475 25" position="0 -5 0">' ..
+        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
@@ -1012,6 +1026,7 @@ end
 -- FUNZIONE: charge_attackRowClick(player, value, id)
 -- ============================================================
 function charge_attackRowClick(player, value, id)
+
     local slotStr, otherKey = id:match("^charge_attack_row_btn_(%d)_(.+)$")
 
     if not slotStr then return end
@@ -1038,12 +1053,21 @@ function charge_attackRowClick(player, value, id)
 
     IEF_CHARGE_RESPONSE_PENDING[slot] = { elemento = elemento, unitKey = myKey }
 
-    local buttonIds = { "btnResponseCounter", "btnResponseEvade", "btnResponseStopfire", "btnResponseHold" }
+    local buttonIds = { "btnResponseCounter", "btnResponseEvade", "btnResponseStopfire", "btnResponseHold", "btnResponseCharge", "btnResponseEvadeMove" }
     for _, bid in ipairs(buttonIds) do
         UI.setAttribute(bid, "active", "false")
     end
-    UI.setAttribute("btnResponseCharge", "active", "true")
-    UI.setAttribute("btnResponseCharge", "textColor", "white")
+
+    local mioResponse = charge_elementoResponse(elemento, slot)
+
+    if mioResponse == REACTION_TYPE.EVA then
+        UI.setAttribute("btnResponseEvadeMove", "active", "true")
+        UI.setAttribute("btnResponseEvadeMove", "textColor", "white")
+    else
+        UI.setAttribute("btnResponseCharge", "active", "true")
+        UI.setAttribute("btnResponseCharge", "textColor", "white")
+    end
+
     UI.setAttribute("charge_response_panel", "visibility", player.color)
     UI.setAttribute("charge_response_panel", "active", "true")
 end
@@ -1052,7 +1076,6 @@ end
 -- ============================================================
 function charge_defenseRowClick(player, value, id)
     local slotStr, otherKey = id:match("^charge_defense_row_btn_(%d)_(.+)$")
-
     if not slotStr then return end
     local slot = tonumber(slotStr)
     local otherSlot = charge_elementoOtherSlot(slot)
@@ -1069,61 +1092,60 @@ function charge_defenseRowClick(player, value, id)
     local myBases = charge_getUnitBases(myKey)
     local attackerBases = charge_getUnitBases(otherKey)
 
-    if charge_elementoIsReciprocal(elemento) then
-        if myBases[1] and attackerBases[1] then
-            local p1, p2 = myBases[1].getPosition(), attackerBases[1].getPosition()
-            charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
-        end
-        return
-    end
-
     if myBases[1] and attackerBases[1] then
         local p1, p2 = myBases[1].getPosition(), attackerBases[1].getPosition()
         charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
     end
 
-    local myMeta = myBases[1] and charge_getUnitMeta(myBases[1])
-    local myTipo = myMeta and myMeta.unitType
-    local myArmi = myMeta and myMeta.armi or {}
-    local myCapabilities = myMeta and myMeta.capabilities or {}
+    if ENGINE.phase == PHASE.CHARGE_REACT then
 
-    local attackerMeta = attackerBases[1] and charge_getUnitMeta(attackerBases[1])
-    local attackerTipo = attackerMeta and attackerMeta.unitType
+        if charge_elementoIsReciprocal(elemento) then
+            return
+        end
 
-    local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
+        local myMeta = myBases[1] and charge_getUnitMeta(myBases[1])
+        local myTipo = myMeta and myMeta.unitType
+        local myArmi = myMeta and myMeta.armi or {}
+        local myCapabilities = myMeta and myMeta.capabilities or {}
 
-    if not obbligato and #opzioni == 0 then
-        printToColor(string.format("[CARICA] %s non ha nessuna risposta disponibile", myKey), player.color, {r=0.7,g=0.7,b=0.7})
+        local attackerMeta = attackerBases[1] and charge_getUnitMeta(attackerBases[1])
+        local attackerTipo = attackerMeta and attackerMeta.unitType
+
+        local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
+
+        if not obbligato and #opzioni == 0 then
+            printToColor(string.format("[CARICA] %s non ha nessuna risposta disponibile", myKey), player.color, {r=0.7,g=0.7,b=0.7})
+            return
+        end
+
+        IEF_CHARGE_RESPONSE_PENDING[slot] = { elemento = elemento }
+
+        local disponibili = obbligato and { obbligato } or opzioni
+        local buttonIds = {
+            [REACTION_TYPE.COC] = "btnResponseCounter",
+            [REACTION_TYPE.EVA] = "btnResponseEvade",
+            [REACTION_TYPE.TIR] = "btnResponseStopfire",
+            [REACTION_TYPE.FER] = "btnResponseHold",
+        }
+
+        UI.setAttribute("btnResponseCharge", "active", "false")
+        UI.setAttribute("btnResponseEvadeMove", "active", "false")
+
+        for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
+            local presente = false
+            for _, d in ipairs(disponibili) do
+                if d == chiave then presente = true end
+            end
+            UI.setAttribute(buttonIds[chiave], "active", presente and "true" or "false")
+            UI.setAttribute(buttonIds[chiave], "textColor", "white")
+        end
+
+        UI.setAttribute("btnResponseCancel", "active", "true")
+        UI.setAttribute("btnResponseCancel", "textColor", "white")
+        UI.setAttribute("charge_response_panel", "visibility", player.color)
+        UI.setAttribute("charge_response_panel", "active", "true")
         return
     end
-
-    IEF_CHARGE_RESPONSE_PENDING[slot] = { elemento = elemento }
-
-    local disponibili = obbligato and { obbligato } or opzioni
-    local buttonIds = {
-        [REACTION_TYPE.COC] = "btnResponseCounter",
-        [REACTION_TYPE.EVA] = "btnResponseEvade",
-        [REACTION_TYPE.TIR] = "btnResponseStopfire",
-        [REACTION_TYPE.FER] = "btnResponseHold",
-    }
-
-    for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
-        UI.setAttribute(buttonIds[chiave], "active", "false")
-    end
-
-    for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
-        local presente = false
-        for _, d in ipairs(disponibili) do
-            if d == chiave then presente = true end
-        end
-        UI.setAttribute(buttonIds[chiave], "active", presente and "true" or "false")
-        UI.setAttribute(buttonIds[chiave], "textColor", "white")
-    end
-
-    UI.setAttribute("btnResponseCancel", "active", "true")
-    UI.setAttribute("btnResponseCancel", "textColor", "white")
-    UI.setAttribute("charge_response_panel", "visibility", player.color)
-    UI.setAttribute("charge_response_panel", "active", "true")
 end
 -- ============================================================
 -- FUNZIONE: charge_resolveConflicts()
@@ -1383,22 +1405,23 @@ end
 -- Aggiorna il testo di UNA riga Difesa dopo che la reazione è
 -- stata registrata/annullata — la riga resta sempre visibile.
 -- ============================================================
--- ============================================================
--- FUNZIONE: charge_refreshDefenseRowText(slot, elemento)
--- Aggiorna il testo di UNA riga Difesa dopo che la reazione è
--- stata registrata/annullata — la riga resta sempre visibile.
--- ============================================================
 function charge_refreshDefenseRowText(slot, elemento)
     local myKey = charge_elementoUnitKey(elemento, slot)
     local otherKey = charge_elementoOtherKey(elemento, slot)
     local rowId = string.format("charge_defense_row_%d_%s", slot, otherKey)
-    local statoReazione = charge_elementoIsReciprocal(elemento) and REACTION_TYPE.COC or (charge_elementoResponse(elemento, slot) or "è caricata da")
-    UI.setAttribute(rowId, "text", string.format("  %s %s %s %s %s",
-        main_decodeUnitTypeLabel(myKey),
-        main_decodeArmyCodeLabel(myKey),
-        statoReazione,
-        main_decodeUnitTypeLabel(otherKey),
-        main_decodeArmyCodeLabel(otherKey)
+    local statoReazione = charge_elementoIsReciprocal(elemento) and REACTION_TYPE.COC or (charge_elementoResponse(elemento, slot))
+    local risposta = "è caricata da"
+
+     if statoReazione == REACTION_TYPE.EVA then 
+             risposta = "evade la" 
+    elseif  statoReazione == REACTION_TYPE.COC then 
+             risposta = "contro carica la" 
+    end
+
+    UI.setAttribute(rowId, "text", string.format("La %s %s %s",
+        main_decodeExtendedUnitLabel(myKey),
+        risposta,
+        main_decodeExtendedUnitLabel(otherKey)
     ))
     UI.setAttribute(rowId, "textColor", "White")
 end
@@ -1411,18 +1434,28 @@ end
 function charge_refreshAttackRowText(slot, elemento)
     local myKey = charge_elementoUnitKey(elemento, slot)
     local otherKey = charge_elementoOtherKey(elemento, slot)
-    local rowId = string.format("charge_attack_row_%d_%s", slot, otherKey)
-    UI.setAttribute(rowId, "text", string.format("Unità %s carica Unità %s (%s)", myKey, otherKey, elemento.step))
+    local rowId = string.format("charge_attack_row_%d_%s", slot, otherKey)  
+
+  local risposta = "carica la"
+
+     if elemento.step == REACTION_TYPE.EVA then 
+             risposta = "evade la" 
+    elseif  elemento.step == REACTION_TYPE.COC then 
+             risposta = "contro carica la" 
+    end
+
+    UI.setAttribute(rowId, "text", string.format("La %s %s %s", 
+    main_decodeExtendedUnitLabel(myKey), 
+    elemento.step, 
+    main_decodeExtendedUnitLabel(otherKey)
+    ))
     UI.setAttribute(rowId, "textColor", "white")
 end
 
 -- ============================================================
 -- FUNZIONE: charge_executeEvade(slot, elemento)
 -- ============================================================
-
 function charge_executeEvade(evadingSlot, elemento)
-
-    print("charge_executeEvade")
 
     local evadingKey = charge_elementoUnitKey(elemento, evadingSlot)
     local chargingKey = charge_elementoOtherKey(elemento, evadingSlot)
@@ -1448,11 +1481,14 @@ function charge_executeEvade(evadingSlot, elemento)
 
     IEF_UNIT_NO_MOVE_NEXT_TURN[evadingKey] = true
     elemento.outcome = CHARGE_OUTCOME.EVI
-    elemento.step = CHARGE_STEP.CLO
+
+    if evadingSlot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+    if elemento.movedArmy1 and elemento.movedArmy2 then
+        elemento.step = CHARGE_STEP.CLO
+    end
 
     warning(string.format("[CARICA] %s evade la carica di %s", evadingKey, chargingKey), "Yellow")
 end
-
 -- ============================================================
 -- FUNZIONE: charge_responseCancel(player, value, id)
 -- Annulla la reazione scelta: responseArmy{slot} torna a nil.
@@ -1914,86 +1950,6 @@ function charge_executeCounter(elemento)
     warning(string.format("[CARICA] %s e %s sono a contatto", elemento.unitArmy1Key, elemento.unitArmy2Key), "Yellow")
 end
 -- ============================================================
--- FUNZIONE: charge_btnChargeMove(player, value, id)
--- ============================================================
--- function charge_btnChargeMove(player, value, id)
---     local unitKey = id:match("^btn_(.+)_ChargeMove$")
---     if not unitKey then return end
-
---     local slot = main_getArmyByColor(player)
---     print(string.format("[DEBUG CHARGEMOVE] player=%s slot=%s unitKey=%s", tostring(player and player.color), tostring(slot), tostring(unitKey)))
-
---     local elemento = charge_findQueueEntry(slot, unitKey)
---     if elemento then
---         print(string.format("[DEBUG CHARGEMOVE] trovato elemento id=%s unitArmy1=%s unitArmy2=%s step=%s", tostring(elemento.id), tostring(elemento.unitArmy1Key), tostring(elemento.unitArmy2Key), tostring(elemento.step)))
---     else
---         print("[DEBUG CHARGEMOVE] nessun elemento trovato")
---     end
-
---     if not elemento then
---         printToColor("[CARICA] Nessuna carica trovata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
---         return
---     end
---     if elemento.step == CHARGE_STEP.CLO then
---         printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
---         return
---     end
-
---     local otherSlot = charge_elementoOtherSlot(slot)
---     local otherKey = charge_elementoUnitKey(elemento, otherSlot)
---     local myBases = charge_getUnitBases(unitKey)
---     local otherBases = charge_getUnitBases(otherKey)
---     if #myBases == 0 or #otherBases == 0 then return end
-
---     local _, _, distanzaTotaleInch = charge_closestBasePair(myBases, otherBases)
---     if not distanzaTotaleInch then return end
-
---     local distanzaDaPercorrere = distanzaTotaleInch
---     local reciproca = charge_elementoIsReciprocal(elemento)
---     local otherResponse = charge_elementoResponse(elemento, otherSlot)
-
---     if reciproca or otherResponse == REACTION_TYPE.COC then
---         local otherGiaMosso = (slot == 1 and elemento.movedArmy2) or (slot == 2 and elemento.movedArmy1)
---         if otherGiaMosso then
---             distanzaDaPercorrere = distanzaTotaleInch
---         else
---             distanzaDaPercorrere = distanzaTotaleInch / 2
---         end
---     elseif elemento.outcome == CHARGE_OUTCOME.ANN then
---         distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
---     end
-
---     print("distanzaTotaleInch: ", string.format("%.2f",distanzaTotaleInch))
---     print("distanzaDaPercorrere: ", string.format("%.2f",distanzaDaPercorrere))
-
---     IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
---     IEF_MOVE_BUDGET[unitKey] = distanzaDaPercorrere
---     move_avanti_apply(unitKey, distanzaDaPercorrere)
---     IEF_MOVE_UNITS[unitKey] = nil
---     IEF_MOVE_BUDGET[unitKey] = nil
-
---     if otherResponse == REACTION_TYPE.EVA then
---         elemento.outcome = CHARGE_OUTCOME.EVI
---     else
---         elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
---     end
-
---     if reciproca or otherResponse == REACTION_TYPE.COC then
---         -- Reciproca/contro-carica: chiude solo quando ENTRAMBI i
---         -- lati hanno eseguito il proprio movimento — un solo click
---         -- su "Carica" muove solo la propria metà.
---         if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
---         if elemento.movedArmy1 and elemento.movedArmy2 then
---             elemento.step = CHARGE_STEP.CLO
---         end
---     else
---         -- Tutti gli altri casi: un solo lato si muove, chiude subito.
---         elemento.step = CHARGE_STEP.CLO
---     end
-
---     printToColor(string.format("[CARICA] %s percorre %.1f\" (di %.1f\" totali)", unitKey, distanzaDaPercorrere, distanzaTotaleInch), player.color, {r=1,g=0.85,b=0.2})
--- end
--- ============================================================
 -- FUNZIONE: charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
 -- ============================================================
 function charge_isMandatoryCharge(attackerTipo, attackerCapabilities, targetTipo)
@@ -2117,12 +2073,6 @@ function charge_closestBasePair(basesA, basesB)
 end
 -- ============================================================
 -- FUNZIONE: charge_executeChargeMove(player, unitKey)
--- Cuore del movimento di carica: muove in LINEA RETTA (sola
--- traslazione, nessuna rotazione) verso il punto fisso salvato al
--- momento della dichiarazione/reazione (elemento.moveTargetArmy1/2
--- — la base nemica più vicina snapshottata allora, non ricalcolata
--- live ad ogni click). Condiviso fra il vecchio bottone 3D e il
--- bottone nel popup charge_response_panel.
 -- ============================================================
 function charge_executeChargeMove(player, unitKey)
     local slot = main_getArmyByColor(player)
@@ -2142,29 +2092,37 @@ function charge_executeChargeMove(player, unitKey)
         return
     end
 
-    local myBaseGUID = (slot == 1) and elemento.closestBaseArmy1 or elemento.closestBaseArmy2
-    local otherBaseGUID = (slot == 1) and elemento.closestBaseArmy2 or elemento.closestBaseArmy1
-    if not myBaseGUID or not otherBaseGUID then
-        printToColor("[CARICA] Nessuna base di riferimento salvata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
-        return
-    end
-
-    local myBase = getObjectFromGUID(myBaseGUID)
-    local otherBase = getObjectFromGUID(otherBaseGUID)
-    if not myBase or not otherBase then
-        printToColor("[CARICA] Base di riferimento non più presente sul tavolo per " .. unitKey, player.color, {r=1,g=0.6,b=0})
-        return
-    end
+    local otherSlot = charge_elementoOtherSlot(slot)
+    local reciproca = charge_elementoIsReciprocal(elemento)
+    local otherResponse = charge_elementoResponse(elemento, otherSlot)
 
     local myBases = charge_getUnitBases(unitKey)
     if #myBases == 0 then return end
 
-    local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
-    if not distanzaTotaleInch then return end
+    if otherResponse == REACTION_TYPE.EVA then
+        -- Il bersaglio è già fuggito (o sta per farlo): il
+        -- caricante NON deve mai misurare/muoversi verso la sua
+        -- posizione live (che si è spostata) — percorre solo la
+        -- PROPRIA distanza dichiarata, lungo il proprio fronte
+        -- fisso, ignorando dove è finita l'unità evasa.
+        local distanzaDichiarata = charge_elementoDistInches(elemento, slot) or 0
 
-    local otherSlot = charge_elementoOtherSlot(slot)
-    local reciproca = charge_elementoIsReciprocal(elemento)
-    local otherResponse = charge_elementoResponse(elemento, otherSlot)
+        IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
+        IEF_MOVE_BUDGET[unitKey] = distanzaDichiarata
+        move_avanti_apply(unitKey, distanzaDichiarata)
+        IEF_MOVE_UNITS[unitKey] = nil
+        IEF_MOVE_BUDGET[unitKey] = nil
+
+        elemento.outcome = CHARGE_OUTCOME.EVI
+
+        if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+        if elemento.movedArmy1 and elemento.movedArmy2 then
+            elemento.step = CHARGE_STEP.CLO
+        end
+
+        printToColor(string.format("[CARICA] %s percorre %.2f\" (bersaglio evaso, distanza dichiarata)", unitKey, distanzaDichiarata), player.color, {r=1,g=0.85,b=0.2})
+        return
+    end
 
     local isCounterCharge = reciproca
         or elemento.responseArmy1 == REACTION_TYPE.COC
@@ -2184,9 +2142,6 @@ function charge_executeChargeMove(player, unitKey)
         return
     end
 
-    local myBases = charge_getUnitBases(unitKey)
-    if #myBases == 0 then return end
-
     local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
@@ -2205,11 +2160,7 @@ function charge_executeChargeMove(player, unitKey)
     if not myOriginBase then return end
     charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
 
-    if otherResponse == REACTION_TYPE.EVA then
-        elemento.outcome = CHARGE_OUTCOME.EVI
-    else
-        elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
-    end
+    elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
 
     if isCounterCharge then
         if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
@@ -2273,4 +2224,16 @@ function charge_closestBaseToPoint(basiObjs, point)
         end
     end
     return migliore, migliorDist
+end
+-- ============================================================
+-- FUNZIONE: charge_responseEvadeMove(player, value, id)
+-- ============================================================
+function charge_responseEvadeMove(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
+    if not pending then return end
+
+    UI.setAttribute("charge_response_panel", "active", "false")
+    charge_executeEvade(slot, pending.elemento)
+    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
