@@ -88,13 +88,7 @@ end
 -- ============================================================
 -- FUNZIONE: before_charge_auto(phaseName, phase)
 -- ============================================================
--- ============================================================
--- FUNZIONE: before_charge_auto(phaseName, phase)
--- Processa OGNI elemento non chiuso della coda, valutando
--- request/response, con un ramo esplicito per ciascun esito
--- possibile — nessun elemento può uscire da questa fase senza
--- step=CLO, qualunque sia la combinazione request/response.
--- ============================================================
+
 function before_charge_auto(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }

@@ -666,7 +666,7 @@ function charge_checkTarget(player, unitKey)
         if not obbligatoria then
             local myBase = charge_getUnitBases(session.attackerKey)[1]
             if not main_isInCommandRange(myBase, slot) then
-                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale, \n non è posiibile caricare", main_decodeExtendedUnitLabel(session.attackerKey)), player.color, "Yellow", 5)
+                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale, impossibile caricare", main_decodeExtendedUnitLabel(session.attackerKey)), player.color, "Yellow", 5)
                 return
             end
         end
@@ -924,8 +924,8 @@ function charge_getAttackListPanelXml(slot)
     end
     
     local colore = ARMY[slot] and ARMY[slot].color or "White"
-    local attivo = (ENGINE.phase == PHASE.CHARGE_DECLARE and #righe > 0) and "true" or "false"
-
+    local attivo = ((ENGINE.phase == PHASE.CHARGE_DECLARE or ENGINE.phase == PHASE.CHARGE_AUTO) and #righe > 0) and "true" or "false"
+    
     local rows = ""    
     for i, e in ipairs(righe) do
 
@@ -1051,6 +1051,17 @@ function charge_attackRowClick(player, value, id)
         return
     end
 
+     if elemento.step == CHARGE_STEP.CLO then
+        warningToColor("Questa carica è già stata risolta", player.color, "Yellow", 5)
+        return
+    end
+
+    local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
+    if giaMossoIoStesso then
+        warningToColor("Hai già eseguito il tuo movimento di carica", player.color, "Yellow", 5)
+        return
+    end
+
     IEF_CHARGE_RESPONSE_PENDING[slot] = { elemento = elemento, unitKey = myKey }
 
     local buttonIds = { "btnResponseCounter", "btnResponseEvade", "btnResponseStopfire", "btnResponseHold", "btnResponseCharge", "btnResponseEvadeMove" }
@@ -1059,6 +1070,9 @@ function charge_attackRowClick(player, value, id)
     end
 
     local mioResponse = charge_elementoResponse(elemento, slot)
+
+
+
 
     if mioResponse == REACTION_TYPE.EVA then
         UI.setAttribute("btnResponseEvadeMove", "active", "true")
@@ -1100,6 +1114,14 @@ function charge_defenseRowClick(player, value, id)
     if ENGINE.phase == PHASE.CHARGE_REACT then
 
         if charge_elementoIsReciprocal(elemento) then
+            return
+        end
+
+        if charge_elementoResponse(elemento, slot) ~= nil then
+            -- Reazione già scelta per questo lato: solo zoom
+            -- camera (già fatto sopra), nessuna riapertura del
+            -- popup — stesso comportamento delle altre reazioni
+            -- una volta consumate.
             return
         end
 
@@ -1237,26 +1259,6 @@ function charge_applyStraightMove(basiObjs, distInches)
     for _, obj in ipairs(basiObjs) do
         local p = obj.getPosition()
         obj.setPosition(Vector(p.x + fwdXZ.x*deltaUnits, p.y, p.z + fwdXZ.z*deltaUnits))
-    end
-end
-
--- ============================================================
--- FUNZIONE: charge_moveToward(basiObjs, targetPoint, distInches)
--- ============================================================
-function charge_moveTowardPoint(basiObjs, originBase, targetPos, distanzaInch)
-    if #basiObjs == 0 or not originBase then return end
-
-    local origin = originBase.getPosition()
-    local dir = Vector(targetPos.x - origin.x, 0, targetPos.z - origin.z)
-    local len = math.sqrt(dir.x*dir.x + dir.z*dir.z)
-    if len < 0.0001 then return end
-
-    local dirNorm = Vector(dir.x / len, 0, dir.z / len)
-    local deltaUnits = distanzaInch * INCH_TO_TTS
-
-    for _, obj in ipairs(basiObjs) do
-        local p = obj.getPosition()
-        obj.setPosition(Vector(p.x + dirNorm.x*deltaUnits, p.y, p.z + dirNorm.z*deltaUnits))
     end
 end
 -- ============================================================
@@ -1533,7 +1535,6 @@ function charge_stopfireEnd()
     print("charge_stopfireEnd")
     local cur = IEF_STOPFIRE_CURRENT
     IEF_STOPFIRE_CURRENT = nil
-    print(cur)
     if cur then
         charge_refreshDefenseRowText(cur.slot, cur.elemento)
         charge_refreshAttackRowText((cur.slot == 1) and 2 or 1, cur.elemento)
@@ -1777,7 +1778,7 @@ end
 -- FUNZIONE: charge_stopfireExitClick(player, slot)
 -- ============================================================
 function charge_stopfireExitClick(player, value, id)
-    print("charge_stopfireExitClick")
+
     local cur = IEF_STOPFIRE_CURRENT
     printTable(cur)
     if not cur or cur.subStep ~= "ESCI" then return end
@@ -2145,6 +2146,9 @@ function charge_executeChargeMove(player, unitKey)
     local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
+    print(string.format("[DEBUG CHARGEMOVE] myBase.rot=%.1f otherBase.rot=%.1f distanzaTotaleInch=%.3f",
+        myBase.getRotation().y, otherBase.getRotation().y, distanzaTotaleInch))
+
     local distanzaDaPercorrere = distanzaTotaleInch
 
     if isCounterCharge then
@@ -2158,6 +2162,12 @@ function charge_executeChargeMove(player, unitKey)
 
     local myOriginBase = charge_closestBaseToPoint(myBases, otherBase.getPosition())
     if not myOriginBase then return end
+
+    print(string.format("[DEBUG CHARGEMOVE] myBase(salvata)=%s myOriginBase(ricalcolata)=%s STESSA=%s",
+        myBase.getGUID(), myOriginBase.getGUID(), tostring(myBase.getGUID() == myOriginBase.getGUID())))
+    print(string.format("[DEBUG CHARGEMOVE] distanzaTotaleInch(da myBase fissata)=%.3f distanzaVerificaOra(da myOriginBase)=%.3f",
+        distanzaTotaleInch, main_distanceInches(myOriginBase, otherBase) or -1))
+
     charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
 
     elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
@@ -2236,4 +2246,31 @@ function charge_responseEvadeMove(player, value, id)
     UI.setAttribute("charge_response_panel", "active", "false")
     charge_executeEvade(slot, pending.elemento)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
+end
+-- ============================================================
+-- FUNZIONE: charge_slotStillNeedsAction(elemento, slot)
+-- Vero se ARMY{slot} ha ancora un'azione da compiere su questo
+-- elemento. Per la reciproca/COC controlla il proprio movedArmy
+-- (l'altro lato può restare pendente senza bloccarmi); per gli
+-- altri casi (Ferma/Tiro riuscito/Evasione) solo il lato
+-- effettivamente coinvolto (caricante o evaso) è bloccante.
+-- ============================================================
+function charge_slotStillNeedsAction(elemento, slot)
+    if elemento.step == CHARGE_STEP.CLO then return false end
+
+    local reciproca = charge_elementoIsReciprocal(elemento)
+    local isCounterCharge = reciproca or elemento.responseArmy1 == REACTION_TYPE.COC or elemento.responseArmy2 == REACTION_TYPE.COC
+
+    if isCounterCharge then
+        local myMoved = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
+        return not myMoved
+    end
+
+    local myResponse = charge_elementoResponse(elemento, slot)
+    if myResponse == REACTION_TYPE.EVA then
+        return true
+    end
+
+    local chargingSlot = elemento.requestArmy1 and 1 or (elemento.requestArmy2 and 2 or nil)
+    return chargingSlot == slot
 end

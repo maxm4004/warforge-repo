@@ -490,7 +490,7 @@ function getRulesetUiXml()
 
 <Panel id="charge_response_panel"
    rectAlignment="LowerCenter"
-   width="260" height="60"
+   width="260" height="50"
    color="rgba(0,0,0,0.0)"
    offsetXY="0 10"
    active="false">
@@ -549,7 +549,18 @@ function getRulesetUiXml()
             textColor="White"
             width="80"
             active="false"
-            onClick="charge_responseChargeMove"/>        
+            onClick="charge_responseChargeMove"/>       
+            
+    <Button id="btnResponseEvadeMove" 
+            text="Evadi" 
+            font="warforge_font"
+            fontSize="11"
+            image="Sprites/Layout/Button"
+            color="rgba(0.7,0.15,0.15,1)"
+            textColor="White"
+            width="80"
+            active="false"
+            onClick="charge_responseEvadeMove"/>     
      
     <Button id="btnResponseCancel" 
             text="Annulla"

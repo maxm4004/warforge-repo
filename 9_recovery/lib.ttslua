@@ -1,0 +1,4 @@
+function recovery_buttonBaseClick(obj, player_color, alt_click)
+   local player = Player[player_color]
+   warningToColor("Recupero (da implementare)", player, "Yellow", 5)    
+end

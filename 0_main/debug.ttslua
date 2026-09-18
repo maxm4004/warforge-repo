@@ -715,10 +715,7 @@ function debug_chargePrintQueue()
 end
 -- ============================================================
 -- FUNZIONE: charge_moveUnitInches(distanzaInch)
--- DEBUG/TEST: muove in linea retta (sola traslazione) l'unità
--- della PRIMA base selezionata verso la SECONDA base selezionata,
--- per distanzaInch — usando come origine la base più vicina al
--- bersaglio (non una base arbitraria). Richiamabile da console.
+-- /execute debug_moveUnit(1.723)
 -- ============================================================
 function debug_moveUnit(distanzaInch)
     
@@ -752,4 +749,56 @@ function debug_moveUnit(distanzaInch)
     charge_moveTowardPoint(basiObjs, originBase, targetObj.getPosition(), distanzaInch)
     print(string.format("[CARICA] %s mosso di %.2f\" verso %s", unitKey, distanzaInch, targetObj.getName()))
     return true
+end
+-- ============================================================
+-- FUNZIONE: debug_moveUnitForced(distanzaInch)
+-- /execute debug_moveUnitForced(3.31)
+-- ============================================================
+-- function debug_moveUnitForced(distanzaInch)
+--     local selected = main_SelectedObjects()
+--     if not selected or #selected < 1 then
+--         print("[DEBUG] seleziona la base della tua unità prima di lanciare il comando")
+--         return false
+--     end
+
+--     local myObj = selected[1]
+--     local unitKey = main_getUnitKey(myObj)
+--     if not unitKey then
+--         print("[DEBUG] impossibile identificare l'unità dalla base selezionata")
+--         return false
+--     end
+
+--     local myBases = charge_getUnitBases(unitKey)
+--     if #myBases == 0 then
+--         print("[DEBUG] nessuna base trovata per " .. unitKey)
+--         return false
+--     end
+
+--     local fwd = myObj.getTransformForward()
+--     local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+--     local deltaUnits = distanzaInch * INCH_TO_TTS
+
+--     print(string.format("[DEBUG] muovo %s di %.2f\" dritto avanti (rot=%.1f, fwdXZ=%.3f,%.3f)",
+--         unitKey, distanzaInch, myObj.getRotation().y, fwdXZ.x, fwdXZ.z))
+
+--     for _, obj in ipairs(myBases) do
+--         local p = obj.getPosition()
+--         obj.setPosition(Vector(p.x + fwdXZ.x*deltaUnits, p.y, p.z + fwdXZ.z*deltaUnits))
+--     end
+
+--     return true
+-- end
+-- ============================================================
+-- FUNZIONE: debug_moveUnitForced(distanzaInch)
+-- /execute debug_moveUnitForced(2.91)
+-- ============================================================
+function debug_moveUnitForced(distanzaInch)
+    local obj = main_SelectedObjects()[1]
+    if not obj then return end
+
+    local fwd = obj.getTransformForward()
+    local delta = distanzaInch * INCH_TO_TTS
+    local p = obj.getPosition()
+
+    obj.setPosition(Vector(p.x + fwd.x*delta, p.y, p.z + fwd.z*delta))
 end

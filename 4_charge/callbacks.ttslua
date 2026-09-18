@@ -83,8 +83,8 @@ end
 -- ============================================================
 function charge_auto_btn_army1(player, value, id, buttonConfig)
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if e.step ~= CHARGE_STEP.CLO then
-            printToColor("[CARICA] Ci sono ancora cariche da risolvere prima di chiudere la fase", player.color, {r=1,g=0.6,b=0})
+        if charge_slotStillNeedsAction(e, 1) then
+            printToColor("[CARICA] Ci sono ancora cariche da risolvere per il tuo esercito", player.color, {r=1,g=0.6,b=0})
             return false
         end
     end
@@ -96,8 +96,8 @@ end
 -- ============================================================
 function charge_auto_btn_army2(player, value, id, buttonConfig)
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if e.step ~= CHARGE_STEP.CLO then
-            printToColor("[CARICA] Ci sono ancora cariche da risolvere prima di chiudere la fase", player.color, {r=1,g=0.6,b=0})
+        if charge_slotStillNeedsAction(e, 1) then
+            printToColor("[CARICA] Ci sono ancora cariche da risolvere per il tuo esercito", player.color, {r=1,g=0.6,b=0})
             return false
         end
     end

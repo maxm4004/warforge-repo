@@ -54,7 +54,6 @@ function main_updateCenterPanel()
             end
         elseif phase.inputMode == "INITIATIVE" then
 
-            print("[IEF] updateCenterPanel: INITIATIVE mode fase " .. ENGINE.phase .. " activeArmy=" .. tostring(TURN and TURN.activeArmy))
             UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
             UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
             UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
@@ -62,21 +61,15 @@ function main_updateCenterPanel()
             UI.setAttribute(BUTTONS.BTN_ARMY1, "color", colorArmy1 or COLOR.NOARMY)
             UI.setAttribute(BUTTONS.BTN_ARMY2, "color", colorArmy2 or COLOR.NOARMY)
 
-            if TURN and TURN.activeArmy == "Army1" then
-                print("[IEF] updateCenterPanel: Army1 active")
-                
+            if TURN and TURN.activeArmy == "Army1" then                
                 UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
                 UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
-
                 UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "false")
                 UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY)
                 UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "Black")
             elseif TURN and TURN.activeArmy == "Army2" then
-                print("[IEF] updateCenterPanel: Army2 active")
-
                 UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
                 UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
-
                 UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "false")
                 UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY)
                 UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "Black")
@@ -343,8 +336,6 @@ function main_resetTurnForPhase()
     TURN.activeArmy     = army
     TURN.completed.Army1 = false
     TURN.completed.Army2 = false
-
-    print("[IEF] resetTurnForPhase: phase=" .. tostring(TURN.phase) .. " firstArmy=" .. tostring(TURN.firstArmy) .. " activeArmy=" .. tostring(TURN.activeArmy))
 end
 --=============================================================
 --FUNZIONE: getArmyByButton()
@@ -1231,7 +1222,6 @@ function main_formationRedraw(unitKey)
 
     local fronteAttuale = main_detectFormation(basiObjs)
     local x, y, z = main_calcolaPosizionePannello(fronteAttuale, #basiObjs)
-    print(string.format("[DEBUG POS] unitKey=%s fronte=%d x=%.2f y=%.2f z=%.2f", unitKey, fronteAttuale, x, y, z))
 
     local panel3D = state.panel3DObj
     local labelText = string.format("%s — Fronte: %d", unitKey, fronteAttuale)
@@ -2168,19 +2158,21 @@ end
 -- ============================================================
 -- FUNZIONE: recovery()
 -- ============================================================
-function recovery(obj, unit, pos, rot)
-
-    obj.createButton({
-        click_function = "",
-        function_owner = Global,
-        label = "RECUPERO",
-        position = pos,
-        rotation = rot,
-        width = 500,
-        height = 400,
-        font_size = 60,
-    })
-
+function recovery(obj, unit, pos, rot, w, h)
+    if unit and not string.find(unit, "GEN") then
+  
+        obj.createButton({
+            click_function = "recovery_buttonBaseClick",
+            function_owner = Global,
+            label = "RECUPERO",
+            position = pos,
+            rotation = rot,
+            width = w, 
+            height = h, 
+            font_size = 60,
+        })
+         pos.x = pos.x - 0.8 
+    end
 end
 -- ============================================================
 -- FUNZIONE:  main_decodeUnitTypeLabel(unitKey)
@@ -2320,6 +2312,7 @@ end
 -- ============================================================
 
 function main_btnShowRange(obj, player_color, alt_click)
+
     local player = Player[player_color]
     if not player then return end
 
@@ -2379,12 +2372,6 @@ function main_clearHighlightList(lista)
 end
 -- ============================================================
 -- FUNZIONE: main_distanceInches(objA, objB)
--- Distanza in pollici fra due oggetti — bordo-a-bordo (bounds),
--- solo sul piano XZ (ignora l'altezza). Unica fonte di verità per
--- ogni calcolo di distanza fisica del progetto: raggio di comando,
--- measure, e qualunque altro controllo di distanza futuro. Se
--- getBounds() non è disponibile per uno dei due (oggetto non
--- valido), ricade su centro-centro come fallback.
 -- ============================================================
 function main_distanceInches(objA, objB)
     if not objA or not objB then return nil end
@@ -2393,33 +2380,44 @@ function main_distanceInches(objA, objB)
     local posB = objB.getPosition()
     if not posA or not posB then return nil end
 
-    local boundsA = objA.getBounds()
-    local boundsB = objB.getBounds()
+    local dirAB = Vector(posB.x - posA.x, 0, posB.z - posA.z)
+    local pianaLen = math.sqrt(dirAB.x*dirAB.x + dirAB.z*dirAB.z) 
+    if pianaLen < 0.0001 then return 0 end
 
-    local distTTS
-    if boundsA and boundsB then
-        local dirAB = Vector(posB.x - posA.x, 0, posB.z - posA.z)
-        local pianaLen = math.sqrt(dirAB.x*dirAB.x + dirAB.z*dirAB.z)
-        if pianaLen > 0.0001 then
-            local dirNorm = Vector(dirAB.x / pianaLen, 0, dirAB.z / pianaLen)
+    local dirNorm = Vector(dirAB.x / pianaLen, 0, dirAB.z / pianaLen)
 
-            local function rayBoxExit(halfWidth, halfDepth, dx, dz)
-                local tx = (math.abs(dx) > 0.0001) and (halfWidth / math.abs(dx)) or math.huge
-                local tz = (math.abs(dz) > 0.0001) and (halfDepth / math.abs(dz)) or math.huge
-                return math.min(tx, tz)
-            end
+local function rayBoxExitDeclared(obj, dirWorldX, dirWorldZ)
+    local meta = main_getUnitMeta(obj)
+    local tipo = meta and meta.unitType
+    local unitTypeData = tipo and main_getUnitType(tipo)
+    local widthCm = (unitTypeData and unitTypeData.base_width_cm) or 4
+    local depthCm = (unitTypeData and unitTypeData.base_depth_cm) or 3
+    local halfWidth = (widthCm * CM_TO_TTS) / 2
+    local halfDepth = (depthCm * CM_TO_TTS) / 2
 
-            local offsetA = rayBoxExit(boundsA.size.x/2, boundsA.size.z/2, dirNorm.x, dirNorm.z)
-            local offsetB = rayBoxExit(boundsB.size.x/2, boundsB.size.z/2, dirNorm.x, dirNorm.z)
+    -- Nessuna matrice di rotazione costruita a mano: uso i veri
+    -- assi locali dell'oggetto forniti da TTS stesso, eliminando
+    -- ogni ambiguità sulla convenzione di rotazione (oraria/
+    -- antioraria) che ha probabilmente causato il bug di oggi.
+    local fwd = obj.getTransformForward()
+    local right = obj.getTransformRight()
 
-            distTTS = math.max(0, pianaLen - offsetA - offsetB)
-        else
-            distTTS = 0
-        end
-    else
-        distTTS = Vector(posA.x - posB.x, 0, posA.z - posB.z):magnitude()
-    end
+    local localZ = dirWorldX * fwd.x + dirWorldZ * fwd.z      -- componente lungo la profondità
+    local localX = dirWorldX * right.x + dirWorldZ * right.z  -- componente lungo la larghezza
 
+    local tx = (math.abs(localX) > 0.0001) and (halfWidth / math.abs(localX)) or math.huge
+    local tz = (math.abs(localZ) > 0.0001) and (halfDepth / math.abs(localZ)) or math.huge
+    return math.min(tx, tz)
+end
+
+    local offsetA = rayBoxExitDeclared(objA, dirNorm.x, dirNorm.z)
+    local offsetB = rayBoxExitDeclared(objB, -dirNorm.x, -dirNorm.z)
+        
+    print(string.format("[DEBUG DIST] pianaLen=%.3f offsetA=%.3f offsetB=%.3f rotA=%.1f rotB=%.1f pianaLen_cm=%.2f offsetA_cm=%.2f offsetB_cm=%.2f",
+        pianaLen, offsetA, offsetB, objA.getRotation().y, objB.getRotation().y,
+        pianaLen/CM_TO_TTS, offsetA/CM_TO_TTS, offsetB/CM_TO_TTS))
+
+    local distTTS = math.max(0, pianaLen - offsetA - offsetB)
     return distTTS / INCH_TO_TTS
 end
 -- ============================================================

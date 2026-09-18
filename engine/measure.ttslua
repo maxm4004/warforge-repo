@@ -1,18 +1,11 @@
     ENGINE_MEASURE = {
-        LINE_DURATION  = 8,
+        --LINE_DURATION  = 8,
         LINE_COLOR     = {0, 0, 0},
         LINE_THICKNESS = 0.08,
-        SCALE          = 1.257,
-        UNIT_LABEL     = "cm",
-        activeLine     = nil,
+        --SCALE          = 1.257,
+        --UNIT_LABEL     = "cm",
+        --activeLine     = nil,
     }
-
-    UNIT = {
-        CM   = "cm",
-        INCH = "inch"
-    }
-
-    MEASURE_UNIT = UNIT.INCH -- default IEF
 -- ============================================================
 -- FUNZIONE: engine_measure_getUnitObjects(obj)
 -- Dato un oggetto base, ritorna la lista di TUTTI gli oggetti

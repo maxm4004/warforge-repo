@@ -55,6 +55,17 @@ PHASE = {
     RECOVERY         = "RECOVERY",
 }
 
-    CM_TO_TTS = 88.71 / 119.5 
-    INCH_TO_TTS = 0.730 * 2.54 
+    UNIT = {
+        CM   = "cm",
+        INCH = "inch"
+    }
+
+    MEASURE_UNIT = UNIT.INCH
+
+    --CM_TO_TTS = 0.637
+    --INCH_TO_TTS = CM_TO_TTS * 2.54
+    
+    CM_TO_TTS = 0.7902
+    INCH_TO_TTS = 0.7902 * 2.54
+    
     COMMAND_RANGE_INCHES = 12.8

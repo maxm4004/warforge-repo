@@ -45,14 +45,14 @@ function getEngineUiXml()
     end
 
     local panels = [[
-        <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="false">
+        <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="true">
             <Image image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/logo/logo01.png" preserveAspect="1"/>
         </Panel>
-        <Panel rectAlignment="LowerCenter" width="1100" height="30" color="rgba(0,0,0,0)" offsetXY="0 700">
-            <Text id="playerGameMessage" text="" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
-            outlineSize="1" alignment="MiddleCenter"/>
+        <Panel rectAlignment="LowerCenter" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="0 300">
+            <Text id="playerGameMessage" text="" fontStyle="Bold" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
+            outlineSize="1" alignment="LeftCenter"/>
         </Panel>
-        <Panel id="panelVersion" active="false">
+        <Panel id="panelVersion" active="true">
             rectAlignment="UpperCenter"
             width="420"
             height="30"
@@ -64,16 +64,16 @@ function getEngineUiXml()
         ]] .. buttons .. [[
         </Panel>    
         <Panel id="measure_cancel_panel"
-        rectAlignment="UpperCenter"
+        rectAlignment="LowerCenter"
         width="150" height="50"
-        color="rgba(0,0,0,0.35)"
-        offsetXY="0 -390"
+        color="rgba(0,0,0,0.00)"
+        offsetXY="0 0"
         active="false">
             <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter">               
                 <Button id="btn_measure_cancel_panel"
                         text="CANCEL"
                         font="warforge_font"
-                        fontSize="12" fontStyle="Bold"
+                        fontSize="11" fontStyle="Bold"
                         image="Sprites/Layout/Button"
                         color="rgba(0.4,0.4,0.4,1)"
                         textColor="White"

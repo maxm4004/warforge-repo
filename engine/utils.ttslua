@@ -44,6 +44,9 @@ end
 -- FUNZIONE: warningToColor()
 -- ============================================================
 function warningToColor(warning, player, color, second)
+
+    local color = color == "Yellow" and "#FFD833" or color
+
     if player then
         UI.setAttribute("playerGameMessage", "Color", color)
         UI.setAttribute("playerGameMessage", "text", warning)
@@ -54,6 +57,9 @@ function warningToColor(warning, player, color, second)
     Wait.time(function()
         UI.setAttribute("playerGameMessage", "active", "false")
     end, not second and 5 or second)
+
+   -- printToColor(warning, player.color, color)
+
 end
 -- ============================================================
 -- FUNZIONE: warningToColor()
