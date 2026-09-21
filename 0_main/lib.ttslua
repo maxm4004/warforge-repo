@@ -104,7 +104,6 @@ function main_aggiornaLinee()
     local Y_LINEE    = 1.22
     local LX = 66.806
     local LZ = 44.536
-    --local CM_TO_TTS  = LX / 90.0   -- 66.70 / 90 = 0.741
     local DEPLOY_TTS = 30.48 * CM_TO_TTS   -- 12 pollici in TTS = 22.59
     local LAT_TTS = 6 * INCH_TO_TTS  -- 6 pollici in TTS = 11.31
     local LX_SPAWN   = 84.00
@@ -1340,7 +1339,7 @@ function main_ricostruisciFormazione(basiObjs, fronte)
 
     local baseInfoAnchor = main_parseNickname(refObj.getName())
     local unitTypeDataAnchor = baseInfoAnchor and main_getUnitType(baseInfoAnchor.unitType)
-    local HGAP = 0.25
+    local HGAP = 0.1
     local VGAP = 0.1
     local width = (unitTypeDataAnchor and unitTypeDataAnchor.base_width_cm or 4) * CM_TO_TTS + HGAP
     local depth = (unitTypeDataAnchor and unitTypeDataAnchor.base_depth_cm or 3) * CM_TO_TTS + VGAP
@@ -2019,7 +2018,7 @@ function main_createBaseButtons(obj, phase, unit)
     obj.clearButtons()
 
     local azioni = {
-        [PHASE.DEPLOY_SPAWN]     = {},
+        [PHASE.DEPLOY_SPAWN]     = {form},
         [PHASE.DEPLOY_POSITION]  = {form, range},
         [PHASE.CHARGE_DECLARE]   = {range, charge},
         [PHASE.CHARGE_REACT]     = {},
@@ -2032,6 +2031,10 @@ function main_createBaseButtons(obj, phase, unit)
     }
 
     local pos = {x = 1.2, y = 0.1, z = -1.6}
+    if string.find(unit, "_FP") then
+        pos.z = -1
+    end
+
     local rot = {x = 0, y = 180, z = 0}
     local  w  = 400
     local h = 250

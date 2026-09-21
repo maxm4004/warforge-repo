@@ -103,9 +103,7 @@ function deployment_spawnArmy(slot, armyData)
         displayName = armyData.nome or armyData.tag,
     }
 
-    local CM_TO_TTS   = 0.7423
-
-    local unitOffsetX = slot == 1 and -73.60 or 73.60
+    local unitOffsetX = slot == 1 and -87 or 87
     local unitOffsetZ = -45.00
     local prevModel   = nil
 
@@ -197,6 +195,7 @@ function deployment_spawnArmy(slot, armyData)
             local unitNumber = counters[unitData.model]
 
             for _, baseData in ipairs(unitData.basi or {}) do
+                
                 base = base + 1
                 if prevModel == unitData.model then
                     if rango then
@@ -220,6 +219,7 @@ function deployment_spawnArmy(slot, armyData)
                     else
                         unitOffsetX = unitOffsetX - (prevMaxX + 4) * CM_TO_TTS - GAP_DIVERSO
                     end
+
                     unitOffsetZ = 0
                     prevModel = unitData.model
                     basi = 1
@@ -238,8 +238,8 @@ function deployment_spawnArmy(slot, armyData)
             if (b.posizione.z or 0) > prevMaxZ then prevMaxZ = b.posizione.z end
         end
 
-        local utDict  = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
-        prevDepth = utDict and utDict[tipo] and utDict[tipo].base_depth_cm or 3
+        --local utDict  = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
+        --prevDepth = utDict and utDict[tipo] and utDict[tipo].base_depth_cm or 3
     end
 end
 -- ============================================================
@@ -286,6 +286,8 @@ end
 -- ============================================================
 function deployment_buildBaseNickname(unitData, baseData, unitNumber)
     return unitData.model .. "_" .. unitNumber .. "." .. baseData.seq
+    --.. unitData.tipo .. "_" .. 
+   
 end
 -- ============================================================
 -- FUNZIONE: deployment_buildBasePosition()
@@ -302,7 +304,7 @@ function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
     local zOffset   = slot == 1 and -(VERDE_LZ + SPAWN_GAP) or (VERDE_LZ + SPAWN_GAP)
     local zSign = slot == 1 and -1 or 1
     local col = math.floor((sourcePos.x or 0) / 4)
-    local horizGap = 0.245
+    local horizGap = 0.01
 
     local x1 = ((unitOffsetX or 0) + (sourcePos.x or 0) * CM_TO_TTS + col * horizGap)
     local x2 = ((unitOffsetX or 0) - (sourcePos.x or 0) * CM_TO_TTS - col * horizGap)

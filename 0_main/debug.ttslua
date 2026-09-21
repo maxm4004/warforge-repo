@@ -1,9 +1,12 @@
 -- ============================================================
 -- FUNZIONE DI TEST: debug_getChildOffsets()
+-- /execute debug_getChildOffsets("Green")
 -- ============================================================
-function debug_getChildOffsets()
+function debug_getChildOffsets(color)
+
+    local player = Player[color]
     
-    local sel = Player.Green.getSelectedObjects()
+    local sel = player.getSelectedObjects()
     if not sel or #sel < 1 then
         print("[OFFSET] Seleziona la base")
         return
@@ -28,7 +31,7 @@ function debug_getChildOffsets()
     local attached = data.AttachedObjects or data.ContainedObjects or {}
 
     if #attached == 0 then
-        -- prova ChildObjects
+        -- prova ChildObjects 
         attached = data.ChildObjects or {}
     end
 
@@ -553,13 +556,6 @@ function debug_fieldCardsDump()
 end
 -- ============================================================
 -- FUNZIONE: debug_chargeRectangle(guid)
--- Disegna sul tavolo (linee rosse) il rettangolo di carica usato
--- da charge_findLineTarget (fronte x move_inches, davanti alla
--- base indicata) e stampa, per ogni base nemica sul tavolo, le
--- coordinate locali (avanti/laterale, in TTS units e pollici) e
--- se cade dentro o fuori dal rettangolo.
---
--- Uso da console:
 --   /execute debug_chargeRectangle("GUID_BASE_ATTACCANTE")
 -- ============================================================
 function debug_chargeRectangle()
@@ -652,8 +648,6 @@ function debug_moveToPhase(phaseName)
 end
 -- ============================================================
 -- FUNZIONE DI TEST: debug_checkIefDataStructure()
--- Verifica la forma reale di IEF_DATA.weapons e IEF_DATA.meleed
--- dopo il caricamento JSON, confrontata con morale (di controllo).
 -- /execute debug_checkIefDataStructure()
 -- ============================================================
 function debug_checkIefDataStructure()
@@ -749,56 +743,4 @@ function debug_moveUnit(distanzaInch)
     charge_moveTowardPoint(basiObjs, originBase, targetObj.getPosition(), distanzaInch)
     print(string.format("[CARICA] %s mosso di %.2f\" verso %s", unitKey, distanzaInch, targetObj.getName()))
     return true
-end
--- ============================================================
--- FUNZIONE: debug_moveUnitForced(distanzaInch)
--- /execute debug_moveUnitForced(3.31)
--- ============================================================
--- function debug_moveUnitForced(distanzaInch)
---     local selected = main_SelectedObjects()
---     if not selected or #selected < 1 then
---         print("[DEBUG] seleziona la base della tua unità prima di lanciare il comando")
---         return false
---     end
-
---     local myObj = selected[1]
---     local unitKey = main_getUnitKey(myObj)
---     if not unitKey then
---         print("[DEBUG] impossibile identificare l'unità dalla base selezionata")
---         return false
---     end
-
---     local myBases = charge_getUnitBases(unitKey)
---     if #myBases == 0 then
---         print("[DEBUG] nessuna base trovata per " .. unitKey)
---         return false
---     end
-
---     local fwd = myObj.getTransformForward()
---     local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
---     local deltaUnits = distanzaInch * INCH_TO_TTS
-
---     print(string.format("[DEBUG] muovo %s di %.2f\" dritto avanti (rot=%.1f, fwdXZ=%.3f,%.3f)",
---         unitKey, distanzaInch, myObj.getRotation().y, fwdXZ.x, fwdXZ.z))
-
---     for _, obj in ipairs(myBases) do
---         local p = obj.getPosition()
---         obj.setPosition(Vector(p.x + fwdXZ.x*deltaUnits, p.y, p.z + fwdXZ.z*deltaUnits))
---     end
-
---     return true
--- end
--- ============================================================
--- FUNZIONE: debug_moveUnitForced(distanzaInch)
--- /execute debug_moveUnitForced(2.91)
--- ============================================================
-function debug_moveUnitForced(distanzaInch)
-    local obj = main_SelectedObjects()[1]
-    if not obj then return end
-
-    local fwd = obj.getTransformForward()
-    local delta = distanzaInch * INCH_TO_TTS
-    local p = obj.getPosition()
-
-    obj.setPosition(Vector(p.x + fwd.x*delta, p.y, p.z + fwd.z*delta))
 end

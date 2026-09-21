@@ -154,8 +154,6 @@ function shoot_range_and_target(player, selection)
         fwdXZ    = Vector(dirUnita.z, 0, -dirUnita.x)
     end
 
--- Dimensioni base da IEF_DATA (in TTS: cm * 0.7423)
-    local CM_TO_TTS  = 0.7423
     local unitType   = shooterUnit and shooterUnit.tipo or "FP"
     local unitTypesDict = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
     local utData = unitTypesDict and unitTypesDict[unitType] or {}
