@@ -1,3 +1,6 @@
+-- ============================================================
+-- FUNZIONE: shoot_buttonBaseClick(obj, player_color, alt_click)
+-- ============================================================
 function shoot_buttonBaseClick(obj, player_color, alt_click)
 
     local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
@@ -19,7 +22,7 @@ function shoot_buttonBaseClick(obj, player_color, alt_click)
 
 end
 -- ============================================================
--- FUNZIONE: shoot_range_and_target
+-- FUNZIONE: shoot_range_and_target(player, selection)
 -- ============================================================
 function shoot_range_and_target(player, selection)
 
@@ -288,8 +291,7 @@ local angolo   = math.rad(angoloGradi)
             end
         end
 
-        local sampleBounds = basiObjs[1].getBounds()
-        local rankStep = sampleBounds.size.z
+        local rankStep = (tonumber(utData.base_depth_cm) or 3) * CM_TO_TTS
         local rankTolerance = rankStep * 0.6
 
         local maxRanghi = 1
@@ -413,23 +415,11 @@ local angolo   = math.rad(angoloGradi)
         IEF_SHOOT_STATE.targetSlot   = targetSlot
         IEF_SHOOT_STATE.basiNemiche  = basiNemiche
 
-        local pos = shooter.getPosition()
-        local targetPos = target.getPosition()
-        local boundsShooter = shooter.getBounds()
-        local boundsTarget  = target.getBounds()
-
-        local dirST = (Vector(targetPos.x, targetPos.y, targetPos.z) - Vector(pos.x, pos.y, pos.z)):normalized()
-
-        local offsetShooter  = math.abs(boundsShooter.size.x/2 * dirST.x) + math.abs(boundsShooter.size.z/2 * dirST.z)
-        local offsetTarget   = math.abs(boundsTarget.size.x/2 * dirST.x) + math.abs(boundsTarget.size.z/2 * dirST.z)
-
-        local dist           = (target.getPosition() - pos):magnitude()
-        local distBordoBordo = dist - offsetShooter - offsetTarget
-
-        local INCH_TO_TTS_msg = INCH_TO_TTS
-        local distInch = distBordoBordo / INCH_TO_TTS_msg
-        local rangeInch = state and state.rangeUnits and (state.rangeUnits / INCH_TO_TTS_msg) or (rangeUnits / INCH_TO_TTS_msg)
-        local msg = string.format("[TIRO] Bersaglio: %s dist: %.1f" .. " gittata: %.0f" .. " (basi pronte: %d/%d)", targetUnit and (targetUnit.tipo .. "_" .. targetUnit.unita_num) or target.getName(), distInch, rangeInch, basiPronte, #basiObjs)
+        local distInch  = main_distanceInches(shooter, target)
+        local rangeInch = rangeUnits / INCH_TO_TTS
+        local msg = string.format("[TIRO] Bersaglio: %s dist: %.1f gittata: %.0f (basi pronte: %d/%d)",
+        targetUnit and (targetUnit.tipo .. "_" .. targetUnit.unita_num) or target.getName(),
+        distInch, rangeInch, basiPronte, #basiObjs)
         printToColor(msg, player.color, {r=1,g=0.85,b=0.2})
 
         UI.setAttribute("confirm_panel_shoot", "active", "true")
@@ -468,70 +458,7 @@ local angolo   = math.rad(angoloGradi)
     return true
 end
 -- ============================================================
--- FUNZIONE: lionheart_trovaBersagliPerBase
--- Per ogni base in basiObjs, trova il PROPRIO nemico piu' vicino
--- in LOS (puo' essere diverso da base a base).
--- Ritorna una lista: { {base=obj, target=obj}, ... } solo per
--- le basi che hanno trovato un bersaglio valido.
--- ============================================================
-function shoot_trovaBersagliPerBase(basiObjs, nemici, rangeUnits, angoloGradi)
-
-    local risultati = {}
-
-    for _, base in ipairs(basiObjs) do
-        local posA = base.getPosition()
-        local fwd  = base.getTransformForward()
-        local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-
-        local candidati = {}
-
-        for _, nemico in ipairs(nemici) do
-            if nemico and nemico ~= base then
-                local posB = nemico.getPosition()
-                local dir  = Vector(posB.x - posA.x, 0, posB.z - posA.z)
-                local dist = dir:magnitude()
-
-                if dist > 0 and dist <= rangeUnits then
-                    local dirNorm = dir:normalized()
-                    local dot     = math.max(-1, math.min(1, fwdXZ.x*dirNorm.x + fwdXZ.z*dirNorm.z))
-                    local ang     = math.deg(math.acos(dot))
-
-                    if ang <= angoloGradi then
-                        table.insert(candidati, { obj = nemico, dist = dist })
-                    end
-                end
-            end
-        end
-
-        table.sort(candidati, function(a, b) return a.dist < b.dist end)
-
-        local trovato = nil
-
-        for _, cand in ipairs(candidati) do
-            if shoot_checkLOS(base, posA, cand.obj.getPosition()) then
-                trovato = cand.obj
-                break
-            end
-        end
-
-        print("[TIRO] base=" .. base.getName() .. " esito=" .. (trovato and ("target: " .. trovato.getName()) or "no target"))
-
-        if trovato then
-            table.insert(risultati, { base = base, target = trovato })
-        end
-    end
-
-    return risultati
-end
--- ============================================================
--- FUNZIONE: lionheart_trovaBersaglio
--- 1. Trova tutte le UNITA' nemiche nel cono (per distanza minima
---    base-a-base, senza ancora controllare la LOS).
--- 2. Ordina le unita' candidate dalla piu' vicina alla piu' lontana.
--- 3. Per ogni unita' candidata, in ordine: se ALMENO UNA base
---    tiratrice ha LOS libera verso ALMENO UNA base di quell'unita',
---    quella diventa il bersaglio definitivo. Altrimenti si scarta
---    e si passa alla prossima unita' candidata piu' vicina.
+-- FUNZIONE: shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
 -- ============================================================
 function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
 
@@ -616,50 +543,7 @@ function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
     return nil, nil
 end
 -- ============================================================
--- FUNZIONE: lionheart_isDentroCono
--- ============================================================
-function shoot_isDentroCono(shooter, nemico, targetPos, angoloGradi, maxDist, puntiArco, puntiSinistro, puntiDestro)
-    if shoot_isToccata(shooter, puntiArco,     nemico) then return true end
-    if shoot_isToccata(shooter, puntiSinistro, nemico) then return true end
-    if shoot_isToccata(shooter, puntiDestro,   nemico) then return true end
-
-    local pos   = shooter.getPosition()
-    local dir   = targetPos - pos
-    local dist  = dir:magnitude()
-    if dist > maxDist then return false end
-
-    local fwd   = shooter.getTransformForward()
-    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-    local dirXZ = Vector(dir.x, 0, dir.z):normalized()
-    local dot   = math.max(-1, math.min(1, fwdXZ:dot(dirXZ)))
-    local ang   = math.deg(math.acos(dot))
-
-    return ang <= angoloGradi
-end
--- ============================================================
--- FUNZIONE: lionheart_isToccata
--- ============================================================
-function shoot_isToccata(shooter, punti, nemico)
-    if not nemico or not nemico.getBounds then return false end
-    local bounds = nemico.getBounds()
-    if not bounds or not bounds.size then return false end
-
-    local pos  = nemico.getPosition()
-    local xmin = pos.x - bounds.size.x / 2
-    local xmax = pos.x + bounds.size.x / 2
-    local zmin = pos.z - bounds.size.z / 2
-    local zmax = pos.z + bounds.size.z / 2
-
-    for _, p in ipairs(punti) do
-        local pw = shooter.positionToWorld(p)
-        if pw.x >= xmin and pw.x <= xmax and pw.z >= zmin and pw.z <= zmax then
-            return true
-        end
-    end
-    return false
-end
--- ============================================================
--- FUNZIONE: lionheart_checkLOS
+-- FUNZIONE: shoot_checkLOS(shooter, fromPos, toPos)
 -- ============================================================
 function shoot_checkLOS(shooter, fromPos, toPos)
     local dir       = toPos - fromPos
@@ -701,7 +585,7 @@ function shoot_checkLOS(shooter, fromPos, toPos)
     return true
 end
 -- ============================================================
--- FUNZIONE: lionheart_getNemici
+-- FUNZIONE: shoot_getNemici(shooter, shooterSlot)
 -- ============================================================
 function shoot_getNemici(shooter, shooterSlot)
     local nemici   = {}
@@ -714,9 +598,9 @@ function shoot_getNemici(shooter, shooterSlot)
     return nemici
 end
 -- ============================================================
--- FUNZIONE: lionheart_shootResetLines
+-- FUNZIONE: shoot_shootResetLines(player, value, id)
 -- ============================================================
-function shoot_shootResetLines(player, value, id)
+function shoot_ResetLines(player, value, id)
 
     if IEF_SHOOTING.activeShooter then
         IEF_SHOOTING.activeShooter.setVectorLines({})
@@ -735,14 +619,10 @@ function shoot_shootResetLines(player, value, id)
     UI.setAttribute("confirm_panel_shoot", "active", "false")
     callHandler("aggiornaLinee")
 end
--- shoot_fire e shoot_stopFire rimossi — animazione laser non usata in IEF
 -- ============================================================
--- FUNZIONE: lionheart_shootConfirm(player)
--- Supporta bersagli multipli: raggruppa le basi pronte per
--- unita' bersaglio, e tira i dadi separatamente per ciascun
--- gruppo.
+-- FUNZIONE: shoot_shootConfirm(player)
 -- ============================================================
-function shoot_shootConfirm(player)
+function shoot_Confirm(player)
 
     local state = IEF_SHOOT_STATE
     if not state.shooter or not state.target then
@@ -789,7 +669,7 @@ function shoot_shootConfirm(player)
 
     if numDadi <= 0 then
         printToColor("[TIRO] Nessuna base in gittata con LOS", player.color, {r=1,g=0.6,b=0})
-        shoot_shootReset()
+        shoot_Reset()
         return
     end
 
@@ -805,18 +685,16 @@ function shoot_shootConfirm(player)
         else
             printToAll("[TIRO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
         end
-        shoot_shootReset()
+        shoot_Reset()
     end)
 
     local unitKey = main_getUnitKey(state.shooter)
     IEF_FIRED[unitKey] = true
 
-    shoot_shootResetLines(player)
+    shoot_ResetLines(player)
 end
 -- ============================================================
--- FUNZIONE: shoot_basiPronte()
--- IEF: conta le basi tiratici con LOS verso il bersaglio
--- Ogni base pronta = 1D6
+-- FUNZIONE: shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
 -- ============================================================
 function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
     if not basiObjs or #basiObjs == 0 then return 0 end
@@ -836,92 +714,21 @@ function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
     end
     return count
 end
+
 -- ============================================================
--- FUNZIONE: lionheart_figureValideTiro(unita, basiObjs, basiNemiche, rangeUnits)
--- Per ogni base tiratrice, controlla se ha raggio+LOS verso
--- ALMENO UNA base dell'unita' bersaglio (basiNemiche), non solo
--- verso una base specifica. Se si', conta le sue figure (solo
--- primo rango, fpb/2; SKC+ARC: primo+secondo rango).
+-- FUNZIONE: shoot_shootCancel()
 -- ============================================================
-function shoot_figureValideTiro(unita, basiObjs, basiNemiche, rangeUnits)
-    if not basiObjs or #basiObjs == 0 then return 0 end
-    if not basiNemiche or #basiNemiche == 0 then return 0 end
-
-    -- IEF: figures_per_base dal regolamento_ief.json
-    local unitTypeData = IEF_DATA.unitTypes and IEF_DATA.unitTypes[unita.tipo] or {}
-    local fpb = unitTypeData.figures_per_base or 3
-    -- In IEF solo il primo rango tira (base sottile 4x1.5cm per FP)
-    local fpbRango = fpb
-
-    local maxRanghi = 1
-    if unita.tipo == "SKC" and unita.arma == "ARC" then
-        maxRanghi = 2
-    end
-
-    local fwd   = basiObjs[1].getTransformForward()
-    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-
-    local proiezioni = {}
-    local minProj = nil
-
-    for _, baseObj in ipairs(basiObjs) do
-        local p = baseObj.getPosition()
-        local proj = p.x * fwdXZ.x + p.z * fwdXZ.z
-        proiezioni[baseObj] = proj
-        if minProj == nil or proj < minProj then
-            minProj = proj
-        end
-    end
-
-    local sampleBounds = basiObjs[1].getBounds()
-    local rankStep = sampleBounds.size.z
-    local rankTolerance = rankStep * 0.6
-
-    local figure = 0
-
-    for _, baseObj in ipairs(basiObjs) do
-        local offset = proiezioni[baseObj] - minProj
-        local rangoIndex = math.floor((offset + rankTolerance) / rankStep)
-
-        if rangoIndex < maxRanghi then
-            local posA = baseObj.getPosition()
-
-            -- Cerca la PRIMA base nemica (qualsiasi dell'unita' bersaglio) in raggio+LOS
-            local trovata = false
-            for _, baseNemica in ipairs(basiNemiche) do
-                local targetPos = baseNemica.getPosition()
-                local dist = (Vector(targetPos.x, 0, targetPos.z) - Vector(posA.x, 0, posA.z)):magnitude()
-
-                if dist <= rangeUnits and shoot_checkLOS(baseObj, posA, targetPos) then
-                    trovata = true
-                    break
-                end
-            end
-
-            if trovata then
-                local nickname = baseObj.getName()
-                local wounds = wounds_data and wounds_data[nickname] or 0
-                figure = figure + math.max(0, fpbRango - wounds)
-            end
-        end
-    end
-
-    return figure
-end
--- ============================================================
--- FUNZIONE: lionheart_shootCancel()
--- ============================================================
-function shoot_shootCancel(player)
+function shoot_Cancel(player)
     if IEF_SHOOT_STATE.target then
         IEF_SHOOT_STATE.target.highlightOff()
     end
-    shoot_shootReset()
+    shoot_Reset()
     printToColor("[TIRO] Annullato", player.color, {r=0.7,g=0.7,b=0.7})
 end
 -- ============================================================
--- FUNZIONE: lionheart_shootReset()
+-- FUNZIONE: shoot_shootReset()
 -- ============================================================
-function shoot_shootReset()
+function shoot_Reset()
     IEF_SHOOT_STATE = {
         shooter=nil, 
         target=nil,
@@ -1014,40 +821,45 @@ function shoot_applyHits(unita, slot, hits, player, targetObj)
     printToAll(msg, {r=1,g=0.4,b=0.4})
 end
 -- ============================================================
--- FUNZIONE: lionheart_checkMorale(unita, slot, player)
--- Verifica se l'unità deve testare il morale
+-- FUNZIONE: shoot_checkMorale(unita, slot, player)
 -- ============================================================
 function shoot_checkMorale(unita, slot, player)
-
-    -- Rileggi unità aggiornata dopo scan
     local unitaAgg = main_findUnit(slot, unita.tipo, unita.unita_num)
     if not unitaAgg then return end
-
     local tipo     = unitaAgg.tipo
     local fpb      = (IEF_DATA.unitTypes and IEF_DATA.unitTypes[tipo] or {}).figures_per_base or 3
     local fig_att  = main_figureTotaliUnita(unitaAgg)
     local fig_max  = (unitaAgg.basi_max or #unitaAgg.basi) * fpb
     local perc     = fig_max > 0 and (fig_att / fig_max) or 0
-
     if perc == 0 then
         printToAll("[MORALE] " .. tipo .. "_" .. unitaAgg.unita_num .. " — DESTROYED", {r=1,g=0.2,b=0.2})
         return
     end
 
-    -- IEF: soglia morale da regolamento_ief.json
-    local moraleData = IEF_DATA.morale and IEF_DATA.morale.levels and IEF_DATA.morale.levels[unitaAgg.morale]
-    local threshold  = moraleData and moraleData.threshold or 6
-    local basiTot    = unitaAgg.basi_max or #unitaAgg.basi
-    local basiRim    = main_basiPresentiUnita(unitaAgg)
+    local basiTot = unitaAgg.basi_max or #unitaAgg.basi
+    local basiRim = main_basiPresentiUnita(unitaAgg)
 
     if basiRim <= math.floor(basiTot / 2) then
-        printToAll(string.format("[MORALE] %s_%d sotto 50%% — TEST MORALE (soglia %d+)",
-            tipo, unitaAgg.unita_num, threshold), {r=1,g=0.6,b=0})
+        local baseObj = unitaAgg.basi[1] and getObjectFromGUID(unitaAgg.basi[1].guid)
+        local unitKey = baseObj and main_getUnitKey(baseObj)
+        local targetPlayer = Player[ARMY[slot].color]
+
+        if not unitKey or not targetPlayer then
+            printToAll("[MORALE] Impossibile avviare il test per " .. tipo .. "_" .. unitaAgg.unita_num, {r=1,g=0.3,b=0.3})
+            return
+        end
+
+        main_testMorale(unitKey, targetPlayer, "altre_situazioni", 0, function(esito, somma, soglia, effetto)
+            if esito == MORALE_RESULT.KO then
+                printToAll(string.format("[MORALE] %s_%d fallisce il test — %s", tipo, unitaAgg.unita_num, effetto or ""), {r=1,g=0.3,b=0.3})
+            else
+                printToAll(string.format("[MORALE] %s_%d supera il test", tipo, unitaAgg.unita_num), {r=0.5,g=1,b=0.5})
+            end
+        end)
     end
 end
 -- ============================================================
--- FUNZIONE: lionheart_findNearestEnemy(shooter, shooterSlot, range)
--- Trova il nemico più vicino entro la gittata (in TTS units)
+-- FUNZIONE: shoot_findNearestEnemy(shooter, shooterSlot, range)
 -- ============================================================
 function shoot_findNearestEnemy(shooter, shooterSlot, rangeUnits)
 
