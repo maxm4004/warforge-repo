@@ -502,6 +502,7 @@ function engine_diceRoll_start(player)
     if not slot then warning("Impossibile usare questo button, scegliere prima un colore", "Yellow") return end
   
     if ENGINE.phase == "INITIATIVE_ROLL" then
+        
         local faseOrigine = ENGINE.phase
         local key = slot == 1 and "rolledNumberArmy1" or "rolledNumberArmy2"
         if DICE_CONTEST[key] ~= nil then return end
@@ -510,8 +511,9 @@ function engine_diceRoll_start(player)
             DICE_CONTEST[key] = risultati[1]
             engine_diceCameraReturn(player, slot, faseOrigine)
             local bothRolled = DICE_CONTEST.rolledNumberArmy1 ~= nil and DICE_CONTEST.rolledNumberArmy2 ~= nil
-            callHandler("dice_check")
+            callHandler("dice_check")           
             if bothRolled and DICE_CONTEST.winner == nil then
+                main_manage_no_winner_for_roll(player, ENGINE.phase)
                 engine_diceClearLastRoll(1)
                 engine_diceClearLastRoll(2)
                 return

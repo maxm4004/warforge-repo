@@ -17,14 +17,15 @@ end
 -- FUNZIONE: assign_initiative_btn_all()
 -- ============================================================
 function assign_initiative_btn_all(player, value, id, buttonConfig)
-
-    local winner = ARMY[DICE_CONTEST.winner]
+    
+    local winner = ARMY[DICE_CONTEST.winner]    
     local clicker = ARMY[main_getArmyByColor(player)]
     local clicked = ARMY[main_getArmyByButton(id)]
     
-    if clicker.name ~= winner.name then
-        fadeOut(clicker.name.." can't assign anything", player) 
-    else 
+    if clicker and winner and clicker.name ~= winner.name then
+        warningToColor(clicker.name.." non può usare questo pulsante", player, "Yellow", 5)
+        return
+    else
         DICE_CONTEST.initiative = clicked
         callHandler("resetTurnForPhase")
         local army = callHandler("getArmySlotByColor", clicked.color)

@@ -378,10 +378,7 @@ function main_dice_check()
     else
         DICE_CONTEST.winner = 2
     end   
-    
-    print("Winner is Army: " .. tostring(ARMY[DICE_CONTEST.winner].name))
 end
-
 -- ============================================================
 -- FUNZIONE: advanceTurnAfterClick()
 -- ============================================================
@@ -417,6 +414,8 @@ end
 -- FUNZIONE: canUseButton()
 -- ============================================================
 function main_canUseButton(slot, player, value, id, button, phase)
+
+    print("main_canUseButton")
 
     local mode = phase and phase.inputMode or "FREE"
 
@@ -1339,8 +1338,8 @@ function main_ricostruisciFormazione(basiObjs, fronte)
 
     local baseInfoAnchor = main_parseNickname(refObj.getName())
     local unitTypeDataAnchor = baseInfoAnchor and main_getUnitType(baseInfoAnchor.unitType)
-    local HGAP = 0.1
-    local VGAP = 0.1
+    local HGAP = 0.03
+    local VGAP = 0.03
     local width = (unitTypeDataAnchor and unitTypeDataAnchor.base_width_cm or 4) * CM_TO_TTS + HGAP
     local depth = (unitTypeDataAnchor and unitTypeDataAnchor.base_depth_cm or 3) * CM_TO_TTS + VGAP
 
@@ -2018,8 +2017,8 @@ function main_createBaseButtons(obj, phase, unit)
     obj.clearButtons()
 
     local azioni = {
-        [PHASE.DEPLOY_SPAWN]     = {form},
-        [PHASE.DEPLOY_POSITION]  = {form, range},
+        [PHASE.DEPLOY_SPAWN]     = {form, move},
+        [PHASE.DEPLOY_POSITION]  = {form, move, range},
         [PHASE.CHARGE_DECLARE]   = {range, charge},
         [PHASE.CHARGE_REACT]     = {},
         [PHASE.CHARGE_STOPFIRE]  = {},
@@ -2050,13 +2049,16 @@ end
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
 function range(obj, unit, pos, rot, w, h)
-    if unit and string.find(unit, "GEN") then 
+
+    if unit and string.find(unit, "GEN") then         
+        
+        local newPos = {x = 1.2, y = 0.1, z = -2}
         
         obj.createButton({
             click_function = "main_btnShowRange",
             function_owner = Global,
             label = "RAGGIO",
-            position = pos,
+            position = newPos,
             rotation = rot,
             width = w, 
             height = h, 
@@ -2446,4 +2448,18 @@ function main_distanceInchesToPoint(obj, point)
     end
 
     return distTTS / INCH_TO_TTS
+end
+-- ============================================================
+-- FUNZIONE: main_manage_no_winner(player, phase)
+-- ============================================================
+function main_manage_no_winner_for_roll(player, phase)
+
+      if phase == "INITIATIVE_ROLL" then
+        Wait.time(function ()
+            warning("Pareggio, il tiro per assegnare l'iniziativa deve essere ripetuto", "Yellow")
+            DICE_CONTEST.rolledNumberArmy1 = nil
+            DICE_CONTEST.rolledNumberArmy2 = nil
+        end, 2)
+        return
+     end
 end

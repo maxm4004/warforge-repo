@@ -1,7 +1,6 @@
--- ============================================================
--- rulesets/imperifeudi/engine/state.ttslua
--- Tabelle di stato globale IEF.
--- ============================================================
+IEF_FORM_TEST_MODE = true
+IEF_MOVE_TEST_MODE = true
+
 -- Colori esercito (alias leggibili)
 colorArmy1 = colorArmy1 or COLOR.NOARMY
 colorArmy2 = colorArmy2 or COLOR.NOARMY
@@ -36,8 +35,6 @@ IEF_FRONT_WIDTH = IEF_FRONT_WIDTH or {}
 IEF_REFORM_USED = IEF_REFORM_USED or {}
 
 IEF_FORM_UNITS = IEF_FORM_UNITS or {}
-
-IEF_FORM_TEST_MODE = true
 
 IEF_UNIT_BUTTON_BASE = IEF_UNIT_BUTTON_BASE or {}
 -- ============================================================

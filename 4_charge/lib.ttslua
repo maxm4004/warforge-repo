@@ -1226,6 +1226,9 @@ function charge_resolveConflicts()
     end
     IEF_CHARGE_QUEUE = nuova
 end
+-- ============================================================
+-- FUNZIONE: charge_applyPivot(basiObjs, pivotBase, angoloSigned)
+-- ============================================================
 function charge_applyPivot(basiObjs, pivotBase, angoloSigned)
     local pivotPos = pivotBase.getPosition()
     local angoloGradi = math.deg(angoloSigned)
@@ -1239,6 +1242,7 @@ function charge_applyPivot(basiObjs, pivotBase, angoloSigned)
             local newPos = Vector(pivotPos.x + rx, p.y, pivotPos.z + rz)
             obj.setPosition(newPos)
         end
+
         local rot = obj.getRotation()
         obj.setRotation(Vector(rot.x, rot.y - angoloGradi, rot.z))
     end
@@ -1518,6 +1522,7 @@ end
 -- CHARGE_STOPFIRE), non più da un click diretto.
 -- ============================================================
 function charge_stopfireBegin(slot, elemento)
+    charge_stopfireMoveToRange(elemento, slot)
     IEF_STOPFIRE_CURRENT = { elemento = elemento, slot = slot, subStep = "TIRO" }
     charge_stopfireRedraw()
     callHandler("updateCenterPanel")
@@ -2273,4 +2278,36 @@ function charge_slotStillNeedsAction(elemento, slot)
 
     local chargingSlot = elemento.requestArmy1 and 1 or (elemento.requestArmy2 and 2 or nil)
     return chargingSlot == slot
+end
+-- ============================================================
+-- FUNZIONE: charge_stopfireMoveToRange(elemento, defenderSlot)
+-- Movimento OBBLIGATORIO (regolamento righe 367-370): il
+-- caricante si ferma a 2" dal bersaglio PRIMA di ricevere il
+-- Tiro d'Arresto — necessario perché la gittata/LOS del tiro
+-- (shoot_basiPronte) misura le posizioni ATTUALI, non un valore
+-- calcolato a posteriori.
+-- ============================================================
+function charge_stopfireMoveToRange(elemento, defenderSlot)
+    local chargingSlot = charge_elementoOtherSlot(defenderSlot)
+    local chargingKey = charge_elementoUnitKey(elemento, chargingSlot)
+    local chargingBases = charge_getUnitBases(chargingKey)
+    if #chargingBases == 0 then return end
+
+    local myBaseGUID = (chargingSlot == 1) and elemento.closestBaseArmy1 or elemento.closestBaseArmy2
+    local otherBaseGUID = (chargingSlot == 1) and elemento.closestBaseArmy2 or elemento.closestBaseArmy1
+    if not myBaseGUID or not otherBaseGUID then return end
+
+    local myBase = getObjectFromGUID(myBaseGUID)
+    local otherBase = getObjectFromGUID(otherBaseGUID)
+    if not myBase or not otherBase then return end
+
+    local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
+    if not distanzaTotaleInch then return end
+
+    local distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
+    if distanzaDaPercorrere <= 0 then return end
+
+    local myOriginBase = charge_closestBaseToPoint(chargingBases, otherBase.getPosition())
+    if not myOriginBase then return end
+    charge_moveTowardPoint(chargingBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
 end

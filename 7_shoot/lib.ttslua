@@ -436,13 +436,14 @@ local angolo   = math.rad(angoloGradi)
         UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
 
         if phase.title == PHASE.SHOOT then
-            if DEBUG_SHOW_CONFIRM_SHOOT then
-                  UI.setAttribute("btnActionShoot", "active", "true") 
-            else
-                  UI.setAttribute("btnActionShoot", "active", "false")      
-            end 
+            -- if DEBUG_SHOW_CONFIRM_SHOOT then
+            
+            UI.setAttribute("btnActionShoot", "active", "true") 
+            -- else
+            --       UI.setAttribute("btnActionShoot", "active", "false")      
+            -- end 
       else
-          UI.setAttribute("btnActionShoot", "active", "false")   
+          --UI.setAttribute("btnActionShoot", "active", "false")   
       end
         
         IEF_SHOOTING.activeLines = parabolaLines
@@ -452,7 +453,7 @@ local angolo   = math.rad(angoloGradi)
         IEF_SHOOTING.activeLines = nil
 
         UI.setAttribute("confirm_panel_shoot", "active", "true")
-        UI.setAttribute("btnActionShoot", "active", "false")
+        UI.setAttribute("btnActionShoot", "active", "true")
         UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
       
         if IEF_SHOOTING.activeShooter then

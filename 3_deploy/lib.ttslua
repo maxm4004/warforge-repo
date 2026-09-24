@@ -278,16 +278,14 @@ function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, mod
         end
     })
 end
-
 -- ============================================================
--- FUNZIONE: deployment_buildBaseNickname()
--- Formato: TIPO_unitNum.seq[_MOD][_ARMA]
--- Es: FP_1.3 | FM_2.6_ARCL
+-- FUNZIONE: deployment_buildBaseNickname(unitData, baseData, unitNumber)
+-- Alcuni model hanno un suffisso extra dopo il tipo unità (es.
+-- "VIK_Huscarl_FP_MIX") — lo tolgo troncando subito dopo il
+-- segmento del tipo, invece di usare il model per intero.
 -- ============================================================
 function deployment_buildBaseNickname(unitData, baseData, unitNumber)
     return unitData.model .. "_" .. unitNumber .. "." .. baseData.seq
-    --.. unitData.tipo .. "_" .. 
-   
 end
 -- ============================================================
 -- FUNZIONE: deployment_buildBasePosition()
@@ -428,7 +426,6 @@ function deployment_onBaseSpawned(obj, slot, armyTag, nickname, unitData, baseDa
 
     end, 2)
 end
-
 -- ============================================================
 -- FUNZIONE: deployment_applyBaseMetadata()
 -- Scrive i dati base in GMNotes (JSON) per recupero runtime.

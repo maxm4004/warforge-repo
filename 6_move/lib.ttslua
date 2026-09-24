@@ -99,7 +99,6 @@ function move_redraw(unitKey)
     end
 
     local rangeUnits  = math.max(moveResiduo, 0) * INCH_TO_TTS
-
     local unitTypeData = main_getUnitType(tipo)
     local halfWidth = (unitTypeData and unitTypeData.base_width_cm or 4) * CM_TO_TTS / 2 - 0.06
     local halfDepth = (unitTypeData and unitTypeData.base_depth_cm or 3) * CM_TO_TTS / 2 - 0.06
@@ -260,16 +259,8 @@ function move_perno_apply(unitKey, direction)
 
     local moveResiduo  = IEF_MOVE_BUDGET[unitKey]  or 0
     local pivotResiduo = IEF_PIVOT_BUDGET[unitKey] or 0
-    local distanzaInch = 1
-    if not IEF_MOVE_TEST_MODE then
-        distanzaInch = math.min(1, moveResiduo, pivotResiduo)
-        if distanzaInch <= 0 then return false end
-    end
 
     move_getGroupAxis(basiObjs)
-
-    state.history = state.history or {}
-    table.insert(state.history, move_snapshot(unitKey))
 
     local pivotBase, farBase
     if direction == "left" then
@@ -283,9 +274,24 @@ function move_perno_apply(unitKey, direction)
     local radius = (Vector(farPos.x - pivotPos.x, 0, farPos.z - pivotPos.z)):magnitude()
     if radius <= 0 then return false end
 
-    local dirSegno = (direction == "left") and -1 or 1
-    local angoloSigned = dirSegno * (distanzaInch * INCH_TO_TTS) / radius
-    local angoloGradi  = math.deg(angoloSigned)
+    -- Angolo FISSO allo snap di TTS (15°), non più calcolato da
+    -- distanzaInch/radius — elimina la discrepanza che causava il
+    -- soft-snap al tocco: il nostro perno e quello di TTS coincidono.
+    local angoloGradi = (direction == "left") and -ROTATION_SNAP_DEGREES or ROTATION_SNAP_DEGREES
+    local angoloSigned = math.rad(angoloGradi)
+
+    -- Quanti pollici di arco consuma questo perno fisso, per
+    -- verificare/scalare il budget residuo (dipende dal raggio).
+    local distanzaInch = math.abs(angoloSigned) * radius / INCH_TO_TTS
+
+    if not IEF_MOVE_TEST_MODE then
+        if distanzaInch > moveResiduo or distanzaInch > pivotResiduo then
+            return false
+        end
+    end
+
+    state.history = state.history or {}
+    table.insert(state.history, move_snapshot(unitKey))
 
     for _, obj in ipairs(basiObjs) do
         if obj ~= pivotBase then

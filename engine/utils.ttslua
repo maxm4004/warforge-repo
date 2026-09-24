@@ -43,9 +43,9 @@ end
 -- ============================================================
 -- FUNZIONE: warningToColor()
 -- ============================================================
-function warningToColor(warning, player, color, second)
+function warningToColor(warning, player, textColor, second)
 
-    local color = color == "Yellow" and "#FFD833" or color
+    local color = textColor == "Yellow" and "#FFD833" or textColor
 
     if player then
         UI.setAttribute("playerGameMessage", "Color", color)
