@@ -9,6 +9,7 @@ function before_sitting(phaseName, phase)
 
     FIELD_STATE.orientamento1 = orientamentoArmy1
     FIELD_STATE.orientamento2 = orientamentoArmy2
+
     FIELD_STATE.army1Elements = FIELD_ELEMENTS_BY_ORIENTAMENTO[orientamentoArmy1]
     FIELD_STATE.army2Elements = FIELD_ELEMENTS_BY_ORIENTAMENTO[orientamentoArmy2]
 

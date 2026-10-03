@@ -45,8 +45,8 @@ function debug_getChildOffsets(color)
         local z = pos.posZ or pos.z or 0
 
         print(string.format(
-            '[%d] \"offsetX\":%.3f, \"offsetZ\":%.3f, \"offsetY\":%.3f',
-            i, x, z, y
+            '[%d] X %.2f, Y %.2f, Z %.2f',
+            i, x, y, z
         ))
     end
 end

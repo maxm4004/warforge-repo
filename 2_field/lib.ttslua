@@ -139,7 +139,7 @@ function field_doRollFieldElement(player, slot)
             field_handPreviewShow(slot, #rolls, variante)
 
             warningToColor("Con un risultato di " .. somma .. " ottieni l'elemento di terreno '".. tipo:upper() .."'", player, "Yellow", 8)
-
+            
             if #rolls >= totale then
                 UI.setAttribute(btnId, "text", "Tiri Dado Esauriti")
                 UI.setAttribute(btnId, "Color", "Grey")

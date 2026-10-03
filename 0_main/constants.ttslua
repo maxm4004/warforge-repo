@@ -55,16 +55,11 @@ PHASE = {
     RECOVERY         = "RECOVERY",
 }
 
-    UNIT = {
-        CM   = "cm",
-        INCH = "inch"
-    }
+    UNIT = {CM = "cm", INCH = "inch"}
 
     MEASURE_UNIT = UNIT.INCH
-   
     CM_TO_TTS = 0.7902
     INCH_TO_TTS = 0.7902 * 2.54
-    
     COMMAND_RANGE_INCHES = 12.8
-
     ROTATION_SNAP_DEGREES = 5
+    DEFAULT_HIT_THRESHOLD = 4

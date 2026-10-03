@@ -31,8 +31,8 @@ function before_field_roll(phaseName, phase)
     field_initVarianti(1)
     field_initVarianti(2)
 
-    -- field_handPreviewReset(1)
-    -- field_handPreviewReset(2)
+    field_handPreviewReset(1)
+    field_handPreviewReset(2)
 
     field_handPreviewCard(1)
     field_handPreviewCard(2)

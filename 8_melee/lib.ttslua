@@ -120,7 +120,7 @@ function melee_attack(player, selection)
 
     -- Evidenzia basi in contatto
     for _, db in ipairs(defenderBases) do
-        --db.highlightOn({1, 0.3, 0}, 10)
+        db.highlightOn({1, 0.3, 0}, 10)
     end
 
     local flankMsg = isFlanked and " [FIANCO]" or ""
@@ -134,11 +134,12 @@ function melee_attack(player, selection)
         UI.setAttribute("confirm_panel_attack", "active", "true") 
         UI.setAttribute("confirm_panel_attack", "visibility", player.color)
 
-
         if phase.title == PHASE.ATTACK or DEBUG_SHOW_CONFIRM_ATTACK then
                 UI.setAttribute("btnActionAttack", "active", "true") 
+                UI.setAttribute("btnActionAttack", "textColor", "White") 
         else
-                UI.setAttribute("btnActionAttack", "active", "false")      
+                UI.setAttribute("btnActionAttack", "active", "false") 
+                UI.setAttribute("btnActionAttack", "textColor", "White") 
         end
 
         return true
@@ -149,13 +150,14 @@ end
 -- ============================================================
 function melee_confirm(player, value, id)
 
+    print("melee_confirm")
+
     local state = IEF_MELEE_STATE
     if not state.attackerUnit or not state.defenderUnit then
         printToColor("[MISCHIA] Nessuna mischia in attesa", player.color, {r=1,g=0.6,b=0})
         return
     end
 
-    UI.setAttribute("confirm_panel_shoot", "active", "false")
     UI.setAttribute("confirm_panel_attack", "active", "false")
 
     local atkUnit  = state.attackerUnit
@@ -272,7 +274,10 @@ end
 -- ============================================================
 -- FUNZIONE: lionheart_meleeCancel(player)
 -- ============================================================
-function melee_cancel(player, value, id)
+function melee_cancel(player, value, id, buttonConfig)
+
+    print("melee_cancel")
+
     for _, db in ipairs(IEF_MELEE_STATE.defenderBases or {}) do
         if db then db.highlightOff() end
     end

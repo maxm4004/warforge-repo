@@ -69,9 +69,9 @@ function deployment_loadArmySlot(slot, player)
             printToAll("[DEPLOY] Army" .. slot .. ": campo 'unita' mancante", {r=1,g=0.3,b=0.3})
             return
         end
-        if type(armyData.modelli) ~= "table" then
+        if type(armyData.elementi) ~= "table" then
             deployment_setBusy(slot, false)
-            printToAll("[DEPLOY] Army" .. slot .. ": campo 'modelli' mancante — usare formato 2.0-IEF", {r=1,g=0.3,b=0.3})
+            printToAll("[DEPLOY] Army" .. slot .. ": campo 'elementi' mancante — usare formato 2.0-IEF", {r=1,g=0.3,b=0.3})
             return
         end
 
@@ -89,8 +89,6 @@ end
 
 -- ============================================================
 -- FUNZIONE: deployment_spawnArmy()
--- Itera le unità e spawna ogni base.
--- I modelli vengono letti da armyData.modelli (embedded).
 -- ============================================================
 function deployment_spawnArmy(slot, armyData)
 
@@ -226,7 +224,7 @@ function deployment_spawnArmy(slot, armyData)
                     subUnitCounter = 1   -- <-- NUOVO: reset quando cambia model (nuovo reparto tipo diverso)
                 end
                 local unitNumber = (counters[unitData.model] - 1) + subUnitCounter
-                deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.modelli, unitOffsetX, unitOffsetZ, onBaseSpawnata)
+                deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.elementi, unitOffsetX, unitOffsetZ, onBaseSpawnata)
             end
 
         -- salva valori per prossima iterazione
@@ -244,12 +242,11 @@ function deployment_spawnArmy(slot, armyData)
 end
 -- ============================================================
 -- FUNZIONE: deployment_spawnBase()
--- Spawna una singola base cercando il modello in modelli{}.
 -- ============================================================
-function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, modelli, unitOffsetX, unitOffsetZ, onSpawnata)
+function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, elementi, unitOffsetX, unitOffsetZ, onSpawnata)
        
     local modelKey     = unitData.model
-    local templateData = modelli and modelli[modelKey]
+    local templateData = elementi and elementi[modelKey]
 
     if not templateData then
         printToAll("[DEPLOY] Modello non trovato: " .. tostring(modelKey), {r=1,g=0.6,b=0})

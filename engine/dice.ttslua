@@ -254,7 +254,9 @@ function engine_diceReadResults(slot, dadi, sogliaSuccesso, onComplete)
                 end
                 
                 warningToColor("Dadi: " .. table.concat(testo, ", "), Player[main_ColorByArmySlot("Army"..slot)], "Yellow", 3)
-
+                Wait.time(function ()
+                    engine_diceClearLastRoll(slot)
+                end, 2)
                 local successi = nil
                 if sogliaSuccesso then
                     successi = 0
@@ -499,7 +501,7 @@ end
 function engine_diceRoll_start(player)
 
     local slot = main_SlotByColor(player.color)
-    if not slot then warning("Impossibile usare questo button, scegliere prima un colore", "Yellow") return end
+    if not slot then warning("Impossibile usare questo pulsante, scegliere prima un colore", "Yellow") return end
   
     if ENGINE.phase == "INITIATIVE_ROLL" then
         
@@ -525,8 +527,6 @@ function engine_diceRoll_start(player)
         return
     end
 
-    engine_diceClearLastRoll(slot)
-
     if ENGINE.phase == "FIELD_ROLL" then
         field_doRollFieldElement(player, slot)
         return
@@ -537,10 +537,6 @@ function engine_diceRoll_start(player)
         return
     end    
 
-    -- 4_charge/CHARGE_STOPFIRE: Tiro d'Arresto (difensore) e Test
-    -- Morale (attaccante) hanno ciascuno il proprio entry point
-    -- dedicato, dispatchati in base al subStep corrente e a chi
-    -- clicca (IEF_STOPFIRE_CURRENT.slot = difensore).
     if ENGINE.phase == "CHARGE_STOPFIRE" and IEF_STOPFIRE_CURRENT then
         if IEF_STOPFIRE_CURRENT.subStep == "TIRO" and IEF_STOPFIRE_CURRENT.slot == slot then
             charge_stopfireDoRoll(player, slot)
@@ -553,6 +549,12 @@ function engine_diceRoll_start(player)
         return
     end
 
+    if ENGINE.phase == "SHOOT" then
+        shoot_doRoll(player, slot)
+        return
+    end
+    
+    engine_diceClearLastRoll(slot)
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
     engine_diceCameraReturn(player, slot)
     end)
@@ -574,7 +576,8 @@ function engine_diceCameraZoom(player, slot)
             ENGINE.phase == "FIELD_ROLL" or 
                     ENGINE.phase == "FIELD_BLOCK" or 
                             ENGINE.phase == "INITIATIVE_ROLL" or
-                                    ENGINE.phase == "CHARGE_STOPFIRE" then
+                                         ENGINE.phase == "CHARGE_STOPFIRE" or
+                                                ENGINE.phase == "SHOOT" then
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)              
    end
 end
@@ -612,11 +615,22 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
         end, 2)
     end
 
-    if faseOrigine == "INITIATIVE_ROLL" or
-            faseOrigine == "CHARGE_STOPFIRE" then
+    if faseOrigine == "INITIATIVE_ROLL" then
                 Wait.time(function()
                     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
                 end, 2)
     end
+
+    if faseOrigine == "CHARGE_STOPFIRE" then
+                Wait.time(function()
+                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+                end, 2)
+    end   
+
+    if faseOrigine == "SHOOT" then
+                Wait.time(function()
+                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+                end, 2)
+    end   
 
 end

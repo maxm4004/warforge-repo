@@ -1,4 +1,20 @@
 -- ============================================================
+-- FUNZIONE: main_sistemaFormazione(obj, player_color, alt_click)
+-- ============================================================
+function main_sistemaFormazione(obj, player_color, alt_click)
+    local unitKey = main_getUnitKey(obj)
+    if not unitKey then return end
+   
+    local basiObjs = {}
+    for _, o in ipairs(getAllObjects()) do
+        if main_getUnitKey(o) == unitKey then
+            table.insert(basiObjs, o)
+        end
+    end
+
+    if unitKey then main_sistemaFormazioneCore(unitKey, basiObjs) end
+end 
+-- ============================================================
 -- FUNZIONE: updateCenterPanel()
 -- ============================================================
 function main_updateCenterPanel()
@@ -209,6 +225,11 @@ function main_restart()
             Army2 = false
         }
     }
+ 
+    IEF_CHARGE_QUEUE = {}
+    IEF_CHARGE_RESPONSE_PENDING = {}
+    IEF_CHARGE_DECLARE_SESSION = {}
+    IEF_STOPFIRE_CURRENT = nil
 
     UI.setAttribute("iconWinnerArmy1", "active", "false")
     UI.setAttribute("iconWinnerArmy2", "active", "false")
@@ -234,6 +255,12 @@ function main_restart()
     callHandler("deployment_resetRuntimeOnly")
     callHandler("deployment_clearSpawnedModels") 
 
+    FIELD_STATE.orientamento1 = orientamentoArmy1
+    FIELD_STATE.orientamento2 = orientamentoArmy2
+
+    FIELD_STATE.army1Elements = FIELD_ELEMENTS_BY_ORIENTAMENTO[orientamentoArmy1]
+    FIELD_STATE.army2Elements = FIELD_ELEMENTS_BY_ORIENTAMENTO[orientamentoArmy2]
+
     linee_spawn = true
     linea_field   = false
     linee_deploy  = false
@@ -243,7 +270,7 @@ function main_restart()
     callHandler("engine_cameraResetAll")
     callHandler("aggiornaLinee")
     warning("RESTART...", "Yellow")
-    
+
 end
 -- ============================================================
 -- FUNZIONE: main_SlotByColor(color)
@@ -415,8 +442,6 @@ end
 -- ============================================================
 function main_canUseButton(slot, player, value, id, button, phase)
 
-    print("main_canUseButton")
-
     local mode = phase and phase.inputMode or "FREE"
 
     -- ========================================================
@@ -458,7 +483,7 @@ function main_canUseButton(slot, player, value, id, button, phase)
         -- se esiste un turno attivo, solo lui può cliccare
         if activeColor then
             if not player or player.color ~= activeColor then
-                warningToColor("Aspetta il tuo turno", player, "Yellow")
+                warningToColor("Non è possibile usare questo pulsante", player, "Yellow")
                 return false
             end
         end
@@ -493,7 +518,7 @@ function main_initUI()
     callHandler("buildUI")
 end
 -- ============================================================
--- FUNZIONE: lionheart_findUnit(slot, tipo, unita_num)
+-- FUNZIONE: main_findUnit(slot, tipo, unita_num)
 -- Trova un'unità in DEPLOYMENT.scanned
 -- ============================================================
 function main_findUnit(slot, tipo, unita_num)
@@ -508,7 +533,7 @@ function main_findUnit(slot, tipo, unita_num)
     return nil
 end
 -- ============================================================
--- FUNZIONE: lionheart_infoUnita()
+-- FUNZIONE: main_infoUnita()
 -- ============================================================
 function main_infoUnita(player, value, id, buttonConfig)
 
@@ -1292,9 +1317,6 @@ end
 
 -- ============================================================
 -- FUNZIONE: main_ricostruisciFormazione(basiObjs, fronte)
--- Motore di posizionamento a griglia, ancorato al centro del
--- rango frontale attuale. Gestisce il caso resto=2 (basi agli
--- estremi sx/dx dell'ultimo rango).
 -- ============================================================
 function main_ricostruisciFormazione(basiObjs, fronte)
 
@@ -1303,9 +1325,19 @@ function main_ricostruisciFormazione(basiObjs, fronte)
     if fronte > #basiObjs then fronte = #basiObjs end
 
     local refObj = basiObjs[1]
+    local refSeq = nil
+    for _, obj in ipairs(basiObjs) do
+        local info = main_parseNickname(obj.getName())
+        local seq  = info and info.baseSeq
+        if seq and (refSeq == nil or seq < refSeq) then
+            refSeq = seq
+            refObj = obj
+        end
+    end
+
     local fwd    = refObj.getTransformForward()
     local fwdXZ  = Vector(fwd.x, 0, fwd.z):normalized()
-    local right  = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local right  = Vector(fwdXZ.z, 0, -fwdXZ.x)
 
     local maxProj = -math.huge
     for _, obj in ipairs(basiObjs) do
@@ -1542,14 +1574,10 @@ end
 -- FUNZIONE: main_sistemaFormazioneCore(unitKey)
 -- "Ripara" la formazione al fronte attualmente rilevato.
 -- ============================================================
-function main_sistemaFormazioneCore(unitKey)
-    local state = IEF_FORM_UNITS[unitKey]
-    if not state or not state.basiObjs then return false end
-    local basiObjs = state.basiObjs
-
+function main_sistemaFormazioneCore(unitKey, basiObjs)
+    IEF_FORM_UNITS[unitKey] = basiObjs
     local fronte = main_detectFormation(basiObjs)
     main_ricostruisciFormazione(basiObjs, fronte)
-
     main_riposizionaPulsanteFormazione(unitKey, basiObjs)
     main_formationRedraw(unitKey)
     return true
@@ -1586,10 +1614,6 @@ end
 function main_cambioFronte180(player, value, id)
     local unitKey = id:match("^btn_(.+)_Cambio180$")
     if unitKey then main_cambioFronte180Core(unitKey) end
-end
-function main_sistemaFormazione(player, value, id)
-    local unitKey = id:match("^btn_(.+)_Sistema$")
-    if unitKey then main_sistemaFormazioneCore(unitKey) end
 end
 function main_formationClose(player, value, id)
     local unitKey = id:match("^btn_(.+)_Close$")
@@ -1686,46 +1710,56 @@ function main_calcolaPosizionePannello(fronte, totalBasi)
 end
 -- ============================================================
 -- FUNZIONE: main_trovaBaseAngoloLibero(basiObjs)
--- Trova la base nella colonna più a sinistra, nella posizione
--- più arretrata di quella colonna — ancora per il pulsante 3D.
 -- ============================================================
 function main_trovaBaseAngoloLibero(basiObjs)
-    local ref = basiObjs[1]
-    local fwd = ref.getTransformForward()
-    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-    local right = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local refObj = basiObjs[1]
+    local refSeq = nil
+    for _, obj in ipairs(basiObjs) do
+        local info = main_parseNickname(obj.getName())
+        local seq  = info and info.baseSeq
+        if seq and (refSeq == nil or seq < refSeq) then
+            refSeq = seq
+            refObj = obj
+        end
+    end
 
-    local maxRight = -math.huge
+    local fwd   = refObj.getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+    local right = Vector(fwdXZ.z, 0, -fwdXZ.x)
+
+    -- Rango posteriore: proiezione minima lungo fwdXZ (il più
+    -- lontano dal nemico, quindi mai coperto da altri ranghi)
+    local minProj = math.huge
     for _, obj in ipairs(basiObjs) do
         local p = obj.getPosition()
-        local projRight = p.x*right.x + p.z*right.z
-        if projRight > maxRight then maxRight = projRight end
+        local proj = p.x*fwdXZ.x + p.z*fwdXZ.z
+        if proj < minProj then minProj = proj end
     end
 
     local EPS = 0.5
-    local colonnaSinistra = {}
+    local rangoPosteriore = {}
     for _, obj in ipairs(basiObjs) do
         local p = obj.getPosition()
-        local projRight = p.x*right.x + p.z*right.z
-        if math.abs(projRight - maxRight) < EPS then
-            table.insert(colonnaSinistra, obj)
+        local proj = p.x*fwdXZ.x + p.z*fwdXZ.z
+        if math.abs(proj - minProj) < EPS then
+            table.insert(rangoPosteriore, obj)
         end
     end
 
-    local baseArretrata = colonnaSinistra[1]
-    local minFwd = math.huge
-    for _, obj in ipairs(colonnaSinistra) do
+    -- Dentro il rango posteriore, la base più a sinistra
+    local baseScelta = rangoPosteriore[1]
+    local minRight = math.huge
+    for _, obj in ipairs(rangoPosteriore) do
         local p = obj.getPosition()
-        local projFwd = p.x*fwdXZ.x + p.z*fwdXZ.z
-        if projFwd < minFwd then
-            minFwd = projFwd
-            baseArretrata = obj
+        local projRight = p.x*right.x + p.z*right.z
+        if projRight < minRight then
+            minRight = projRight
+            baseScelta = obj
         end
     end
 
-    return baseArretrata
+    return baseScelta
 end
-
 -- ============================================================
 -- FUNZIONE: main_riposizionaPulsanteFormazione(unitKey, basiObjs)
 -- Ricalcola la base "angolo libero" e sposta lì i pulsanti 3D,
@@ -1798,7 +1832,6 @@ function main_buildFormationPanel3DXml(unitKey, x, y, z, colore, labelText)
                     <Button id="btn_%s_Cambio90Sx" text="90° Sn"   font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="130" height="30" onClick="Global/main_cambioFronte90Sx"/>
                     <Button id="btn_%s_Cambio90Dx" text="90° Dx"   font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="130" height="30" onClick="Global/main_cambioFronte90Dx"/>
                     <Button id="btn_%s_Cambio180"  text="180°"    font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="130" height="30" onClick="Global/main_cambioFronte180"/>
-                    <Button id="btn_%s_Sistema"    text="Sistema" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="130" height="30" onClick="Global/main_sistemaFormazione"/>
                 </HorizontalLayout>
                 <Button id="btn_%s_Close" text="Chiudi" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="560" height="30" onClick="Global/main_formationClose"/>
             </VerticalLayout>
@@ -1835,9 +1868,9 @@ end
 -- ============================================================
 -- FUNZIONE: main_getChildOffsets()
 -- ============================================================
-function main_getChildOffsets()
+function main_getChildOffsets(player)
     
-    local sel = Player.Green.getSelectedObjects()
+    local sel = player.getSelectedObjects()
     if not sel or #sel < 1 then
         print("[OFFSET] Seleziona la base")
         return
@@ -1876,8 +1909,8 @@ function main_getChildOffsets()
         local z = pos.posZ or pos.z or 0
 
         print(string.format(
-            '[%d] \"offsetX\":%.3f, \"offsetZ\":%.3f, \"offsetY\":%.3f',
-            i, x, z, y
+            "[%d] \'%.2f\' \'%.2f\' \'%.2f\'",
+            i, x, y, z
         ))
     end
 end
@@ -2017,16 +2050,16 @@ function main_createBaseButtons(obj, phase, unit)
     obj.clearButtons()
 
     local azioni = {
-        [PHASE.DEPLOY_SPAWN]     = {form, move},
-        [PHASE.DEPLOY_POSITION]  = {form, move, range},
-        [PHASE.CHARGE_DECLARE]   = {range, charge},
-        [PHASE.CHARGE_REACT]     = {},
-        [PHASE.CHARGE_STOPFIRE]  = {},
-        [PHASE.CHARGE_AUTO]      = {},
-        [PHASE.MOVE]             = {form, move, range},
-        [PHASE.SHOOT]            = {shoot},
-        [PHASE.MELEE]            = {melee},
-        [PHASE.RECOVERY]         = {recovery}
+        [PHASE.DEPLOY_SPAWN]     = {tidy, form, move},
+        [PHASE.DEPLOY_POSITION]  = {tidy, form, move, range},
+        [PHASE.CHARGE_DECLARE]   = {tidy, range, charge},
+        [PHASE.CHARGE_REACT]     = {tidy},
+        [PHASE.CHARGE_STOPFIRE]  = {tidy},
+        [PHASE.CHARGE_AUTO]      = {tidy},
+        [PHASE.MOVE]             = {tidy, form, move, range},
+        [PHASE.SHOOT]            = {tidy, form, shoot},
+        [PHASE.MELEE]            = {tidy, melee},
+        [PHASE.RECOVERY]         = {tidy, recovery}
     }
 
     local pos = {x = 1.2, y = 0.1, z = -1.6}
@@ -2043,6 +2076,24 @@ function main_createBaseButtons(obj, phase, unit)
 
     for _, f in ipairs(funzioni) do
         f(obj, unit, pos, rot, w, h)
+    end
+end
+-- ============================================================
+-- FUNZIONE: move(obj, unit, pos, rot, w, h)
+-- ============================================================
+function tidy(obj, unit, pos, rot, w, h)
+ if unit and not string.find(unit, "GEN") then
+    obj.createButton({
+        click_function = "main_sistemaFormazione",
+        function_owner = Global,
+        label = "RIORDINA",
+        position = pos,
+        rotation = rot,
+        width = w, 
+        height = h, 
+        font_size = 60,
+    }) 
+    pos.x = pos.x - 0.8
     end
 end
 -- ============================================================
@@ -2126,19 +2177,21 @@ end
 -- FUNZIONE: form()
 -- ============================================================
 function shoot(obj, unit, pos, rot, w, h)
-    if unit and not string.find(unit, "GEN") then
 
-            obj.createButton({
-            click_function = "shoot_buttonBaseClick",
-            function_owner = Global,
-            label = "TIRO",
-            position = pos,
-            rotation = rot,
-            width = w, 
-            height = h, 
-            font_size = 60,
-        }) 
-        pos.x = pos.x - 0.8
+    if unit and not string.find(unit, "GEN") then
+        if shoot_getWeapon(unit) then
+                obj.createButton({
+                click_function = "shoot_buttonBaseClick",
+                function_owner = Global,
+                label = "TIRO",
+                position = pos,
+                rotation = rot,
+                width = w, 
+                height = h, 
+                font_size = 60,
+            }) 
+            pos.x = pos.x - 0.8
+       end
     end
 end
 -- ============================================================
@@ -2418,9 +2471,9 @@ end
     local offsetA = rayBoxExitDeclared(objA, dirNorm.x, dirNorm.z)
     local offsetB = rayBoxExitDeclared(objB, -dirNorm.x, -dirNorm.z)
         
-    print(string.format("[DEBUG DIST] pianaLen=%.3f offsetA=%.3f offsetB=%.3f rotA=%.1f rotB=%.1f pianaLen_cm=%.2f offsetA_cm=%.2f offsetB_cm=%.2f",
-        pianaLen, offsetA, offsetB, objA.getRotation().y, objB.getRotation().y,
-        pianaLen/CM_TO_TTS, offsetA/CM_TO_TTS, offsetB/CM_TO_TTS))
+    -- print(string.format("[DEBUG DIST] pianaLen=%.3f offsetA=%.3f offsetB=%.3f rotA=%.1f rotB=%.1f pianaLen_cm=%.2f offsetA_cm=%.2f offsetB_cm=%.2f",
+    --     pianaLen, offsetA, offsetB, objA.getRotation().y, objB.getRotation().y,
+    --     pianaLen/CM_TO_TTS, offsetA/CM_TO_TTS, offsetB/CM_TO_TTS))
 
     local distTTS = math.max(0, pianaLen - offsetA - offsetB)
     return distTTS / INCH_TO_TTS

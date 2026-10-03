@@ -1681,7 +1681,7 @@ function charge_stopfireDoRoll(player, slot)
         return
     end
 
-    local soglia = weapon.hit_threshold or 4
+    local soglia = weapon.hit_threshold or DEFAULT_HIT_THRESHOLD
     local mods = weapon.modifiers or {}
 
     local attackerMeta = charge_getUnitMeta(attackerBases[1])

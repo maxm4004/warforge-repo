@@ -46,7 +46,7 @@ function getEngineUiXml()
 
     local panels = [[
         <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="true">
-            <Image image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/logo/logo01.png" preserveAspect="1"/>
+            <Image image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/warforge.png" preserveAspect="1"/>
         </Panel>
         <Panel rectAlignment="LowerCenter" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="0 300">
             <Text id="playerGameMessage" text="" fontStyle="Bold" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 

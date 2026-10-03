@@ -4,6 +4,7 @@
 function ief_handleChat(message, player)
     if message == "!restart"  then main_restart()  return false end
     if message == "!clear"    then clear()    return false end
+    if message == "!minis"    then main_getChildOffsets(player)   return false end
     return false
 end
 
@@ -58,8 +59,46 @@ function warningToColor(warning, player, textColor, second)
         UI.setAttribute("playerGameMessage", "active", "false")
     end, not second and 5 or second)
 
-   -- printToColor(warning, player.color, color)
+    Wait.time(function () 
+        printToColor("[" .. ENGINE.phase .."] " .. warning, player.color, {1, 1, 1})
+    end, 2)
 
+end
+-- ============================================================
+-- FUNZIONE: warningListToColor()
+-- ============================================================
+IEF_WARNING_ACTIVE = false
+
+function warningListToColor(warnings, player, textColor, second)
+
+    local color = textColor == "Yellow" and "#FFD833" or textColor
+
+    if player then
+        UI.setAttribute("playerGameMessage", "Color", color)
+        UI.setAttribute("playerGameMessage", "active", "true")
+        UI.setAttribute("playerGameMessage", "visibility", player.color)
+
+        IEF_WARNING_ACTIVE = true
+        local a = true
+
+        local function step(i)
+            if not IEF_WARNING_ACTIVE then return end
+
+            UI.setAttribute("playerGameMessage", "text", warnings[i])
+            if a then
+                printToColor("[" .. ENGINE.phase .. "] " .. warnings[i], player.color, {1, 1, 1})
+            end
+
+            local nextI = i + 1
+            if nextI > 3 then nextI = 1; a = false end
+
+            Wait.time(function()
+                step(nextI)
+            end, 3)
+        end
+
+        step(1)
+    end
 end
 -- ============================================================
 -- FUNZIONE: warningToColor()
