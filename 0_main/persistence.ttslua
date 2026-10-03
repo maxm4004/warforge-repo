@@ -1,11 +1,4 @@
 -- ============================================================
--- rulesets/imperifeudi/engine/persistence.ttslua
--- Save/restore stato IEF.
--- Portato da LH rulesets/lionheart/engine/persistence.ttslua
--- Modifiche: LIONHEART_DATA → IEF_DATA, nomi funzioni
--- ============================================================
-
--- ============================================================
 -- FUNZIONE: ief_onSave()
 -- ============================================================
 function main_onSave()
@@ -43,8 +36,7 @@ function main_onSave()
     turn              = TURN,
     colorArmy1        = colorArmy1,
     colorArmy2        = colorArmy2,
-    wounds_data       = wounds_data,
-    deployment_armies = DEPLOYMENT and DEPLOYMENT.armies or nil,
+       deployment_armies = DEPLOYMENT and DEPLOYMENT.armies or nil,
     ief_front_width   = IEF_FRONT_WIDTH,
     ief_reform_used   = IEF_REFORM_USED,
     ief_move_budget   = IEF_MOVE_BUDGET,
@@ -52,6 +44,9 @@ function main_onSave()
     ief_unit_button_base = IEF_UNIT_BUTTON_BASE,
     field_state = callHandler("field_serializeState"),
     ief_charge_queue = IEF_CHARGE_QUEUE,
+    ief_unit_cohesion = IEF_UNIT_COHESION,
+      ief_melee_list    = IEF_MELEE_LIST,
+      ief_melee_next_id = IEF_MELEE_NEXT_ID,    
 }
 
     return JSON.encode(saveData)
@@ -92,10 +87,6 @@ function main_restoreState(save_state)
         colorArmy2 = data.colorArmy2 or COLOR.NOARMY
     end
     
-    if data.wounds_data then
-        wounds_data = data.wounds_data
-    end
-
     if data.deployment_armies then
         DEPLOYMENT = DEPLOYMENT or {}
         DEPLOYMENT.armies = data.deployment_armies
@@ -124,6 +115,18 @@ function main_restoreState(save_state)
 
     if data.field_state then
         callHandler("field_restoreState", data.field_state)
+    end
+
+    if data.ief_unit_cohesion then
+        IEF_UNIT_COHESION = data.ief_unit_cohesion
+    end
+
+    if data.ief_melee_list then
+          IEF_MELEE_LIST = data.ief_melee_list
+    end
+
+    if data.ief_melee_next_id then
+          IEF_MELEE_NEXT_ID = data.ief_melee_next_id
     end
 
     Wait.time(function()

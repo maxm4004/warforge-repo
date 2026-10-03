@@ -130,6 +130,7 @@ end
 -- RENDERER: 2BtnClickChargeList
 -- ============================================================
 RENDERERS["2BtnClickChargeAttackList"] = function(phase)
+
     UI.setAttribute("panelBtnUp",   "active", "true")
     UI.setAttribute("panelBtnDown", "active", "false")
     UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
@@ -145,6 +146,7 @@ end
 -- RENDERER: chargeStopfireOnly
 -- ============================================================
 RENDERERS["2BtnClickChargeDefenseList"] = function(phase)
+        
     UI.setAttribute("panelBtnUp",   "active", "true")
     UI.setAttribute("panelBtnDown", "active", "false")
     UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
@@ -160,6 +162,18 @@ end
 -- RENDERER: chargeStopfire
 -- ============================================================
 RENDERERS["chargeStopfire"] = function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelDices",   "active", "false")
+    UI.setAttribute("panelBtnUp", "offsetXY", "0 -223")
+end
+-- ============================================================
+-- RENDERER: 2BtnClickMeleeList
+-- ============================================================
+RENDERERS["2BtnClickMeleeList"] = function(phase)
+
+    print("2BtnClickMeleeList")
+    
     UI.setAttribute("panelBtnUp",   "active", "true")
     UI.setAttribute("panelBtnDown", "active", "false")
     UI.setAttribute("panelDices",   "active", "false")

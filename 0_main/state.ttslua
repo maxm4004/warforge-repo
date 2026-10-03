@@ -11,24 +11,13 @@ ARMY = ARMY or {
     [2] = { name = "Army2", color = COLOR.ARMY2, slot = 2 },
 }
 
--- Stato mischie attive IEF
--- { [id] = { turno_inizio, unitaAtk, slotAtk, unitaDif, slotDif, ... } }
-IEF_MELEE_STATE = IEF_MELEE_STATE or {
-    mischie      = {},
-    nextId       = 1,
-}
 
 -- Contatore GUID → soglia contatto
 IEF_CONTACT_THRESHOLD = 0.1
 
--- Traccia turni di mischia per unità { [chiaveUnita] = turnoInizio }
-IEF_MELEE_ENGAGED = IEF_MELEE_ENGAGED or {}
-
--- Stato tiro (resettato ogni fase SHOOT)
 IEF_FIRED = IEF_FIRED or {}
 
--- Wounds per base { [nickname] = wounds }
-wounds_data = wounds_data or {}
+IEF_UNIT_COHESION = IEF_UNIT_COHESION or {}
 
 IEF_FRONT_WIDTH = IEF_FRONT_WIDTH or {}
 

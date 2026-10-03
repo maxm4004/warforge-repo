@@ -705,70 +705,29 @@ function shoot_Reset()
 end
 -- ============================================================
 -- FUNZIONE: shoot_applyHits(unita, slot, hits, player, targetObj)
+-- Ponte verso main_applyLosses (perdite IEF, nessun accumulo).
+-- Mantiene firma e post-elaborazione per i chiamanti esistenti
+-- (7_shoot, Tiro d'Arresto in 4_charge).
 -- ============================================================
 function shoot_applyHits(unita, slot, hits, player, targetObj)
 
-        if not unita then
-            printToAll("[TIRO] Errore: unità bersaglio nil", {r=1,g=0.3,b=0.3})
-            return
-        end
-        if not unita.basi then
-            printToAll("[TIRO] Errore: basi nil per " .. tostring(unita.tipo), {r=1,g=0.3,b=0.3})
-            return
-        end
-
-    -- Riordina basi mettendo quella colpita per prima
-    local basiOrdinate = {}
-    local targetNickname = targetObj and targetObj.getName() or nil
-
-    for _, base in ipairs(unita.basi) do
-        if base.nickname == targetNickname then
-            table.insert(basiOrdinate, 1, base)  -- prima
-        else
-            table.insert(basiOrdinate, base)
-        end
+    if not unita then
+        printToAll("[TIRO] Errore: unità bersaglio nil", {r=1,g=0.3,b=0.3})
+        return
+    end
+    if not unita.basi then
+        printToAll("[TIRO] Errore: basi nil per " .. tostring(unita.tipo), {r=1,g=0.3,b=0.3})
+        return
     end
 
-    local tipo      = unita.tipo
-    local unitTypeData = IEF_DATA.unitTypes and IEF_DATA.unitTypes[tipo] or {}
-    local fpb       = unitTypeData.figures_per_base or 3
-    local rimasti   = hits
-    local basiRimosse = 0
-
-    wounds_data = wounds_data or {}
-
-    -- Distribuisce ferite base per base (dalla prima)
-    for _, base in ipairs(basiOrdinate) do 
-        if rimasti <= 0 then break end
-
-        local nickname     = base.nickname
-        local ferite_curr  = wounds_data[nickname] or 0
-        local spazio       = fpb - ferite_curr
-
-        if spazio > 0 then
-            local da_aggiungere = math.min(rimasti, spazio)
-            wounds_data[nickname] = ferite_curr + da_aggiungere
-            rimasti = rimasti - da_aggiungere
-
-            -- Rimuovi base se ferite >= fpb
-            if wounds_data[nickname] >= fpb then
-                local obj = getObjectFromGUID(base.guid)
-                if obj then
-                    obj.highlightOn({1,0,0}, 2)
-                    Wait.time(function()
-                        if obj then obj.destruct() end
-                    end, 2)
-                    basiRimosse = basiRimosse + 1
-                end
-            else
-                -- Aggiorna tinta base ferita
-                local obj = getObjectFromGUID(base.guid)
-                if obj and aggiornaTintaBase then
-                    aggiornaTintaBase(obj, wounds_data[nickname], fpb)
-                end
-            end
-        end
+    local baseObj = targetObj or (unita.basi[1] and getObjectFromGUID(unita.basi[1].guid))
+    local unitKey = baseObj and main_getUnitKey(baseObj)
+    if not unitKey then
+        printToAll("[TIRO] Errore: unitKey non trovata per " .. tostring(unita.tipo), {r=1,g=0.3,b=0.3})
+        return
     end
+
+    main_applyLosses(unitKey, hits)
 
     Wait.time(function()
         callHandler("deployment_scanTable")
@@ -778,10 +737,6 @@ function shoot_applyHits(unita, slot, hits, player, targetObj)
         end
         shoot_checkMorale(unita, slot, player)
     end, 2.5)
-
-    local msg = string.format("[TIRO] %s subisce %d HIT — basi rimosse: %d",
-        tipo .. "_" .. unita.unita_num, hits, basiRimosse)
-    printToAll(msg, {r=1,g=0.4,b=0.4})
 end
 -- ============================================================
 -- FUNZIONE: shoot_checkMorale(unita, slot, player)

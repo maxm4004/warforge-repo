@@ -1,15 +1,67 @@
 -- ============================================================
--- FUNZIONE: before_melee()
+-- FUNZIONE: before_melee(phaseName, phase)
+-- Rientro anche da MELEE_RESOLVE: l'import è idempotente.
 -- ============================================================
 function before_melee(phaseName, phase)
-    if TURN.phase ~= phaseName then main_resetTurnForPhase() end
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
+
+    IEF_MELEE_CURRENT = nil
+    IEF_MELEE_PENDING = {}
+
+    melee_importFromCharges()
+    melee_pruneList()
+
+    callHandler("buildUI")
+    callHandler("updateCenterPanel")
+    melee_hideChargeLists()
 end
 
 -- ============================================================
--- FUNZIONE: after_melee()
+-- FUNZIONE: after_melee(phaseName, phase)
+-- IEF_MELEE_LIST NON si azzera: le mischie proseguono nei
+-- turni successivi.
 -- ============================================================
 function after_melee(phaseName, phase)
-    IEF_MELEE_ENGAGED = {}
+    IEF_MELEE_PENDING = {}
+    melee_infoCloseAll()
+    UI.setAttribute("confirm_panel_melee", "active", "false")
+    UI.setAttribute("melee_list_army1", "active", "false")
+    UI.setAttribute("melee_list_army2", "active", "false")
+    callHandler("updateCenterPanel")
+end
+
+-- ============================================================
+-- FUNZIONE: before_melee_resolve(phaseName, phase)
+-- ============================================================
+function before_melee_resolve(phaseName, phase)
+    TURN.phase = phaseName
+    TURN.completed = { Army1 = false, Army2 = false }
+
+    callHandler("engine_diceClearLastRoll", 1)
+    callHandler("engine_diceClearLastRoll", 2)
+
+    melee_resolveBegin()
+    callHandler("updateCenterPanel")
+    melee_hideChargeLists()
+end
+
+-- ============================================================
+-- FUNZIONE: after_melee_resolve(phaseName, phase)
+-- ============================================================
+function after_melee_resolve(phaseName, phase)
+end
+
+-- ============================================================
+-- FUNZIONE: melee_hideChargeLists()
+-- Nasconde le liste della carica dopo il rebuild dell'UI:
+-- UI.setXml è asincrono, quindi si riapplica con un ritardo.
+-- ============================================================
+function melee_hideChargeLists()
+    Wait.time(function()
+        UI.setAttribute("charge_attack_list_army1",  "active", "false")
+        UI.setAttribute("charge_attack_list_army2",  "active", "false")
+        UI.setAttribute("charge_defense_list_army1", "active", "false")
+        UI.setAttribute("charge_defense_list_army2", "active", "false")
+    end, 0.5)
 end

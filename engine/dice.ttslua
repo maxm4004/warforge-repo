@@ -553,6 +553,15 @@ function engine_diceRoll_start(player)
         shoot_doRoll(player, slot)
         return
     end
+
+    if ENGINE.phase == "MELEE_RESOLVE" and IEF_MELEE_CURRENT then
+        if IEF_MELEE_CURRENT.subStep == "TIRO" then
+            melee_doRoll(player, slot)
+        elseif IEF_MELEE_CURRENT.subStep == "MORALE" then
+            melee_doMorale(player, slot)
+        end
+        return
+    end
     
     engine_diceClearLastRoll(slot)
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
@@ -632,5 +641,11 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
                     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
                 end, 2)
     end   
+
+    if faseOrigine == "MELEE_RESOLVE" then
+                Wait.time(function()
+                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+                end, 2)
+    end
 
 end

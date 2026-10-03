@@ -230,12 +230,23 @@ function main_restart()
     IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_STOPFIRE_CURRENT = nil
+    IEF_UNIT_COHESION = {}
+    IEF_MELEE_LIST = {}
+    IEF_MELEE_NEXT_ID = 0
+    IEF_MELEE_CURRENT = nil
+    IEF_MELEE_PENDING = {}
+    IEF_MELEE_INFO_HOST = {}
 
     UI.setAttribute("iconWinnerArmy1", "active", "false")
     UI.setAttribute("iconWinnerArmy2", "active", "false")
 
     UI.setAttribute("iconMoveArmy1", "active", "false")
     UI.setAttribute("iconMoveArmy2", "active", "false")
+
+    UI.setAttribute("charge_attack_list_title_army1",  "active", "false")
+    UI.setAttribute("charge_attack_list_title_army2",  "active", "false")
+    UI.setAttribute("charge_defense_list_title_army1", "active", "false")
+    UI.setAttribute("charge_defense_list_title_army2", "active", "false")
 
     -- Rimuovi elementi terreno spawnati
     for _, obj in ipairs(getAllObjects()) do
@@ -560,7 +571,7 @@ function main_infoUnita(player, value, id, buttonConfig)
     return true
 end
 -- ============================================================
--- FUNZIONE: lionheart_getSelectedObjects()
+-- FUNZIONE: getSelectedObjects()
 -- ============================================================
 function main_getSelectedObjects(player)
 
@@ -740,7 +751,7 @@ function main_mostraPopupUnita(obj, player)
     UI.setAttribute(p, "visibility", player.color)
 end
 -- ============================================================
--- FUNZIONE: lionheart_basiPresentiUnita(unita)
+-- FUNZIONE: basiPresentiUnita(unita)
 -- ============================================================
 function main_basiPresentiUnita(unita)
     local count = 0
@@ -751,16 +762,13 @@ function main_basiPresentiUnita(unita)
     return count
 end
 -- ============================================================
--- FUNZIONE: lionheart_figureTotaliUnita(unita)
+-- FUNZIONE: main_figureTotaliUnita(unita)
+-- IEF: nessuna perdita parziale per base — figure = basi
+-- presenti x figures_per_base.
 -- ============================================================
 function main_figureTotaliUnita(unita)
-    local fpb    = (IEF_DATA.unitTypes and IEF_DATA.unitTypes[unita.tipo] or {}).figures_per_base or 0
-    local figure = 0
-    for _, base in ipairs(unita.basi) do
-        local wounds = wounds_data and wounds_data[base.nickname] or 0
-        figure = figure + math.max(0, fpb - wounds)
-    end
-    return figure
+    local fpb = (IEF_DATA.unitTypes and IEF_DATA.unitTypes[unita.tipo] or {}).figures_per_base or 0
+    return main_basiPresentiUnita(unita) * fpb
 end
 -- ============================================================
 -- FUNZIONE: aggiornaSchedeUnita() — compatibilità
@@ -2011,7 +2019,103 @@ function main_testMorale(unitKey, player, situazione, modificatori, callback)
         end, 2)
     end)
 end
+-- ============================================================
+-- FUNZIONE: main_getCohesion(unitKey)
+-- Livello di coesione attuale dell'unità (COHESION.*).
+-- Unità assente da IEF_UNIT_COHESION = SALDA.
+-- ============================================================
+function main_getCohesion(unitKey)
+    local c = unitKey and IEF_UNIT_COHESION[unitKey]
+    return (c and c.level) or COHESION.SAL
+end
 
+-- ============================================================
+-- FUNZIONE: main_setCohesion(unitKey, level)
+-- Unico punto di scrittura della coesione. Se l'unità entra in
+-- ROTTA registra il turno (routedTurn), altrimenti lo azzera.
+-- ============================================================
+function main_setCohesion(unitKey, level)
+    if not unitKey or not level then return end
+
+    local prima = main_getCohesion(unitKey)
+
+    if level == COHESION.SAL then
+        IEF_UNIT_COHESION[unitKey] = nil
+    else
+        local routedTurn = nil
+        if level == COHESION.ROT then
+            local c = IEF_UNIT_COHESION[unitKey]
+            routedTurn = (prima == COHESION.ROT and c and c.routedTurn) or (ENGINE and ENGINE.turn) or 1
+        end
+        IEF_UNIT_COHESION[unitKey] = { level = level, routedTurn = routedTurn }
+    end
+
+    if prima ~= level then
+        printToAll(string.format("[COESIONE] %s: %s -> %s",
+            main_decodeExtendedUnitLabel(unitKey), prima, level), {r=1,g=0.8,b=0.3})
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_lowerCohesion(unitKey)
+-- Perde un livello: SALDA -> DISORDINATA -> ROTTA.
+-- Già in ROTTA resta in ROTTA. Ritorna il nuovo livello.
+-- ============================================================
+function main_lowerCohesion(unitKey)
+    local attuale = main_getCohesion(unitKey)
+    local nuovo = attuale
+    if attuale == COHESION.SAL then
+        nuovo = COHESION.DIS
+    elseif attuale == COHESION.DIS then
+        nuovo = COHESION.ROT
+    end
+    main_setCohesion(unitKey, nuovo)
+    return nuovo
+end
+
+-- ============================================================
+-- FUNZIONE: main_raiseCohesion(unitKey)
+-- Recupera un livello: ROTTA -> DISORDINATA -> SALDA.
+-- Ritorna il nuovo livello.
+-- ============================================================
+function main_raiseCohesion(unitKey)
+    local attuale = main_getCohesion(unitKey)
+    local nuovo = attuale
+    if attuale == COHESION.ROT then
+        nuovo = COHESION.DIS
+    elseif attuale == COHESION.DIS then
+        nuovo = COHESION.SAL
+    end
+    main_setCohesion(unitKey, nuovo)
+    return nuovo
+end
+
+-- ============================================================
+-- FUNZIONE: main_isRoutedThisTurn(unitKey)
+-- True se l'unità è in ROTTA ed è andata in rotta nel turno
+-- corrente (Recupero: non può tentare il test; Morale: diversa
+-- da "unità che stanno scappando dai turni precedenti").
+-- ============================================================
+function main_isRoutedThisTurn(unitKey)
+    local c = unitKey and IEF_UNIT_COHESION[unitKey]
+    if not c or c.level ~= COHESION.ROT then return false end
+    return c.routedTurn == ((ENGINE and ENGINE.turn) or 1)
+end
+
+-- ============================================================
+-- FUNZIONE: main_getCohesionMoraleModifier(unitKey)
+-- Modificatore al test di morale dovuto alla coesione attuale
+-- (morale.json: unita_disordinata / unita_in_rotta). 0 se SALDA.
+-- ============================================================
+function main_getCohesionMoraleModifier(unitKey)
+    local livello = main_getCohesion(unitKey)
+    if livello == COHESION.DIS then
+        return main_getMoraleModifier("unita_disordinata") or 0
+    elseif livello == COHESION.ROT then
+        return main_getMoraleModifier("unita_in_rotta") or 0
+    end
+    return 0
+end
 -- ============================================================
 -- FUNZIONE: main_refreshAllBaseButtons()
 -- Richiamata ad ogni cambio fase: per ciascuna unità presente
@@ -2094,6 +2198,25 @@ function tidy(obj, unit, pos, rot, w, h)
         font_size = 60,
     }) 
     pos.x = pos.x - 0.8
+    end
+end
+-- ============================================================
+-- FUNZIONE: melee()
+-- Pulsante INFO MISCHIA: solo per unità presenti in una mischia.
+-- ============================================================
+function melee(obj, unit, pos, rot, w, h)
+    if unit and not string.find(unit, "GEN") and melee_getGroupOfUnit(unit) then
+        obj.createButton({
+            click_function = "melee_buttonBaseClick",
+            function_owner = Global,
+            label = "INFO MISCHIA",
+            position = pos,
+            rotation = rot,
+            width = w,
+            height = h,
+            font_size = 60,
+        })
+        pos.x = pos.x - 0.8
     end
 end
 -- ============================================================
@@ -2192,25 +2315,6 @@ function shoot(obj, unit, pos, rot, w, h)
             }) 
             pos.x = pos.x - 0.8
        end
-    end
-end
--- ============================================================
--- FUNZIONE: melee()
--- ============================================================
-function melee(obj, unit, pos, rot, w, h)
-    if unit and not string.find(unit, "GEN") then
-        
-            obj.createButton({
-            click_function = "melee_buttonBaseClick",
-            function_owner = Global,
-            label = "MISCHIA",
-            position = pos,
-            rotation = rot,
-            width = w, 
-            height = h, 
-            font_size = 60,
-        })
-    pos.x = pos.x - 0.8 
     end
 end
 -- ============================================================
@@ -2515,4 +2619,92 @@ function main_manage_no_winner_for_roll(player, phase)
         end, 2)
         return
      end
+end
+-- ============================================================
+-- FUNZIONE: main_applyLosses(unitKey, hits)
+-- Perdite IEF: ogni figures_per_base colpi = 1 base rimossa, i
+-- colpi in eccesso si perdono (nessun accumulo fra tiri/turni).
+-- Le basi si tolgono dai RANGHI POSTERIORI (proiezione minima
+-- lungo il fronte), a parità di rango dalla più esterna, per non
+-- aprire buchi nel fronte.
+-- Ritorna: basiRimosse, colpiPersi
+-- ============================================================
+function main_applyLosses(unitKey, hits)
+    local bases = main_getUnitBases(unitKey)
+    if #bases == 0 or not hits or hits <= 0 then return 0, hits or 0 end
+
+    local meta = main_getUnitMeta(bases[1])
+    local tipo = meta and meta.unitType
+    local unitTypeData = tipo and main_getUnitType(tipo)
+    local fpb = unitTypeData and unitTypeData.figures_per_base
+    if not fpb or fpb <= 0 then
+        print("[PERDITE] figures_per_base non valido per " .. tostring(unitKey))
+        return 0, hits
+    end
+
+    local daRimuovere = math.min(math.floor(hits / fpb), #bases)
+    local colpiPersi  = hits - daRimuovere * fpb
+    if daRimuovere == 0 then
+        printToAll(string.format("[PERDITE] %s: %d colpi, nessuna base rimossa",
+            main_decodeExtendedUnitLabel(unitKey), hits), {r=1,g=0.6,b=0.4})
+        return 0, colpiPersi
+    end
+
+    local fwd   = bases[1].getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+    local right = Vector(-fwdXZ.z, 0, fwdXZ.x)
+
+    local depthCm   = (unitTypeData and unitTypeData.base_depth_cm) or 3
+    local rankStep  = depthCm * CM_TO_TTS
+
+    local minProj  = math.huge
+    local sommaLat = 0
+    local info = {}
+    for _, obj in ipairs(bases) do
+        local p = obj.getPosition()
+        local proj = p.x * fwdXZ.x + p.z * fwdXZ.z
+        local lat  = p.x * right.x + p.z * right.z
+        if proj < minProj then minProj = proj end
+        sommaLat = sommaLat + lat
+        table.insert(info, { obj = obj, proj = proj, lat = lat, guid = obj.getGUID() })
+    end
+    local centroLat = sommaLat / #bases
+
+    -- Rango intero (0 = più arretrato) e distanza dal centro: ordine
+    -- stretto e transitivo, niente tolleranze dentro il comparatore.
+    for _, b in ipairs(info) do
+        b.rank = math.floor((b.proj - minProj) / rankStep + 0.5)
+        b.dist = math.abs(b.lat - centroLat)
+    end
+
+    table.sort(info, function(a, b)
+        if a.rank ~= b.rank then return a.rank < b.rank end
+        if a.dist ~= b.dist then return a.dist > b.dist end
+        return a.guid < b.guid
+    end)
+
+    -- Basi superstiti: il pulsante capitano va spostato PRIMA della
+    -- distruzione (stesso comportamento del cambio formazione).
+    local superstiti = {}
+    for i = daRimuovere + 1, #info do
+        table.insert(superstiti, info[i].obj)
+    end
+    if #superstiti > 0 then
+        main_riposizionaPulsanteFormazione(unitKey, superstiti)
+    else
+        IEF_UNIT_BUTTON_BASE[unitKey] = nil
+    end
+
+    for i = 1, daRimuovere do
+        local obj = info[i].obj
+        obj.highlightOn({1, 0, 0}, 2)
+        Wait.time(function()
+            if obj and not obj.isDestroyed() then obj.destruct() end
+        end, 2)
+    end
+
+    printToAll(string.format("[PERDITE] %s: %d colpi -> %d basi rimosse (%d colpi persi)",
+        main_decodeExtendedUnitLabel(unitKey), hits, daRimuovere, colpiPersi), {r=1,g=0.4,b=0.4})
+
+    return daRimuovere, colpiPersi
 end

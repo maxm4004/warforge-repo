@@ -55,6 +55,13 @@ PHASE = {
     RECOVERY         = "RECOVERY",
 }
 
+
+COHESION = {
+    SAL = "SALDA",
+    DIS = "DISORDINATA",
+    ROT = "ROTTA",
+}
+
     UNIT = {CM = "cm", INCH = "inch"}
 
     MEASURE_UNIT = UNIT.INCH

@@ -3,24 +3,44 @@
 -- ============================================================
 
 -- ============================================================
--- FUNZIONE: melee_btn_army1()
+-- FUNZIONE: melee_btn_army1(player, value, id, buttonConfig)
+-- "Mischie Completate": consentito solo a gruppi tutti risolti.
 -- ============================================================
-function melee_btn_army1(player, value, id)
+function melee_btn_army1(player, value, id, buttonConfig)
+    if melee_listHasPending() then
+        warningToColor("Ci sono ancora mischie da risolvere", player, "Yellow", 5)
+        return false
+    end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
 end
 
 -- ============================================================
--- FUNZIONE: melee_btn_army2()
+-- FUNZIONE: melee_btn_army2(player, value, id, buttonConfig)
 -- ============================================================
-function melee_btn_army2(player, value, id)
+function melee_btn_army2(player, value, id, buttonConfig)
+    if melee_listHasPending() then
+        warningToColor("Ci sono ancora mischie da risolvere", player, "Yellow", 5)
+        return false
+    end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end
 
 -- ============================================================
--- FUNZIONE: melee_btn_single()
+-- FUNZIONE: melee_resolve_btn_army1(player, value, id, buttonConfig)
+-- Bottone dinamico in MELEE_RESOLVE (stesso principio di
+-- charge_stopfire_btn_noop): mai avanzamento automatico.
 -- ============================================================
-function melee_btn_single(player, value, id)
-    return true
+function melee_resolve_btn_army1(player, value, id, buttonConfig)
+    melee_resolveButton(player, 1)
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: melee_resolve_btn_army2(player, value, id, buttonConfig)
+-- ============================================================
+function melee_resolve_btn_army2(player, value, id, buttonConfig)
+    melee_resolveButton(player, 2)
+    return false
 end

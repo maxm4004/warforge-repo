@@ -1,22 +1,48 @@
 -- ============================================================
--- WARFORGE IEF — 8_melee/state.ttslua
+-- rulesets/imperifeudi/8_melee/state.ttslua
+-- Stato FASE MISCHIA — MELEE (lista) e MELEE_RESOLVE
+-- (risoluzione di un gruppo, schema Tiro d'Arresto).
 -- ============================================================
 
-IEF_CONTACT_THRESHOLD = 0.1  -- TODO RENAME → IEF_CONTACT_THRESHOLD
+-- ============================================================
+-- Lista mischie UNICA, persistente fra i turni (una mischia
+-- continua finché un'unità non va in rotta o viene distrutta).
+-- Un elemento per COPPIA di unità a contatto, condiviso fra i
+-- due eserciti (stesso principio di IEF_CHARGE_QUEUE). Le
+-- mischie multiple sono GRUPPI di coppie collegate, calcolati
+-- al volo da melee_getGroups(): la risoluzione è per gruppo.
+--
+-- Ogni elemento:
+-- {
+--   id            = 1,       -- contatore progressivo univoco
+--   unitArmy1Key  = "...",
+--   unitArmy2Key  = "...",
+--   turnStart     = 1,       -- ENGINE.turn di nascita: primo turno
+--                            -- di mischia = (ENGINE.turn == turnStart)
+--   chargedArmy1  = false,   -- Army1 "in carica" (request o COC)
+--   chargedArmy2  = false,
+--   flankedArmy1  = false,   -- Army1 caricata sul fianco
+--   flankedArmy2  = false,
+--   resolvedTurn  = nil,     -- ENGINE.turn in cui il gruppo è stato
+--                            -- risolto (pendente se ~= ENGINE.turn)
+-- }
+-- ============================================================
+IEF_MELEE_LIST = IEF_MELEE_LIST or {}
 
-IEF_MELEE_STATE = {
-    attacker       = nil,
-    attackerUnit   = nil,
-    attackerSlot   = nil,
-    defenderUnit   = nil,
-    defenderSlot   = nil,
-    defenderBases  = {},
-    isFlanked      = false,
-    isFirstTurn    = false,
-    basiAttaccanti = {},
-    -- Sistema B (lista mischie per coppia)
-    mischie        = {},
-    nextId         = 1,
-}
+-- Contatore id univoci in IEF_MELEE_LIST
+IEF_MELEE_NEXT_ID = IEF_MELEE_NEXT_ID or 0
 
-IEF_MELEE_ENGAGED = IEF_MELEE_ENGAGED or {}
+-- Gruppo scelto dalla lista in attesa di Attacca/Annulla nel
+-- popup confirm_panel_melee: [slot] = groupId
+IEF_MELEE_PENDING = IEF_MELEE_PENDING or {}
+
+-- Gruppo in risoluzione nella fase MELEE_RESOLVE:
+-- nil = nessuno, altrimenti
+-- { groupId, slot, subStep = "TIRO"|"ATTESA"|"MORALE"|"ESCI",
+--   calc (melee_computeGroup), rolled = {[1],[2]},
+--   successi = {[1],[2]}, morale = { {key, slot, perse}, ... } }
+-- Non salvato: dopo un reload il gruppo resta pendente.
+IEF_MELEE_CURRENT = IEF_MELEE_CURRENT or nil
+
+-- Pannelli 3D INFO MISCHIA aperti: [unitKey] = base ospite
+IEF_MELEE_INFO_HOST = IEF_MELEE_INFO_HOST or {}

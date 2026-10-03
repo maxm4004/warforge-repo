@@ -3,19 +3,38 @@ function melee_phase()
     return {
         MELEE = {
             title = "FASE 5: RISOLUZIONE DELLE MISCHIE",
-            desc  = "Risoluzione di tutte le mischie derivanti dalle cariche",
+            desc  = "IL VINCITORE DELL'INIZIATIVA SCEGLIE LA MISCHIA DA RISOLVERE",
             before = "before_melee",
             after  = "after_melee",
-            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
-            render = "2BtnClick",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
+            render = "2BtnClickMeleeList",
             enforceOwnership = true,
-            inputMode = "INITIATIVE",
+            inputMode = "OWNER",
             buttons = {
                 BTN_ARMY1 = { action="ARMY1_CLICK", label="Mischie Completate", textColor="White", color="Red",   callback="melee_btn_army1" },
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Mischie Completate", textColor="White", color="Green", callback="melee_btn_army2" },
             },
             transitions = {
                 { to="RECOVERY", conditions={ COND.BOTH_PLAYERS_SELECTED } }
+            }
+        },
+        MELEE_RESOLVE = {
+            title = "FASE 5: MISCHIA IN CORSO",
+            desc  = "TIRO CONTEMPORANEO, PERDITE RECIPROCHE E TEST DEL MORALE",
+            before = "before_melee_resolve",
+            after  = "after_melee_resolve",
+            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
+            render = "meleeResolve",
+            enforceOwnership = true,
+            inputMode = "OWNER",
+            buttons = {
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="In attesa...", textColor="White", color="Red",   callback="melee_resolve_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="In attesa...", textColor="White", color="Green", callback="melee_resolve_btn_army2" },
+            },
+            -- Il ritorno a MELEE avviene via main_goToPhase da
+            -- melee_resolveEnd (stesso principio di CHARGE_STOPFIRE).
+            transitions = {
+                { to="MELEE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         }
     }
