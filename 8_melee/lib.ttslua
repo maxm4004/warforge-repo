@@ -1,9 +1,70 @@
 -- ============================================================
--- WARFORGE IEF — 8_melee/lib.ttslua
--- Lista mischie, import dalle cariche, gruppi, UI lista, popup
--- Attacca/Annulla, geometria, dadi, risoluzione (MELEE_RESOLVE,
--- schema Tiro d'Arresto) e pannello 3D INFO MISCHIA.
+-- FUNZIONE: melee_buttonBaseClick(obj, player_color, alt_click)
+-- Apre/chiude il pannello 3D info sulla base capitana.
 -- ============================================================
+function melee_buttonBaseClick(obj, slot, player_color, alt_click)
+
+    if alt_click then
+        melee_infoClose()
+        return
+    end
+
+    local player = Player[player_color]
+    local unitKey = main_getUnitKey(obj)
+    if IEF_MELEE_INFO_HOST[unitKey] then
+        melee_infoCloseUnit(unitKey)
+        return
+    end
+
+    local gruppo = melee_getGroupOfUnit(unitKey)
+    if not gruppo then
+        warningToColor("Questa unità non è in mischia", player, "Yellow", 5)
+        return
+    end
+
+    local slotCamera = obj.hasTag("Army1") and 1 or 2
+    melee_cameraToGroup(player, slotCamera, gruppo)
+
+    local calc = melee_computeGroup(gruppo)
+
+    local righe = {}
+    if slot then
+        for _, key in ipairs(melee_groupUnitsOfSlot(gruppo, slot)) do
+            local info = calc.unita[key]
+            local det = info.dettaglio
+            table.insert(righe, { testo = string.format("%s - %s - %s",
+                ARMY[slot].name, main_decodeExtendedUnitLabel(key), main_getCohesion(key)), titolo = true, colore = ARMY[slot].color })
+            table.insert(righe, { testo = string.format("%s%s",
+                det.primoTurno and "Primo turno di mischia" or "Turno di mischia successivo",
+                det.fianco and " - caricata sul fianco: non combatte" or "") })
+            table.insert(righe, { testo = string.format("Basi in contatto %d - ranghi posteriori %d - overlap %d",
+                det.contatto, det.posteriori, det.overlap) })
+            table.insert(righe, { testo = det.dimezzati
+                and string.format("Dadi: %d (disordinata: %d dimezzati)", info.dadi, det.dadiGrezzi)
+                or  string.format("Dadi: %d", info.dadi) })
+        end
+    end
+
+    table.insert(righe, { testo = "Per colpire: 5+ base (modificatori non ancora applicati)" })
+
+    local testi = ""
+    for _, r in ipairs(righe) do
+        testi = testi .. string.format(
+            '<Text text="%s" font="warforge_font" fontSize="%d" fontStyle="%s" color="%s" alignment="MiddleLeft" width="660" height="30"/>',
+            r.testo, r.titolo and 18 or 15, r.titolo and "Bold" or "Normal", r.colore or "White")
+    end
+
+    local bases = main_getUnitBases(unitKey)
+    local x, y, z = main_calcolaPosizionePannello(main_detectFormation(bases), #bases)
+
+    obj.UI.setXml(string.format([[
+        <Panel id="panelMeleeInfo_%s" active="true" color="rgba(0,0,0,0.95)" width="700" height="%d" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0">
+            <VerticalLayout spacing="6" padding="20 20 20 20" childAlignment="UpperLeft"> %s</VerticalLayout>
+        </Panel>
+    ]], unitKey, 90 + 36 * #righe, x, y, z, testi, unitKey))
+
+    IEF_MELEE_INFO_HOST[unitKey] = obj
+end
 
 -- ============================================================
 -- FUNZIONE: melee_currentTurn()
@@ -300,12 +361,12 @@ function melee_getListPanelXml(slot)
 
     return string.format(
         '<Panel id="melee_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
-        '<Text text="MISCHIE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
+        '<Text id="melee_list_title_army%d" text="MISCHIE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
         '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
-        slot, colore, attivo, ARMY[slot].name, rows
+        slot, colore, attivo, slot, ARMY[slot].name, rows
     )
 end
 
@@ -340,8 +401,8 @@ function melee_rowClick(player, value, id)
 
     local iniz = melee_initiativeSlot()
     if iniz and iniz ~= slot then
-        warningToColor("L'ordine delle mischie lo sceglie " .. ARMY[iniz].name, player, "Yellow", 5)
-        return
+        --warningToColor("L'ordine delle mischie lo sceglie " .. ARMY[iniz].name, player, "Yellow", 5)
+        --return
     end
 
     if not melee_groupIsPending(gruppo) then
@@ -662,6 +723,12 @@ function melee_resolveRedraw()
     local cur = IEF_MELEE_CURRENT
     if not cur then return end
 
+    local function setBtn(id)
+        Wait.frames(function()
+                UI.setAttribute(id, "textColor", "White")
+        end, 1)
+    end
+
     local labels  = { [1] = "In attesa...", [2] = "In attesa..." }
     local enabled = { [1] = false, [2] = false }
 
@@ -685,14 +752,12 @@ function melee_resolveRedraw()
         end
     end
 
-    Wait.time(function()
-        for slot = 1, 2 do
-            local btnId = "BTN_ARMY" .. slot
-            UI.setAttribute(btnId, "text", labels[slot])
-            UI.setAttribute(btnId, "textColor", "White")
-            UI.setAttribute(btnId, "interactable", enabled[slot] and "true" or "false")
-        end
-    end, 0.5)
+    for slot = 1, 2 do
+        local btnId = "BTN_ARMY" .. slot
+        UI.setAttribute(btnId, "text", labels[slot])
+        UI.setAttribute(btnId, "interactable", enabled[slot] and "true" or "false")
+        setBtn(btnId)
+    end
 end
 
 -- ============================================================
@@ -871,70 +936,6 @@ function melee_resolveEnd()
 
     IEF_MELEE_CURRENT = nil
     main_goToPhase("MELEE")
-end
-
--- ============================================================
--- PANNELLO 3D "INFO MISCHIA" (sola consultazione)
--- ============================================================
-
--- ============================================================
--- FUNZIONE: melee_buttonBaseClick(obj, player_color, alt_click)
--- Apre/chiude il pannello 3D info sulla base capitana.
--- ============================================================
-function melee_buttonBaseClick(obj, player_color, alt_click)
-    local unitKey = main_getUnitKey(obj)
-    if IEF_MELEE_INFO_HOST[unitKey] then
-        melee_infoCloseUnit(unitKey)
-        return
-    end
-
-    local gruppo = melee_getGroupOfUnit(unitKey)
-    if not gruppo then
-        warningToColor("Questa unità non è in mischia", Player[player_color], "Yellow", 5)
-        return
-    end
-
-    local calc = melee_computeGroup(gruppo)
-
-    local righe = {}
-    for slot = 1, 2 do
-        for _, key in ipairs(melee_groupUnitsOfSlot(gruppo, slot)) do
-            local info = calc.unita[key]
-            local det = info.dettaglio
-            table.insert(righe, { testo = string.format("%s - %s - %s",
-                ARMY[slot].name, main_decodeExtendedUnitLabel(key), main_getCohesion(key)), titolo = true, colore = ARMY[slot].color })
-            table.insert(righe, { testo = string.format("%s%s",
-                det.primoTurno and "Primo turno di mischia" or "Turno di mischia successivo",
-                det.fianco and " - caricata sul fianco: non combatte" or "") })
-            table.insert(righe, { testo = string.format("Basi in contatto %d - ranghi posteriori %d - overlap %d",
-                det.contatto, det.posteriori, det.overlap) })
-            table.insert(righe, { testo = det.dimezzati
-                and string.format("Dadi: %d (disordinata: %d dimezzati)", info.dadi, det.dadiGrezzi)
-                or  string.format("Dadi: %d", info.dadi) })
-        end
-    end
-    table.insert(righe, { testo = "Per colpire: 5+ base (modificatori non ancora applicati)" })
-
-    local testi = ""
-    for _, r in ipairs(righe) do
-        testi = testi .. string.format(
-            '<Text text="%s" font="warforge_font" fontSize="%d" fontStyle="%s" color="%s" alignment="MiddleLeft" width="660" height="30"/>',
-            r.testo, r.titolo and 18 or 15, r.titolo and "Bold" or "Normal", r.colore or "White")
-    end
-
-    local bases = main_getUnitBases(unitKey)
-    local x, y, z = main_calcolaPosizionePannello(main_detectFormation(bases), #bases)
-
-    obj.UI.setXml(string.format([[
-        <Panel id="panelMeleeInfo_%s" active="true" color="rgba(0,0,0,0.95)" width="700" height="%d" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0">
-            <VerticalLayout spacing="6" padding="20 20 20 20" childAlignment="UpperLeft">
-                %s
-                <Button id="btn_%s_MeleeInfoClose" text="Chiudi" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/melee_infoClose"/>
-            </VerticalLayout>
-        </Panel>
-    ]], unitKey, 90 + 36 * #righe, x, y, z, testi, unitKey))
-
-    IEF_MELEE_INFO_HOST[unitKey] = obj
 end
 
 -- ============================================================

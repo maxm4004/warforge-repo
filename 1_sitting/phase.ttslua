@@ -17,7 +17,7 @@ function sitting_phase()
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Verde",  textColor="White", color="Green", callback="sitting_btn_all" },
             },
             transitions = {
-                { to="FIELD", conditions={ COND.REQUIREMENT_MET } }
+                { to="DEPLOY_SPAWN", conditions={ COND.REQUIREMENT_MET } }
             }
         }
     }

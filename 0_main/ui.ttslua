@@ -182,6 +182,7 @@ function getRulesetUiXml()
     -- Liste Attacco/Difesa carica: righe generate dinamicamente
     -- da IEF_CHARGE_QUEUE (nessun limite fisso), stesso schema di
     -- popups/movePanels sopra.
+
     local chargeAttack1  = charge_getAttackListPanelXml(1)
     local chargeAttack2  = charge_getAttackListPanelXml(2)
     local chargeDefense1 = charge_getDefenseListPanelXml(1)
@@ -468,7 +469,5 @@ function getRulesetUiXml()
             
 </HorizontalLayout>
 </Panel>
-P
     ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2
-
 end

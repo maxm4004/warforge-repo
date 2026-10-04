@@ -52,6 +52,7 @@ PHASE = {
     MOVE             = "MOVE",
     SHOOT            = "SHOOT",
     MELEE            = "MELEE",
+    MELEE_RESOLVE    = "MELEE_RESOLVE",
     RECOVERY         = "RECOVERY",
 }
 

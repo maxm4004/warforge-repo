@@ -586,7 +586,8 @@ function engine_diceCameraZoom(player, slot)
                     ENGINE.phase == "FIELD_BLOCK" or 
                             ENGINE.phase == "INITIATIVE_ROLL" or
                                          ENGINE.phase == "CHARGE_STOPFIRE" or
-                                                ENGINE.phase == "SHOOT" then
+                                                ENGINE.phase == "SHOOT" or
+                                                        ENGINE.phase == "MELEE_RESOLVE" then                                    
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)              
    end
 end

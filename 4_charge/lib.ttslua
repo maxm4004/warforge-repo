@@ -1046,19 +1046,9 @@ function charge_attackRowClick(player, value, id)
 
     if ENGINE.phase ~= PHASE.CHARGE_AUTO then return end
 
-    if elemento.step == CHARGE_STEP.CLO then
-        printToColor("[CARICA] Questa carica è già stata risolta", player.color, {r=1,g=0.6,b=0})
-        return
-    end
-
-     if elemento.step == CHARGE_STEP.CLO then
-        warningToColor("Questa carica è già stata risolta", player.color, "Yellow", 5)
-        return
-    end
-
     local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
     if giaMossoIoStesso then
-        warningToColor("Hai già eseguito il tuo movimento di carica", player.color, "Yellow", 5)
+        warningToColor(string.format("%s è in carica contro %s", main_decodeExtendedUnitLabel(myKey), main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 5)
         return
     end
 
@@ -1070,9 +1060,6 @@ function charge_attackRowClick(player, value, id)
     end
 
     local mioResponse = charge_elementoResponse(elemento, slot)
-
-
-
 
     if mioResponse == REACTION_TYPE.EVA then
         UI.setAttribute("btnResponseEvadeMove", "active", "true")
@@ -2129,7 +2116,7 @@ function charge_executeChargeMove(player, unitKey)
             elemento.step = CHARGE_STEP.CLO
         end
 
-        printToColor(string.format("[CARICA] %s percorre %.2f\" (bersaglio evaso, distanza dichiarata)", unitKey, distanzaDichiarata), player.color, {r=1,g=0.85,b=0.2})
+        warningToColor(string.format("[CARICA] %s percorre %.2f\" (bersaglio evaso, distanza dichiarata)", main_decodeExtendedUnitLabel(unitKey), distanzaDichiarata), player.color, "Yellow", 5)
         return
     end
 
@@ -2140,7 +2127,7 @@ function charge_executeChargeMove(player, unitKey)
     local myBaseGUID = (slot == 1) and elemento.closestBaseArmy1 or elemento.closestBaseArmy2
     local otherBaseGUID = (slot == 1) and elemento.closestBaseArmy2 or elemento.closestBaseArmy1
     if not myBaseGUID or not otherBaseGUID then
-        printToColor("[CARICA] Nessuna base di riferimento salvata per " .. unitKey, player.color, {r=1,g=0.6,b=0})
+        warningToColor("[CARICA] Nessuna base di riferimento salvata per " .. main_decodeExtendedUnitLabel(unitKey), player.color, "Yellow", 5)
         return
     end
 
@@ -2189,7 +2176,7 @@ function charge_executeChargeMove(player, unitKey)
         elemento.step = CHARGE_STEP.CLO
     end
 
-    printToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", unitKey, distanzaDaPercorrere, distanzaTotaleInch), player.color, {r=1,g=0.85,b=0.2})
+    warningToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, distanzaTotaleInch), player, "Yellow", 5)
 end
 -- ============================================================
 -- FUNZIONE: charge_responseChargeMove(player, value, id)

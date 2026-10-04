@@ -2153,40 +2153,69 @@ function main_createBaseButtons(obj, phase, unit)
 
     obj.clearButtons()
 
-    local azioni = {
-        [PHASE.DEPLOY_SPAWN]     = {tidy, form, move},
-        [PHASE.DEPLOY_POSITION]  = {tidy, form, move, range},
-        [PHASE.CHARGE_DECLARE]   = {tidy, range, charge},
-        [PHASE.CHARGE_REACT]     = {tidy},
-        [PHASE.CHARGE_STOPFIRE]  = {tidy},
-        [PHASE.CHARGE_AUTO]      = {tidy},
-        [PHASE.MOVE]             = {tidy, form, move, range},
-        [PHASE.SHOOT]            = {tidy, form, shoot},
-        [PHASE.MELEE]            = {tidy, melee},
-        [PHASE.RECOVERY]         = {tidy, recovery}
+    local azioniUnita = {
+        [PHASE.DEPLOY_SPAWN]     = {tidy, info, form, move},
+        [PHASE.DEPLOY_POSITION]  = {tidy, form, move},
+        [PHASE.CHARGE_DECLARE]   = {tidy, info, charge},
+        [PHASE.CHARGE_REACT]     = {tidy, info},
+        [PHASE.CHARGE_STOPFIRE]  = {tidy, info},
+        [PHASE.CHARGE_AUTO]      = {tidy, info},
+        [PHASE.MOVE]             = {tidy, info, form, move},
+        [PHASE.SHOOT]            = {tidy, info, form, shoot},
+        [PHASE.MELEE]            = {tidy, info},
+        [PHASE.MELEE_RESOLVE]    = {tidy, info},
+        [PHASE.RECOVERY]         = {tidy, info, recovery}
+    }
+
+    local azioniGenerali = {
+        [PHASE.CHARGE_DECLARE]   = {range, info},
+        [PHASE.CHARGE_REACT]     = {range, info},
+        [PHASE.CHARGE_STOPFIRE]  = {range, info},
+        [PHASE.CHARGE_AUTO]      = {range, info},
+        [PHASE.MOVE]             = {moveGeneral, info, range},
+        [PHASE.SHOOT]            = {range, info},
+        [PHASE.MELEE]            = {range, info},
+        [PHASE.MELEE_RESOLVE]    = {range, info},
+        [PHASE.RECOVERY]         = {range, info}
     }
 
     local pos = {x = 1.2, y = 0.1, z = -1.6}
-    if string.find(unit, "_FP") then
-        pos.z = -1
-    end
-
     local rot = {x = 0, y = 180, z = 0}
-    local  w  = 400
+    local w  = 400
     local h = 250
+   
+    local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+    local color = slot == 1 and "Red" or "Green"
+    local textColor = "White"
 
-    local funzioni = azioni[phase]
-    if not funzioni then return end
+    local funzioniUnita = azioniUnita[phase]
+    if not funzioniUnita then return end
 
-    for _, f in ipairs(funzioni) do
-        f(obj, unit, pos, rot, w, h)
-    end
+    local funzioniGenerali = azioniGenerali[phase]
+    if not funzioniGenerali then return end    
+
+    if unit and not string.find(unit, "GEN") then
+
+        if string.find(unit, "_FP") then
+            pos.z = -1
+        end
+
+        for _, f1 in ipairs(funzioniUnita) do
+            f1(obj, unit, pos, rot, w, h, color, textColor)
+            pos.x = pos.x - 0.8
+        end
+    else
+
+        for _, f2 in ipairs(funzioniGenerali) do
+            f2(obj, unit, pos, rot, w, h, color, textColor)
+            pos.x = pos.x - 0.8
+        end
+    end        
 end
 -- ============================================================
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
-function tidy(obj, unit, pos, rot, w, h)
- if unit and not string.find(unit, "GEN") then
+function tidy(obj, unit, pos, rot, w, h, color, textColor)
     obj.createButton({
         click_function = "main_sistemaFormazione",
         function_owner = Global,
@@ -2195,94 +2224,107 @@ function tidy(obj, unit, pos, rot, w, h)
         rotation = rot,
         width = w, 
         height = h, 
-        font_size = 60,
+        font_size = 70,
+        color = color,
+        font_color = textColor,
+        tooltip = "Riordina le basi dell'unità in formazione compatta"
     }) 
-    pos.x = pos.x - 0.8
-    end
 end
 -- ============================================================
 -- FUNZIONE: melee()
--- Pulsante INFO MISCHIA: solo per unità presenti in una mischia.
+-- Pulsante INFO solo per unità presenti in una mischia.
 -- ============================================================
-function melee(obj, unit, pos, rot, w, h)
-    if unit and not string.find(unit, "GEN") and melee_getGroupOfUnit(unit) then
+function info(obj, unit, pos, rot, w, h, color, textColor)
         obj.createButton({
-            click_function = "melee_buttonBaseClick",
+            click_function = "main_infoByCurrentPhase",
             function_owner = Global,
-            label = "INFO MISCHIA",
+            label = "INFO",
             position = pos,
             rotation = rot,
             width = w,
             height = h,
-            font_size = 60,
+            font_size = 70,
+            color = color,
+            font_color = textColor,
+            tooltip = "Mostra le informazioni in base alla fase corrente"
         })
-        pos.x = pos.x - 0.8
-    end
 end
 -- ============================================================
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
-function range(obj, unit, pos, rot, w, h)
-
-    if unit and string.find(unit, "GEN") then         
-        
-        local newPos = {x = 1.2, y = 0.1, z = -2}
-        
+function range(obj, unit, pos, rot, w, h, color, textColor)
         obj.createButton({
             click_function = "main_btnShowRange",
             function_owner = Global,
             label = "RAGGIO",
-            position = newPos,
+            position = pos,
             rotation = rot,
             width = w, 
             height = h, 
-            font_size = 60,
-        })
-        pos.x = pos.x - 0.8
-    end
+            font_size = 70,
+            color = color,
+            font_color = textColor,
+            tooltip = "Mostra il raggio di comando del Generale"
+            })
 end
-
 -- ============================================================
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
-function move(obj, unit, pos, rot, w, h)
-  
+function moveGeneral(obj, unit, pos, rot, w, h, color, textColor)
     obj.createButton({
         click_function = "main_movementOpenFromButton",
         function_owner = Global,
         label = "MOVIMENTO",
         position = pos,
         rotation = rot,
-        width = w, 
+        width = w + 20, 
         height = h, 
-        font_size = 60,
+        font_size = 70,
+        color = color,
+        font_color = textColor,
+        tooltip = "Modifica la posizione del Generale"
     })
-    pos.x = pos.x - 0.8
+end
+-- ============================================================
+-- FUNZIONE: move(obj, unit, pos, rot, w, h)
+-- ============================================================
+function move(obj, unit, pos, rot, w, h, color, textColor)
+    obj.createButton({
+        click_function = "main_movementOpenFromButton",
+        function_owner = Global,
+        label = "MOVIMENTO",
+        position = pos,
+        rotation = rot,
+        width = w + 20, 
+        height = h, 
+        font_size = 70,
+        color = color,
+        font_color = textColor,
+        tooltip = "Modifica la posizione dell'unità"
+    })
 end
 -- ============================================================
 -- FUNZIONE: form(obj, unit, pos, rot, w, h)
 -- ============================================================
-function form(obj, unit, pos, rot, w, h)
- if unit and not string.find(unit, "GEN") then
+function form(obj, unit, pos, rot, w, h, color, textColor)
     obj.createButton({
         click_function = "main_formationOpenFromButton",
         function_owner = Global,
         label = "FORMAZIONE",
         position = pos,
         rotation = rot,
-        width = w, 
+        width = w + 20, 
         height = h, 
-        font_size = 60,
+        font_size = 70,
+        color = color,
+        font_color = textColor,
+        tooltip = "Modifica la formazione dell'unità"
     }) 
-    pos.x = pos.x - 0.8
-    end
 end
 -- ============================================================
 -- FUNZIONE: charge(obj)
 -- ============================================================
-function charge(obj, unit, pos, rot, w, h)
-    if unit and not string.find(unit, "GEN") then
-
+function charge(obj, unit, pos, rot, w, h, color, textColor)
         obj.createButton({
             click_function = "charge_declareOpenFromButton",
             function_owner = Global,
@@ -2291,17 +2333,16 @@ function charge(obj, unit, pos, rot, w, h)
             rotation = rot,
             width = w, 
             height = h, 
-            font_size = 60,
+            font_size = 70,
+            color = color,
+            font_color = textColor,
+            tooltip = "Dichiarazione di carica dell'unità"
         })
-        pos.x = pos.x - 0.8
-    end
 end
 -- ============================================================
 -- FUNZIONE: form()
 -- ============================================================
-function shoot(obj, unit, pos, rot, w, h)
-
-    if unit and not string.find(unit, "GEN") then
+function shoot(obj, unit, pos, rot, w, h, color, textColor)
         if shoot_getWeapon(unit) then
                 obj.createButton({
                 click_function = "shoot_buttonBaseClick",
@@ -2311,18 +2352,17 @@ function shoot(obj, unit, pos, rot, w, h)
                 rotation = rot,
                 width = w, 
                 height = h, 
-                font_size = 60,
+                font_size = 70,
+                color = color,
+                font_color = textColor,
+                tooltip = "Tiro unità con armi da fuoco"
             }) 
-            pos.x = pos.x - 0.8
        end
-    end
 end
 -- ============================================================
 -- FUNZIONE: recovery()
 -- ============================================================
-function recovery(obj, unit, pos, rot, w, h)
-    if unit and not string.find(unit, "GEN") then
-  
+function recovery(obj, unit, pos, rot, w, h, color, textColor)
         obj.createButton({
             click_function = "recovery_buttonBaseClick",
             function_owner = Global,
@@ -2331,10 +2371,28 @@ function recovery(obj, unit, pos, rot, w, h)
             rotation = rot,
             width = w, 
             height = h, 
-            font_size = 60,
+            font_size = 70,
+            color = color,
+            font_color = textColor,
+            tooltip = "Recupero unità in rotta o disordinata"
         })
-         pos.x = pos.x - 0.8 
+end
+-- ============================================================
+-- FUNZIONE:  main_infoByCurrentPhase()
+-- ============================================================
+function main_infoByCurrentPhase(obj, player_color, alt_click)
+    
+    local phase = ENGINE.phase
+    local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+
+    if phase == PHASE.CHARGE or  phase == PHASE.CHARGE_DECLARE or phase == PHASE.CHARGE_REACT or phase == PHASE.CHARGE_STOPFIRE or phase == PHASE.CHARGE_AUTO then
+        melee_buttonBaseClick(obj, slot, player_color, alt_click)
     end
+
+    if phase == PHASE.MELEE then
+        melee_buttonBaseClick(obj, slot, player_color, alt_click)
+    end
+    
 end
 -- ============================================================
 -- FUNZIONE:  main_decodeUnitTypeLabel(unitKey)
