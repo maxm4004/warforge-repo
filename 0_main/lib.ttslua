@@ -236,6 +236,10 @@ function main_restart()
     IEF_MELEE_CURRENT = nil
     IEF_MELEE_PENDING = {}
     IEF_MELEE_INFO_HOST = {}
+    IEF_MELEE_MARKED = {}
+    IEF_UNIT_BASES_LOST = {}
+    IEF_MORALE_END_QUEUE = {}
+    IEF_MELEE_MARKED = {}
 
     UI.setAttribute("iconWinnerArmy1", "active", "false")
     UI.setAttribute("iconWinnerArmy2", "active", "false")
@@ -2679,73 +2683,71 @@ function main_manage_no_winner_for_roll(player, phase)
      end
 end
 -- ============================================================
--- FUNZIONE: main_applyLosses(unitKey, hits)
--- Perdite IEF: ogni figures_per_base colpi = 1 base rimossa, i
--- colpi in eccesso si perdono (nessun accumulo fra tiri/turni).
--- Le basi si tolgono dai RANGHI POSTERIORI (proiezione minima
--- lungo il fronte), a parità di rango dalla più esterna, per non
--- aprire buchi nel fronte.
--- Ritorna: basiRimosse, colpiPersi
+-- FUNZIONE: main_lossOrder(unitKey)
+-- Ordine di rimozione delle basi perse: RANGO POSTERIORE per
+-- primo, all'interno del rango SEMPRE DA DESTRA verso sinistra
+-- (la capitana, prima a sinistra del rango posteriore, esce per
+-- ultima del suo rango). Destra = stessa convenzione di
+-- main_trovaBaseAngoloLibero.
+-- Ritorna: lista ordinata di oggetti base, figures_per_base
 -- ============================================================
-function main_applyLosses(unitKey, hits)
+function main_lossOrder(unitKey)
     local bases = main_getUnitBases(unitKey)
-    if #bases == 0 or not hits or hits <= 0 then return 0, hits or 0 end
+    if #bases == 0 then return {}, nil end
 
     local meta = main_getUnitMeta(bases[1])
     local tipo = meta and meta.unitType
     local unitTypeData = tipo and main_getUnitType(tipo)
     local fpb = unitTypeData and unitTypeData.figures_per_base
-    if not fpb or fpb <= 0 then
-        print("[PERDITE] figures_per_base non valido per " .. tostring(unitKey))
-        return 0, hits
-    end
-
-    local daRimuovere = math.min(math.floor(hits / fpb), #bases)
-    local colpiPersi  = hits - daRimuovere * fpb
-    if daRimuovere == 0 then
-        printToAll(string.format("[PERDITE] %s: %d colpi, nessuna base rimossa",
-            main_decodeExtendedUnitLabel(unitKey), hits), {r=1,g=0.6,b=0.4})
-        return 0, colpiPersi
-    end
 
     local fwd   = bases[1].getTransformForward()
     local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-    local right = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local right = Vector(fwdXZ.z, 0, -fwdXZ.x)
 
-    local depthCm   = (unitTypeData and unitTypeData.base_depth_cm) or 3
-    local rankStep  = depthCm * CM_TO_TTS
+    local depthCm  = (unitTypeData and tonumber(unitTypeData.base_depth_cm)) or 3
+    local rankStep = depthCm * CM_TO_TTS
 
-    local minProj  = math.huge
-    local sommaLat = 0
+    local minProj = math.huge
     local info = {}
     for _, obj in ipairs(bases) do
         local p = obj.getPosition()
         local proj = p.x * fwdXZ.x + p.z * fwdXZ.z
-        local lat  = p.x * right.x + p.z * right.z
         if proj < minProj then minProj = proj end
-        sommaLat = sommaLat + lat
-        table.insert(info, { obj = obj, proj = proj, lat = lat, guid = obj.getGUID() })
+        table.insert(info, { obj = obj, proj = proj, lat = p.x * right.x + p.z * right.z, guid = obj.getGUID() })
     end
-    local centroLat = sommaLat / #bases
 
-    -- Rango intero (0 = più arretrato) e distanza dal centro: ordine
-    -- stretto e transitivo, niente tolleranze dentro il comparatore.
     for _, b in ipairs(info) do
         b.rank = math.floor((b.proj - minProj) / rankStep + 0.5)
-        b.dist = math.abs(b.lat - centroLat)
     end
 
     table.sort(info, function(a, b)
         if a.rank ~= b.rank then return a.rank < b.rank end
-        if a.dist ~= b.dist then return a.dist > b.dist end
+        if a.lat ~= b.lat then return a.lat > b.lat end
         return a.guid < b.guid
     end)
 
-    -- Basi superstiti: il pulsante capitano va spostato PRIMA della
-    -- distruzione (stesso comportamento del cambio formazione).
+    local ordinate = {}
+    for _, b in ipairs(info) do table.insert(ordinate, b.obj) end
+    return ordinate, fpb
+end
+
+-- ============================================================
+-- FUNZIONE: main_removeBases(unitKey, daRimuovere)
+-- Rimuove le basi indicate: sposta prima il pulsante capitano
+-- sulle superstiti (come il cambio formazione), poi distrugge.
+-- Unico punto di rimozione: aggiorna IEF_UNIT_BASES_LOST.
+-- ============================================================
+function main_removeBases(unitKey, daRimuovere)
+    if #daRimuovere == 0 then return end
+
+    IEF_UNIT_BASES_LOST[unitKey] = (IEF_UNIT_BASES_LOST[unitKey] or 0) + #daRimuovere
+
+    local via = {}
+    for _, obj in ipairs(daRimuovere) do via[obj] = true end
+
     local superstiti = {}
-    for i = daRimuovere + 1, #info do
-        table.insert(superstiti, info[i].obj)
+    for _, obj in ipairs(main_getUnitBases(unitKey)) do
+        if not via[obj] then table.insert(superstiti, obj) end
     end
     if #superstiti > 0 then
         main_riposizionaPulsanteFormazione(unitKey, superstiti)
@@ -2753,16 +2755,45 @@ function main_applyLosses(unitKey, hits)
         IEF_UNIT_BUTTON_BASE[unitKey] = nil
     end
 
-    for i = 1, daRimuovere do
-        local obj = info[i].obj
+    for _, obj in ipairs(daRimuovere) do
         obj.highlightOn({1, 0, 0}, 2)
         Wait.time(function()
             if obj and not obj.isDestroyed() then obj.destruct() end
         end, 2)
     end
+end
+
+-- ============================================================
+-- FUNZIONE: main_applyLosses(unitKey, hits)
+-- Perdite IEF immediate (tiro, Tiro d'Arresto): ogni
+-- figures_per_base colpi = 1 base, i colpi in eccesso si perdono.
+-- Ordine di rimozione: main_lossOrder.
+-- Ritorna: basiRimosse, colpiPersi
+-- ============================================================
+function main_applyLosses(unitKey, hits)
+    if not hits or hits <= 0 then return 0, hits or 0 end
+
+    local ordinate, fpb = main_lossOrder(unitKey)
+    if #ordinate == 0 then return 0, hits end
+    if not fpb or fpb <= 0 then
+        print("[PERDITE] figures_per_base non valido per " .. tostring(unitKey))
+        return 0, hits
+    end
+
+    local n = math.min(math.floor(hits / fpb), #ordinate)
+    local colpiPersi = hits - n * fpb
+    if n == 0 then
+        printToAll(string.format("[PERDITE] %s: %d colpi, nessuna base rimossa",
+            main_decodeExtendedUnitLabel(unitKey), hits), {r=1,g=0.6,b=0.4})
+        return 0, colpiPersi
+    end
+
+    local daRimuovere = {}
+    for i = 1, n do table.insert(daRimuovere, ordinate[i]) end
+    main_removeBases(unitKey, daRimuovere)
 
     printToAll(string.format("[PERDITE] %s: %d colpi -> %d basi rimosse (%d colpi persi)",
-        main_decodeExtendedUnitLabel(unitKey), hits, daRimuovere, colpiPersi), {r=1,g=0.4,b=0.4})
+        main_decodeExtendedUnitLabel(unitKey), hits, n, colpiPersi), {r=1,g=0.4,b=0.4})
 
-    return daRimuovere, colpiPersi
+    return n, colpiPersi
 end

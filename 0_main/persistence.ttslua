@@ -36,7 +36,7 @@ function main_onSave()
     turn              = TURN,
     colorArmy1        = colorArmy1,
     colorArmy2        = colorArmy2,
-       deployment_armies = DEPLOYMENT and DEPLOYMENT.armies or nil,
+    deployment_armies = DEPLOYMENT and DEPLOYMENT.armies or nil,
     ief_front_width   = IEF_FRONT_WIDTH,
     ief_reform_used   = IEF_REFORM_USED,
     ief_move_budget   = IEF_MOVE_BUDGET,
@@ -45,8 +45,10 @@ function main_onSave()
     field_state = callHandler("field_serializeState"),
     ief_charge_queue = IEF_CHARGE_QUEUE,
     ief_unit_cohesion = IEF_UNIT_COHESION,
-      ief_melee_list    = IEF_MELEE_LIST,
-      ief_melee_next_id = IEF_MELEE_NEXT_ID,    
+    ief_melee_list    = IEF_MELEE_LIST,
+    ief_melee_next_id = IEF_MELEE_NEXT_ID,
+    ief_unit_bases_lost = IEF_UNIT_BASES_LOST,
+    ief_melee_marked    = IEF_MELEE_MARKED,
 }
 
     return JSON.encode(saveData)
@@ -127,6 +129,14 @@ function main_restoreState(save_state)
 
     if data.ief_melee_next_id then
           IEF_MELEE_NEXT_ID = data.ief_melee_next_id
+    end
+
+    if data.ief_unit_bases_lost then 
+        IEF_UNIT_BASES_LOST = data.ief_unit_bases_lost 
+    end
+         
+    if data.ief_melee_marked then 
+        IEF_MELEE_MARKED = data.ief_melee_marked 
     end
 
     Wait.time(function()

@@ -20,9 +20,14 @@ end
 -- ============================================================
 -- FUNZIONE: after_melee(phaseName, phase)
 -- IEF_MELEE_LIST NON si azzera: le mischie proseguono nei
--- turni successivi.
+-- turni successivi. Se IEF_MELEE_CURRENT è valorizzato si sta
+-- andando in MELEE_RESOLVE; altrimenti la fase è finita e si
+-- rimuovono le perdite marcate.
 -- ============================================================
 function after_melee(phaseName, phase)
+    if not IEF_MELEE_CURRENT then
+        melee_removeMarkedLosses()
+    end
     IEF_MELEE_PENDING = {}
     melee_infoCloseAll()
     UI.setAttribute("confirm_panel_melee", "active", "false")

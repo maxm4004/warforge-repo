@@ -1,11 +1,12 @@
 -- ============================================================
--- FUNZIONE: melee_buttonBaseClick(obj, player_color, alt_click)
--- Apre/chiude il pannello 3D info sulla base capitana.
+-- FUNZIONE: melee_buttonBaseClick(obj, slot, player_color, alt_click)
+-- Apre/chiude il pannello 3D info sulla base capitana: dati
+-- della sola unità di appartenenza. Alt-click chiude.
 -- ============================================================
 function melee_buttonBaseClick(obj, slot, player_color, alt_click)
 
     if alt_click then
-        melee_infoClose()
+        melee_infoCloseUnit(main_getUnitKey(obj))
         return
     end
 
@@ -28,20 +29,28 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
     local calc = melee_computeGroup(gruppo)
 
     local righe = {}
-    if slot then
-        for _, key in ipairs(melee_groupUnitsOfSlot(gruppo, slot)) do
-            local info = calc.unita[key]
-            local det = info.dettaglio
-            table.insert(righe, { testo = string.format("%s - %s - %s",
-                ARMY[slot].name, main_decodeExtendedUnitLabel(key), main_getCohesion(key)), titolo = true, colore = ARMY[slot].color })
-            table.insert(righe, { testo = string.format("%s%s",
-                det.primoTurno and "Primo turno di mischia" or "Turno di mischia successivo",
-                det.fianco and " - caricata sul fianco: non combatte" or "") })
-            table.insert(righe, { testo = string.format("Basi in contatto %d - ranghi posteriori %d - overlap %d",
-                det.contatto, det.posteriori, det.overlap) })
-            table.insert(righe, { testo = det.dimezzati
-                and string.format("Dadi: %d (disordinata: %d dimezzati)", info.dadi, det.dadiGrezzi)
-                or  string.format("Dadi: %d", info.dadi) })
+    local info = calc.unita[unitKey]
+    if info then
+        local det = info.dettaglio
+        local nemici = {}
+        for enemyKey, _ in pairs(info.verso) do
+            table.insert(nemici, main_decodeExtendedUnitLabel(enemyKey))
+        end
+        table.sort(nemici)
+        table.insert(righe, { testo = string.format("%s - %s - %s",
+            ARMY[info.slot].name, main_decodeExtendedUnitLabel(unitKey), main_getCohesion(unitKey)), titolo = true, colore = ARMY[info.slot].color })
+        table.insert(righe, { testo = "In mischia contro: " .. table.concat(nemici, ", ") })
+        table.insert(righe, { testo = string.format("%s%s",
+            det.primoTurno and "Primo turno di mischia" or "Turno di mischia successivo",
+            det.fianco and " - caricata sul fianco: non combatte" or "") })
+        table.insert(righe, { testo = string.format("Basi in contatto %d - ranghi posteriori %d - overlap %d",
+            det.contatto, det.posteriori, det.overlap) })
+        table.insert(righe, { testo = det.dimezzati
+            and string.format("Dadi: %d (disordinata: %d dimezzati)", info.dadi, det.dadiGrezzi)
+            or  string.format("Dadi: %d", info.dadi) })
+        local marcate = #(IEF_MELEE_MARKED[unitKey] or {})
+        if marcate > 0 then
+            table.insert(righe, { testo = string.format("Basi perse in questa fase: %d (rimosse a fine fase)", marcate) })
         end
     end
 
@@ -180,13 +189,28 @@ end
 
 -- ============================================================
 -- FUNZIONE: melee_pruneList()
--- Rimuove le coppie in cui una delle due unità non ha più basi
--- sul tavolo. Il controllo di contatto reale arriva al passo 4.
+-- Toglie le coppie in cui un'unità non ha più basi, è in ROTTA
+-- o le due unità non sono più a contatto (in nessuna delle due
+-- direzioni). Le altre proseguono nel turno (regolamento: "se
+-- nessuno va in rotta, la mischia continua nel turno successivo").
 -- ============================================================
 function melee_pruneList()
     for i = #IEF_MELEE_LIST, 1, -1 do
         local e = IEF_MELEE_LIST[i]
-        if #main_getUnitBases(e.unitArmy1Key) == 0 or #main_getUnitBases(e.unitArmy2Key) == 0 then
+        local basi1 = main_getUnitBases(e.unitArmy1Key)
+        local basi2 = main_getUnitBases(e.unitArmy2Key)
+        local togli = (#basi1 == 0 or #basi2 == 0)
+            or main_getCohesion(e.unitArmy1Key) == COHESION.ROT
+            or main_getCohesion(e.unitArmy2Key) == COHESION.ROT
+        if not togli then
+            local contatto = #melee_contactBases(e.unitArmy1Key, basi2) > 0
+                          or #melee_contactBases(e.unitArmy2Key, basi1) > 0
+            togli = not contatto
+        end
+        if togli then
+            printToAll(string.format("[MISCHIA] Fine mischia: %s / %s",
+                main_decodeExtendedUnitLabel(e.unitArmy1Key),
+                main_decodeExtendedUnitLabel(e.unitArmy2Key)), {r=1,g=0.8,b=0.3})
             table.remove(IEF_MELEE_LIST, i)
         end
     end
@@ -688,6 +712,11 @@ end
 -- ============================================================
 function melee_resolveBegin()
     local cur = IEF_MELEE_CURRENT
+    if cur and cur.mode == "FINE_FASE" then
+        cur.subStep = (#cur.morale > 0) and "MORALE" or "ESCI"
+        melee_resolveRedraw()
+        return
+    end
     local gruppo = cur and melee_getGroupById(cur.groupId)
     if not gruppo then
         IEF_MELEE_CURRENT = nil
@@ -747,8 +776,12 @@ function melee_resolveRedraw()
         end
     elseif cur.subStep == "ESCI" then
         for slot = 1, 2 do
-            labels[slot]  = "Fine Mischia"
-            enabled[slot] = true
+            if cur.confermato and cur.confermato[slot] then
+                labels[slot] = "Confermato"
+            else
+                labels[slot]  = "Fine Mischia"
+                enabled[slot] = true
+            end
         end
     end
 
@@ -775,7 +808,13 @@ function melee_resolveButton(player, slot)
     elseif cur.subStep == "MORALE" and cur.morale[1] and cur.morale[1].slot == slot then
         engine_diceCameraZoom(player, slot)
     elseif cur.subStep == "ESCI" then
-        melee_resolveEnd()
+        cur.confermato = cur.confermato or {}
+        cur.confermato[slot] = true
+        if cur.confermato[1] and cur.confermato[2] then
+            melee_resolveEnd()
+        else
+            melee_resolveRedraw()
+        end
     end
 end
 
@@ -811,12 +850,159 @@ function melee_doRoll(player, slot)
 end
 
 -- ============================================================
+-- FUNZIONE: melee_markLosses(unitKey, hits)
+-- Perdite di mischia MARCATE (evidenziate, non rimosse): la
+-- rimozione avviene a fine fase MELEE (melee_removeMarkedLosses).
+-- Ordine di rimozione: main_lossOrder (rango posteriore, da
+-- destra), saltando le basi già marcate. Colpi in eccesso persi.
+-- Ritorna: basi marcate ora
+-- ============================================================
+function melee_markLosses(unitKey, hits)
+    if not hits or hits <= 0 then return 0 end
+
+    local ordinate, fpb = main_lossOrder(unitKey)
+    if not fpb or fpb <= 0 then return 0 end
+
+    IEF_MELEE_MARKED[unitKey] = IEF_MELEE_MARKED[unitKey] or {}
+    local giaMarcate = {}
+    for _, guid in ipairs(IEF_MELEE_MARKED[unitKey]) do giaMarcate[guid] = true end
+
+    local n = math.floor(hits / fpb)
+    local marcate = 0
+    for _, obj in ipairs(ordinate) do
+        if marcate >= n then break end
+        local guid = obj.getGUID()
+        if not giaMarcate[guid] then
+            table.insert(IEF_MELEE_MARKED[unitKey], guid)
+            obj.highlightOn({1, 0, 0})
+            marcate = marcate + 1
+        end
+    end
+
+    printToAll(string.format("[PERDITE] %s: %d colpi -> %d basi perse (rimosse a fine fase)",
+        main_decodeExtendedUnitLabel(unitKey), hits, marcate), {r=1,g=0.4,b=0.4})
+    return marcate
+end
+
+-- ============================================================
+-- FUNZIONE: melee_removeMarkedLosses()
+-- Fine fase MELEE: rimuove tutte le basi marcate.
+-- ============================================================
+function melee_removeMarkedLosses()
+    for unitKey, guids in pairs(IEF_MELEE_MARKED) do
+        local objs = {}
+        for _, guid in ipairs(guids) do
+            local obj = getObjectFromGUID(guid)
+            if obj then
+                obj.highlightOff()
+                table.insert(objs, obj)
+            end
+        end
+        main_removeBases(unitKey, objs)
+    end
+    IEF_MELEE_MARKED = {}
+end
+
+-- ============================================================
+-- FUNZIONE: melee_routMove(unitKey)
+-- Movimento di rotta immediato, come l'evasione: cambio fronte
+-- di 180° e movimento in linea retta per tutta la propria mossa.
+-- NON ancora: blocco da nemici/terreno intransitabile
+-- (distruzione) e disordine delle amiche interpenetrate.
+-- ============================================================
+function melee_routMove(unitKey)
+    local bases = main_getUnitBases(unitKey)
+    if #bases == 0 then return end
+
+    local meta = main_getUnitMeta(bases[1])
+    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+    local moveInches = (ut and ut.move_inches) or 0
+
+    local oldFwd = bases[1].getTransformForward()
+    local fleeXZ = Vector(-oldFwd.x, 0, -oldFwd.z):normalized()
+    local delta = moveInches * INCH_TO_TTS
+
+    melee_infoCloseUnit(unitKey)
+
+    for _, obj in ipairs(bases) do
+        local rot = obj.getRotation()
+        obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
+        local p = obj.getPosition()
+        obj.setPosition(Vector(p.x + fleeXZ.x * delta, p.y, p.z + fleeXZ.z * delta))
+    end
+
+    printToAll(string.format("[ROTTA] %s fugge di %s\"", main_decodeExtendedUnitLabel(unitKey), tostring(moveInches)), {r=1,g=0.3,b=0.3})
+end
+
+-- ============================================================
+-- FUNZIONE: melee_queueTest(cur, item, quando)
+-- Accoda un test di morale: IMMEDIATO nella coda della mischia
+-- corrente, FINE_FASE in IEF_MORALE_END_QUEUE (o nella coda
+-- corrente se si sta già risolvendo la fine fase).
+-- ============================================================
+function melee_queueTest(cur, item, quando)
+    local coda = cur.morale
+    if quando == "FINE_FASE" and cur.mode ~= "FINE_FASE" then
+        coda = IEF_MORALE_END_QUEUE
+    end
+    for _, it in ipairs(coda) do
+        if it.key == item.key and it.motivo == item.motivo then return end
+    end
+    table.insert(coda, item)
+end
+
+-- ============================================================
+-- FUNZIONE: melee_onRout(cur, unitKey, slot)
+-- Unità appena andata in ROTTA: situazioni FRIEND_ROUT della
+-- tabella (amiche entro il raggio, valutate prima della fuga),
+-- poi movimento di rotta immediato.
+-- ============================================================
+function melee_onRout(cur, unitKey, slot)
+    local bases = main_getUnitBases(unitKey)
+    local meta = bases[1] and main_getUnitMeta(bases[1])
+
+    local situazioni = main_moraleSituationsFor("FRIEND_ROUT", {
+        tipoOrigine = meta and meta.unitType,
+        origineGiaInFuga = false,
+    })
+
+    for _, s in ipairs(situazioni) do
+        if s.def.testa == "AMICHE_IN_RAGGIO" then
+            for altraKey, altreBasi in pairs(main_unitsOfSlot(slot)) do
+                if altraKey ~= unitKey
+                   and not main_isGeneralKey(altraKey)
+                   and main_getCohesion(altraKey) ~= COHESION.ROT then
+                    local d = main_unitsDistanceInches(bases, altreBasi)
+                    if d and d <= (s.def.raggio or 0) then
+                        melee_queueTest(cur, { key = altraKey, slot = slot, motivo = s.nome, effetto = s.def.effetto }, s.def.quando)
+                    end
+                end
+            end
+        end
+    end
+
+    melee_routMove(unitKey)
+end
+-- ============================================================
+-- FUNZIONE: melee_lowerAndCheckRout(cur, unitKey, slot)
+-- Abbassa la coesione; se l'unità arriva ora in ROTTA applica
+-- le conseguenze (melee_onRout).
+-- ============================================================
+function melee_lowerAndCheckRout(cur, unitKey, slot)
+    local prima = main_getCohesion(unitKey)
+    local dopo = main_lowerCohesion(unitKey)
+    if prima ~= COHESION.ROT and dopo == COHESION.ROT then
+        melee_onRout(cur, unitKey, slot)
+    end
+end
+
+-- ============================================================
 -- FUNZIONE: melee_resolveOutcome()
 -- Perdite reciproche: i successi di ogni esercito si ripartiscono
 -- sui bersagli in proporzione ai dadi tirati verso ciascuno.
 -- Sconfitta = ha ricevuto più colpi di quanti ne abbia inflitti
--- complessivamente -> perde un livello di coesione. Poi rimozione
--- basi per tutti e coda dei test di morale.
+-- complessivamente -> perde un livello di coesione. Perdite
+-- MARCATE (rimosse a fine fase), poi coda dei test di morale.
 -- ============================================================
 function melee_resolveOutcome()
     local cur = IEF_MELEE_CURRENT
@@ -847,44 +1033,50 @@ function melee_resolveOutcome()
         end
     end
 
-    for key, info in pairs(calc.unita) do
+    local chiavi = {}
+    for key, _ in pairs(calc.unita) do table.insert(chiavi, key) end
+    table.sort(chiavi)
+
+    cur.morale = {}
+    local perse = {}
+
+    for _, key in ipairs(chiavi) do
         printToAll(string.format("[MISCHIA] %s: inflitti %d, ricevuti %d",
             main_decodeExtendedUnitLabel(key), inflitti[key], ricevuti[key]), {r=1,g=0.8,b=0.3})
+        perse[key] = melee_markLosses(key, ricevuti[key])
+    end
+
+    for _, key in ipairs(chiavi) do
         if ricevuti[key] > inflitti[key] then
             printToAll("[MISCHIA] Sconfitta: " .. main_decodeExtendedUnitLabel(key), {r=1,g=0.4,b=0.4})
-            main_lowerCohesion(key)
+            melee_lowerAndCheckRout(cur, key, calc.unita[key].slot)
         end
     end
 
-    cur.morale = {}
-    for key, info in pairs(calc.unita) do
-        if ricevuti[key] > 0 then
-            local basiPrima = #main_getUnitBases(key)
-            local perse = main_applyLosses(key, ricevuti[key])
-            if perse > 0 and perse < basiPrima then
-                table.insert(cur.morale, { key = key, slot = info.slot, perse = perse })
+    for _, key in ipairs(chiavi) do
+        local basi = #main_getUnitBases(key)
+        local marcate = #(IEF_MELEE_MARKED[key] or {})
+        if perse[key] > 0 and marcate < basi and main_getCohesion(key) ~= COHESION.ROT then
+            local meta = main_getUnitMeta(main_getUnitBases(key)[1])
+            for _, sit in ipairs(main_moraleSituationsFor("LOSS", { tipo = meta and meta.unitType })) do
+                if sit.def.testa == "VITTIMA" then
+                    melee_queueTest(cur, { key = key, slot = calc.unita[key].slot, motivo = sit.nome, effetto = sit.def.effetto }, sit.def.quando)
+                end
             end
         end
     end
-    table.sort(cur.morale, function(a, b) return a.key < b.key end)
 
-    cur.subStep = "ATTESA"
+    cur.subStep = (#cur.morale > 0) and "MORALE" or "ESCI"
     melee_resolveRedraw()
-
-    Wait.time(function()
-        local live = IEF_MELEE_CURRENT
-        if not live or live ~= cur then return end
-        callHandler("deployment_scanTable")
-        live.subStep = (#live.morale > 0) and "MORALE" or "ESCI"
-        melee_resolveRedraw()
-    end, 2.5)
 end
 
 -- ============================================================
 -- FUNZIONE: melee_doMorale(player, slot)
 -- Dispatch da engine_diceRoll_start. Test per la prima unità in
--- coda: -1 per base persa + modificatore di coesione. Fallito
--- -> perde un livello di coesione.
+-- coda con i modificatori di IEF_MORALE_MODIFIERS (le basi
+-- marcate e non ancora rimosse contano come perse). Fallito ->
+-- perde un livello di coesione (e se va in ROTTA: fuga e test
+-- delle amiche in raggio, a fine fase).
 -- ============================================================
 function melee_doMorale(player, slot)
     local cur = IEF_MELEE_CURRENT
@@ -893,33 +1085,43 @@ function melee_doMorale(player, slot)
     if not item or item.slot ~= slot or item.inCorso then return end
     item.inCorso = true
 
-    local perBase = main_getMoraleModifier("ogni_base_persa") or -1
-    local mod = perBase * item.perse + main_getCohesionMoraleModifier(item.key)
+    local mod, dettaglio = main_moraleModifier(item.key, { basiInSospeso = #(IEF_MELEE_MARKED[item.key] or {}) })
 
-    main_testMorale(item.key, player, "altre_situazioni", mod, function(esito)
+    printToAll(string.format("[MORALE] %s testa (%s), modificatori: %s",
+        main_decodeExtendedUnitLabel(item.key), item.motivo or "", main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
+
+    main_testMorale(item.key, player, item.effetto or "altre_situazioni", mod, function(esito)
         local live = IEF_MELEE_CURRENT
         if not live or live ~= cur then return end
         if esito == nil then
             item.inCorso = false
             return
         end
-        if esito == MORALE_RESULT.KO then
-            main_lowerCohesion(item.key)
-        end
         table.remove(live.morale, 1)
+        if esito == MORALE_RESULT.KO then
+            melee_lowerAndCheckRout(live, item.key, item.slot)
+        end
+
+        -- Chi è andato in rotta nel frattempo non testa più
+        for i = #live.morale, 1, -1 do
+            if main_getCohesion(live.morale[i].key) == COHESION.ROT then
+                table.remove(live.morale, i)
+            end
+        end
+
         live.subStep = (#live.morale > 0) and "MORALE" or "ESCI"
         melee_resolveRedraw()
     end)
 end
-
 -- ============================================================
 -- FUNZIONE: melee_resolveEnd()
--- "Fine Mischia": segna il gruppo risolto, toglie dalla lista
--- le coppie con unità in ROTTA o distrutte, torna a MELEE.
+-- Entrambi hanno confermato "Fine Mischia": gruppo risolto (o
+-- test di fine fase completati), coppie con unità in ROTTA
+-- tolte, ritorno a MELEE.
 -- ============================================================
 function melee_resolveEnd()
     local cur = IEF_MELEE_CURRENT
-    if cur then
+    if cur and cur.mode ~= "FINE_FASE" then
         local gruppo = melee_getGroupById(cur.groupId)
         if gruppo then
             local turno = melee_currentTurn()
@@ -938,6 +1140,29 @@ function melee_resolveEnd()
     main_goToPhase("MELEE")
 end
 
+-- ============================================================
+-- FUNZIONE: melee_startEndOfPhaseTests()
+-- Dopo tutte le mischie: test di morale con quando = FINE_FASE
+-- (es. amiche entro 6" da un'unità in rotta). Riusa
+-- MELEE_RESOLVE in modalità FINE_FASE.
+-- Ritorna true se ha avviato i test.
+-- ============================================================
+function melee_startEndOfPhaseTests()
+    if #IEF_MORALE_END_QUEUE == 0 then return false end
+    local coda = {}
+    for _, it in ipairs(IEF_MORALE_END_QUEUE) do
+        if main_getCohesion(it.key) ~= COHESION.ROT and #main_getUnitBases(it.key) > 0 then
+            table.insert(coda, it)
+        end
+    end
+    IEF_MORALE_END_QUEUE = {}
+    if #coda == 0 then return false end
+
+    IEF_MELEE_CURRENT = { mode = "FINE_FASE", morale = coda }
+    printToAll("[MORALE] Test di fine fase: " .. #coda, {r=1,g=0.8,b=0.3})
+    main_goToPhase("MELEE_RESOLVE")
+    return true
+end
 -- ============================================================
 -- FUNZIONE: melee_infoClose(player, value, id)
 -- ============================================================

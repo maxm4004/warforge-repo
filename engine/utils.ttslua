@@ -48,6 +48,10 @@ function warningToColor(warning, player, textColor, second)
 
     local color = textColor == "Yellow" and "#FFD833" or textColor
 
+    print("DEBUG: " .. warning)
+
+    
+
     if player then
         UI.setAttribute("playerGameMessage", "Color", color)
         UI.setAttribute("playerGameMessage", "text", warning)
@@ -64,8 +68,6 @@ function warningToColor(warning, player, textColor, second)
 
         return
     end
-                print("[ ERRORE " .. ENGINE.phase .."] " .. warning)
-
 end
 -- ============================================================
 -- FUNZIONE: warningListToColor()

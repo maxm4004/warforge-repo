@@ -1,0 +1,359 @@
+-- ============================================================
+-- WARFORGE IEF — 0_main/morale_rules.ttslua
+-- Regole del morale a TABELLE: situazioni che richiedono un test
+-- e modificatori. Le regole sono dati: per cambiare chi è
+-- coinvolto si modificano i campi, non il codice.
+-- Caricato dopo lib (usa main_*).
+-- ============================================================
+
+-- ============================================================
+-- SITUAZIONI (regolamento "QUANDO È NECESSARIO EFFETTUARE UN
+-- TEST DI MORALE?"). Filtri assenti = nessun filtro.
+--   evento        : chi solleva la situazione (LOSS, CHARGED,
+--                   CHARGE_DECLARE, FRIEND_ROUT, GENERAL_KILLED)
+--   testa         : chi fa il test (VITTIMA, CARICATA, CARICANTE,
+--                   AMICHE_IN_RAGGIO)
+--   tipi / tipiAvversario / tipiAvversarioEsclusi : tipi unità
+--   terreno       : categoria terreno dell'unità che testa
+--   lato          : lato del contatto (FRONTE, FIANCO, RETRO)
+--   soloArmiDaTiro: l'unità che testa ha solo armi da tiro
+--                   (escluse le armiEscluse)
+--   raggio        : pollici per AMICHE_IN_RAGGIO
+--   tipiOrigineEsclusi / escludiGiaInFuga : filtri sull'unità
+--                   che ha generato l'evento
+--   effetto       : colonna di morale.json (per_caricare,
+--                   per_riordinare, altre_situazioni)
+--   quando        : IMMEDIATO o FINE_FASE (dopo tutte le mischie
+--                   o tutti i tiri)
+-- ============================================================
+IEF_MORALE_SITUATIONS = {
+    BASE_PERSA = {
+        evento = "LOSS",
+        testa = "VITTIMA",
+        effetto = "altre_situazioni",
+        quando = "IMMEDIATO",
+    },
+    CARICA_IN_TERRENO_APERTO = {
+        evento = "CHARGED",
+        testa = "CARICATA",
+        tipi = { "FM" },
+        tipiAvversario = { "KN", "CP" },
+        terreno = "APERTO",
+        effetto = "altre_situazioni",
+        quando = "IMMEDIATO",
+    },
+    CARICA_SUL_FRONTE = {
+        evento = "CHARGE_DECLARE",
+        testa = "CARICANTE",
+        tipi = { "CL" },
+        tipiAvversario = { "KN", "CP", "FM", "FP" },
+        lato = "FRONTE",
+        effetto = "per_caricare",
+        quando = "IMMEDIATO",
+    },
+    CARICA_CON_ARMI_DA_TIRO = {
+        evento = "CHARGE_DECLARE",
+        testa = "CARICANTE",
+        tipi = { "FP", "FM" },
+        soloArmiDaTiro = true,
+        armiEscluse = { "GIAVELLOTTI" },
+        tipiAvversarioEsclusi = { "FL" },
+        effetto = "per_caricare",
+        quando = "IMMEDIATO",
+    },
+    AMICA_IN_ROTTA = {
+        evento = "FRIEND_ROUT",
+        testa = "AMICHE_IN_RAGGIO",
+        raggio = 6,
+        tipiOrigineEsclusi = { "FL" },
+        escludiGiaInFuga = true,
+        effetto = "altre_situazioni",
+        quando = "FINE_FASE",
+    },
+    GENERALE_UCCISO = {
+        evento = "GENERAL_KILLED",
+        testa = "AMICHE_IN_RAGGIO",
+        raggio = 6,
+        effetto = "altre_situazioni",
+        quando = "FINE_FASE",
+    },
+}
+
+-- ============================================================
+-- MODIFICATORI del test di morale. chiave = morale_modifiers di
+-- morale.json (valore unitario), condizione = funzione in
+-- IEF_MORALE_CONDITIONS che ritorna quante volte si applica.
+-- ============================================================
+IEF_MORALE_MODIFIERS = {
+    { chiave = "generale_con_unita",      condizione = "GENERALE_AGGREGATO" },
+    { chiave = "ogni_base_persa",         condizione = "BASI_PERSE_DA_INIZIO" },
+    { chiave = "fianco_retro_caricabile", condizione = "NEMICO_FIANCO_RETRO" },
+    { chiave = "unita_disordinata",       condizione = "COESIONE_DIS" },
+    { chiave = "unita_in_rotta",          condizione = "COESIONE_ROT" },
+}
+
+-- Tolleranza di contatto per il Generale aggregato (pollici)
+IEF_GENERAL_ATTACH_INCHES = 0.1
+
+-- Gravità delle categorie di terreno (la peggiore vince)
+IEF_TERRAIN_SEVERITY = { APERTO = 0, COVER = 0, ROTTO = 1, FIUME = 2, DIFFICILE = 3, INTRANSITABILE = 4 }
+
+-- ============================================================
+-- CONDIZIONI: function(unitKey, ctx) -> numero di applicazioni
+-- ctx.basiInSospeso = basi perse non ancora rimosse (mischia)
+-- ============================================================
+IEF_MORALE_CONDITIONS = {
+    GENERALE_AGGREGATO = function(unitKey, ctx)
+        return main_getAttachedGeneral(unitKey) and 1 or 0
+    end,
+    BASI_PERSE_DA_INIZIO = function(unitKey, ctx)
+        return (IEF_UNIT_BASES_LOST[unitKey] or 0) + ((ctx and ctx.basiInSospeso) or 0)
+    end,
+    NEMICO_FIANCO_RETRO = function(unitKey, ctx)
+        return main_enemyOnFlankOrRear(unitKey) and 1 or 0
+    end,
+    COESIONE_DIS = function(unitKey, ctx)
+        return main_getCohesion(unitKey) == COHESION.DIS and 1 or 0
+    end,
+    COESIONE_ROT = function(unitKey, ctx)
+        return main_getCohesion(unitKey) == COHESION.ROT and 1 or 0
+    end,
+}
+
+-- ============================================================
+-- FUNZIONE: main_listHas(lista, valore)
+-- ============================================================
+function main_listHas(lista, valore)
+    for _, v in ipairs(lista or {}) do
+        if v == valore then return true end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleSituationsFor(evento, ctx)
+-- Situazioni della tabella che si applicano. ctx:
+--   tipo, tipoAvversario, terreno, lato, soloArmiDaTiro,
+--   tipoOrigine, origineGiaInFuga
+-- Ritorna lista { nome, def } ordinata per nome.
+-- ============================================================
+function main_moraleSituationsFor(evento, ctx)
+    ctx = ctx or {}
+    local out = {}
+    for nome, def in pairs(IEF_MORALE_SITUATIONS) do
+        local ok = def.evento == evento
+        if ok and def.tipi and not main_listHas(def.tipi, ctx.tipo) then ok = false end
+        if ok and def.tipiAvversario and not main_listHas(def.tipiAvversario, ctx.tipoAvversario) then ok = false end
+        if ok and def.tipiAvversarioEsclusi and main_listHas(def.tipiAvversarioEsclusi, ctx.tipoAvversario) then ok = false end
+        if ok and def.terreno and def.terreno ~= ctx.terreno then ok = false end
+        if ok and def.lato and def.lato ~= ctx.lato then ok = false end
+        if ok and def.soloArmiDaTiro and not ctx.soloArmiDaTiro then ok = false end
+        if ok and def.tipiOrigineEsclusi and main_listHas(def.tipiOrigineEsclusi, ctx.tipoOrigine) then ok = false end
+        if ok and def.escludiGiaInFuga and ctx.origineGiaInFuga then ok = false end
+        if ok then table.insert(out, { nome = nome, def = def }) end
+    end
+    table.sort(out, function(a, b) return a.nome < b.nome end)
+    return out
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleModifier(unitKey, ctx)
+-- Somma dei modificatori di IEF_MORALE_MODIFIERS.
+-- Ritorna: totale, dettaglio { {chiave, volte, valore}, ... }
+-- ============================================================
+function main_moraleModifier(unitKey, ctx)
+    local totale, dettaglio = 0, {}
+    for _, m in ipairs(IEF_MORALE_MODIFIERS) do
+        local cond = IEF_MORALE_CONDITIONS[m.condizione]
+        local volte = cond and cond(unitKey, ctx) or 0
+        if volte > 0 then
+            local unitario = main_getMoraleModifier(m.chiave) or 0
+            totale = totale + unitario * volte
+            table.insert(dettaglio, { chiave = m.chiave, volte = volte, valore = unitario * volte })
+        end
+    end
+    return totale, dettaglio
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleModifierText(dettaglio)
+-- ============================================================
+function main_moraleModifierText(dettaglio)
+    local parti = {}
+    for _, d in ipairs(dettaglio or {}) do
+        table.insert(parti, string.format("%s %+d", d.chiave, d.valore))
+    end
+    return (#parti > 0) and table.concat(parti, ", ") or "nessuno"
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitSlot(unitKey)
+-- ============================================================
+function main_unitSlot(unitKey)
+    local b = main_getUnitBases(unitKey)[1]
+    if not b then return nil end
+    if b.hasTag("Army1") then return 1 end
+    if b.hasTag("Army2") then return 2 end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitsOfSlot(slot)
+-- Tutte le unità di un esercito sul tavolo: { [unitKey] = { basi } }
+-- ============================================================
+function main_unitsOfSlot(slot)
+    local out = {}
+    local tag = "Army" .. slot
+    for _, o in ipairs(getAllObjects()) do
+        if o.hasTag(tag) and main_getUnitMeta(o) then
+            local key = main_getUnitKey(o)
+            out[key] = out[key] or {}
+            table.insert(out[key], o)
+        end
+    end
+    return out
+end
+
+-- ============================================================
+-- FUNZIONE: main_isGeneralKey(unitKey)
+-- ============================================================
+function main_isGeneralKey(unitKey)
+    return unitKey ~= nil and string.find(unitKey, "_GEN_", 1, true) ~= nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitsDistanceInches(basiA, basiB)
+-- Distanza minima bordo-bordo fra due insiemi di basi.
+-- ============================================================
+function main_unitsDistanceInches(basiA, basiB)
+    local minimo = nil
+    for _, a in ipairs(basiA) do
+        for _, b in ipairs(basiB) do
+            local d = main_distanceInches(a, b)
+            if d and (not minimo or d < minimo) then minimo = d end
+        end
+    end
+    return minimo
+end
+
+-- ============================================================
+-- FUNZIONE: main_getGeneralHost(genKey)
+-- Unità amica a cui il Generale è aggregato: la sua base tocca
+-- (entro IEF_GENERAL_ATTACH_INCHES) una base dell'unità; se ne
+-- tocca più d'una, la più vicina. Calcolato al volo.
+-- ============================================================
+function main_getGeneralHost(genKey)
+    local slot = main_unitSlot(genKey)
+    if not slot then return nil end
+    local genBasi = main_getUnitBases(genKey)
+
+    local migliore, distMigliore = nil, nil
+    for key, basi in pairs(main_unitsOfSlot(slot)) do
+        if key ~= genKey and not main_isGeneralKey(key) then
+            local d = main_unitsDistanceInches(genBasi, basi)
+            if d and d <= IEF_GENERAL_ATTACH_INCHES and (not distMigliore or d < distMigliore) then
+                migliore, distMigliore = key, d
+            end
+        end
+    end
+    return migliore
+end
+
+-- ============================================================
+-- FUNZIONE: main_getAttachedGeneral(unitKey)
+-- Generale aggregato all'unità (chiave) o nil.
+-- ============================================================
+function main_getAttachedGeneral(unitKey)
+    local slot = main_unitSlot(unitKey)
+    if not slot then return nil end
+    for key, _ in pairs(main_unitsOfSlot(slot)) do
+        if main_isGeneralKey(key) and main_getGeneralHost(key) == unitKey then
+            return key
+        end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_enemyOnFlankOrRear(unitKey)
+-- True se un'unità nemica (non in ROTTA) è a contatto sul
+-- fianco/retro oppure è sul fianco/retro entro la propria mossa
+-- (= in grado di caricarlo nel turno successivo).
+-- Fianco/retro = fuori dal settore frontale di 90° dell'unità.
+-- ============================================================
+function main_enemyOnFlankOrRear(unitKey)
+    local slot = main_unitSlot(unitKey)
+    if not slot then return false end
+    local mieBasi = main_getUnitBases(unitKey)
+
+    local fwd = mieBasi[1].getTransformForward()
+    local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
+    local cx, cz = 0, 0
+    for _, b in ipairs(mieBasi) do
+        local p = b.getPosition()
+        cx, cz = cx + p.x, cz + p.z
+    end
+    cx, cz = cx / #mieBasi, cz / #mieBasi
+
+    local altro = (slot == 1) and 2 or 1
+    for key, basi in pairs(main_unitsOfSlot(altro)) do
+        if main_getCohesion(key) ~= COHESION.ROT then
+            local meta = main_getUnitMeta(basi[1])
+            local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+            local mossa = (ut and ut.move_inches) or 0
+
+            local d = main_unitsDistanceInches(mieBasi, basi)
+            if d and d <= math.max(mossa, IEF_GENERAL_ATTACH_INCHES) then
+                local ex, ez = 0, 0
+                for _, b in ipairs(basi) do
+                    local p = b.getPosition()
+                    ex, ez = ex + p.x, ez + p.z
+                end
+                local dir = Vector(ex / #basi - cx, 0, ez / #basi - cz)
+                if dir:magnitude() > 0 then
+                    dir = dir:normalized()
+                    local cosAng = dir.x * fwdXZ.x + dir.z * fwdXZ.z
+                    if cosAng < math.cos(math.rad(45)) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: main_getUnitTerrain(unitKey)
+-- Categoria di terreno (APERTO, ROTTO, DIFFICILE, ...) su cui si
+-- trova l'unità: raggio verso il basso da ogni base, si leggono
+-- i tag degli oggetti colpiti (tipo carta -> categoria con
+-- IEF_FIELD_TIPO_TO_CATEGORIA, o categoria diretta). Vince la
+-- più grave; nessun pezzo di terreno = APERTO.
+-- ============================================================
+function main_getUnitTerrain(unitKey)
+    local peggiore, gravita = "APERTO", 0
+    local mappa = IEF_FIELD_TIPO_TO_CATEGORIA or {}
+
+    for _, base in ipairs(main_getUnitBases(unitKey)) do
+        local p = base.getPosition()
+        local hits = Physics.cast({
+            origin       = Vector(p.x, p.y + 5, p.z),
+            direction    = Vector(0, -1, 0),
+            type         = 1,
+            max_distance = 15,
+        })
+        for _, hit in ipairs(hits) do
+            local o = hit.hit_object
+            if o and o ~= base then
+                for _, tag in ipairs(o.getTags()) do
+                    local cat = mappa[tag] or (IEF_TERRAIN_SEVERITY[tag] and tag)
+                    if cat and (IEF_TERRAIN_SEVERITY[cat] or 0) > gravita then
+                        peggiore, gravita = cat, IEF_TERRAIN_SEVERITY[cat]
+                    end
+                end
+            end
+        end
+    end
+    return peggiore
+end

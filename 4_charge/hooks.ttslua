@@ -92,16 +92,15 @@ end
 function before_charge_auto(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
-    callHandler("buildUI")
+
+    UI.setAttribute("charge_attack_list_title_army1", "text", "MOVIMENTI DI CHIUSURA CARICA " .. ARMY[1].name)
+    UI.setAttribute("charge_attack_list_title_army2", "text", "MOVIMENTI DI CHIUSURA CARICA " .. ARMY[2].name)
+    callHandler("updateCenterPanel")
 end
 
 -- ============================================================
 -- FUNZIONE: after_charge_auto(phaseName, phase)
 -- ============================================================
 function after_charge_auto(phaseName, phase)
-    UI.setAttribute("charge_attack_list_army1", "active", "false")
-    UI.setAttribute("charge_attack_list_army2", "active", "false")
-    UI.setAttribute("charge_defense_list_army1", "active", "false")
-    UI.setAttribute("charge_defense_list_army2", "active", "false")
-    callHandler("updateCenterPanel")
+
 end

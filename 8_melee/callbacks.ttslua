@@ -4,11 +4,15 @@
 
 -- ============================================================
 -- FUNZIONE: melee_btn_army1(player, value, id, buttonConfig)
--- "Mischie Completate": consentito solo a gruppi tutti risolti.
+-- "Mischie Completate": consentito solo a gruppi tutti risolti;
+-- se ci sono test di morale di fine fase, li avvia prima.
 -- ============================================================
 function melee_btn_army1(player, value, id, buttonConfig)
     if melee_listHasPending() then
         warningToColor("Ci sono ancora mischie da risolvere", player, "Yellow", 5)
+        return false
+    end
+    if melee_startEndOfPhaseTests() then
         return false
     end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
@@ -21,6 +25,9 @@ end
 function melee_btn_army2(player, value, id, buttonConfig)
     if melee_listHasPending() then
         warningToColor("Ci sono ancora mischie da risolvere", player, "Yellow", 5)
+        return false
+    end
+    if melee_startEndOfPhaseTests() then
         return false
     end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)

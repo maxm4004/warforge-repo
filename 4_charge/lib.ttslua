@@ -976,11 +976,12 @@ function charge_getDefenseListPanelXml(slot)
 
     local otherSlot = charge_elementoOtherSlot(slot)
     local righe = {}
+
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if charge_elementoRequest(e, otherSlot) then table.insert(righe, e) end
+        if charge_elementoRequest(e, otherSlot) and not charge_elementoIsReciprocal(e) then
+            table.insert(righe, e)
+        end
     end
-
-
 
     local colore = ARMY[slot] and ARMY[slot].color or "White"
     local attivo = ((ENGINE.phase == PHASE.CHARGE_REACT or ENGINE.phase == PHASE.CHARGE_AUTO) and #righe > 0) and "true" or "false"

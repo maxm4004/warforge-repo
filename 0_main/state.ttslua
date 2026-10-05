@@ -26,6 +26,11 @@ IEF_REFORM_USED = IEF_REFORM_USED or {}
 IEF_FORM_UNITS = IEF_FORM_UNITS or {}
 
 IEF_UNIT_BUTTON_BASE = IEF_UNIT_BUTTON_BASE or {}
+
+-- Basi perse dall'inizio della battaglia: [unitKey] = n (aggiornato da main_removeBases)
+IEF_UNIT_BASES_LOST = IEF_UNIT_BASES_LOST or {}
+-- Test di morale da fare a fine fase: { {key, slot, motivo, effetto}, ... }
+IEF_MORALE_END_QUEUE = IEF_MORALE_END_QUEUE or {}
 -- ============================================================
 -- Posizioni camera per slot — definite PRIMA di IEF_CAMERA_ZONE
 -- ============================================================

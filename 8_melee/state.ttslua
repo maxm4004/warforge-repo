@@ -38,11 +38,16 @@ IEF_MELEE_PENDING = IEF_MELEE_PENDING or {}
 
 -- Gruppo in risoluzione nella fase MELEE_RESOLVE:
 -- nil = nessuno, altrimenti
--- { groupId, slot, subStep = "TIRO"|"ATTESA"|"MORALE"|"ESCI",
+-- { groupId, slot, subStep = "TIRO"|"MORALE"|"ESCI",
 --   calc (melee_computeGroup), rolled = {[1],[2]},
---   successi = {[1],[2]}, morale = { {key, slot, perse}, ... } }
+--   successi = {[1],[2]}, confermato = {[1],[2]},
+--   morale = { {key, slot, perse, motivo}, ... } }
 -- Non salvato: dopo un reload il gruppo resta pendente.
 IEF_MELEE_CURRENT = IEF_MELEE_CURRENT or nil
+
+-- Perdite di mischia MARCATE nella fase corrente, rimosse a
+-- fine fase MELEE: [unitKey] = { guid, ... }
+IEF_MELEE_MARKED = IEF_MELEE_MARKED or {}
 
 -- Pannelli 3D INFO MISCHIA aperti: [unitKey] = base ospite
 IEF_MELEE_INFO_HOST = IEF_MELEE_INFO_HOST or {}

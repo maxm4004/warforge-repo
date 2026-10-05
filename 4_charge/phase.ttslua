@@ -78,8 +78,8 @@ function charge_phase()
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Chiudi Fase", textColor="White", color="Red",   callback="charge_auto_btn_army1" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Chiudi Fase", textColor="White", color="Green", callback="charge_auto_btn_army2" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Cariche Completate", textColor="White", color="Red",   callback="charge_auto_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Cariche Completate", textColor="White", color="Green", callback="charge_auto_btn_army2" },
             },
             transitions = {
                 { to="INITIATIVE_ROLL", conditions={ COND.BOTH_PLAYERS_SELECTED } }
