@@ -35,6 +35,8 @@ IEF_MORALE_END_QUEUE = IEF_MORALE_END_QUEUE or {}
 IEF_MARKED_LOSSES = IEF_MARKED_LOSSES or {}
 
 IEF_MORALE_ROLL_PENDING = IEF_MORALE_ROLL_PENDING or {}
+
+IEF_MORALE_ACTIVE_ROW = IEF_MORALE_ACTIVE_ROW or {}
 -- ============================================================
 -- Posizioni camera per slot — definite PRIMA di IEF_CAMERA_ZONE
 -- ============================================================

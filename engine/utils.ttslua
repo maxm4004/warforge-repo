@@ -61,9 +61,11 @@ function warningToColor(warning, player, textColor, second)
             UI.setAttribute("playerGameMessage", "active", "false")
         end, not second and 5 or second)
 
-        Wait.time(function () 
-            printToColor("[" .. ENGINE.phase .."] " .. warning, player.color, {1, 1, 1})
-        end, 2)
+        if player.seated then
+            Wait.time(function () 
+                printToColor("[" .. ENGINE.phase .."] " .. warning, player.color, {1, 1, 1})
+            end, 2)
+        end
     end
 end
 -- ============================================================

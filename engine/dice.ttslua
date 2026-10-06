@@ -503,10 +503,10 @@ function engine_diceRoll_start(player)
     local slot = main_SlotByColor(player.color)
     if not slot then warning("Impossibile usare questo pulsante, scegliere prima un colore", "Yellow") return end
 
-    if IEF_MORALE_ROLL_PENDING and IEF_MORALE_ROLL_PENDING[slot] then
+    if IEF_MORALE_ROLL_PENDING and IEF_MORALE_ROLL_PENDING[slot] and #IEF_MORALE_ROLL_PENDING[slot] > 0 then
         main_doPendingMoraleRoll(player, slot)
-        return
-    end
+    return
+end
   
     if ENGINE.phase == "INITIATIVE_ROLL" then
         

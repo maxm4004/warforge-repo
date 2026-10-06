@@ -167,15 +167,3 @@ RENDERERS["chargeStopfire"] = function(phase)
     UI.setAttribute("panelDices",   "active", "false")
     UI.setAttribute("panelBtnUp", "offsetXY", "0 -223")
 end
--- ============================================================
--- RENDERER: 2BtnClickMeleeList
--- ============================================================
-RENDERERS["2BtnClickMeleeList"] = function(phase)
-
-    print("2BtnClickMeleeList")
-    
-    UI.setAttribute("panelBtnUp",   "active", "true")
-    UI.setAttribute("panelBtnDown", "active", "false")
-    UI.setAttribute("panelDices",   "active", "false")
-    UI.setAttribute("panelBtnUp", "offsetXY", "0 -223")
-end

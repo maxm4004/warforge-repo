@@ -241,6 +241,7 @@ function main_restart()
     IEF_MORALE_END_QUEUE = {}
     IEF_MELEE_MARKED = {}
     IEF_MARKED_LOSSES = {}
+    IEF_MORALE_ACTIVE_ROW = {}
     
     UI.setAttribute("iconWinnerArmy1", "active", "false")
     UI.setAttribute("iconWinnerArmy2", "active", "false")
@@ -915,6 +916,9 @@ end
 -- FUNZIONE: ief_data_reset()
 -- ============================================================
 function main_getMoraleModifier(chiave)
+
+   print("main_getMoraleModifier")
+
     local mods = IEF_DATA.morale and IEF_DATA.morale.morale_modifiers
     if not mods then
         print("[IEF_DATA] morale_modifiers non caricato"); return nil
@@ -2030,6 +2034,9 @@ end
 -- Unità assente da IEF_UNIT_COHESION = SALDA.
 -- ============================================================
 function main_getCohesion(unitKey)
+
+    print("main_getCohesion")
+
     local c = unitKey and IEF_UNIT_COHESION[unitKey]
     return (c and c.level) or COHESION.SAL
 end

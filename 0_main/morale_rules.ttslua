@@ -564,13 +564,9 @@ function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback
         key = unitKey, situazione = situazione, mod = mod or 0,
         motivo = motivo, callback = callback, inCorso = false,
     }
-
-    local otherSlot = (slot == 1) and 2 or 1
-
-    local player = Player[ARMY[otherSlot].color]
+    local player = Player[ARMY[slot].color]
     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
     warningToColor(string.format("%s: test di morale (%s) - tira i dadi", main_decodeExtendedUnitLabel(unitKey), motivo or situazione), player, "Yellow", 8)
-    
 end
 
 -- ============================================================
@@ -625,7 +621,7 @@ function main_getMoraleQueuePanelXml(slot)
     end
 
     return string.format(
-        '<Panel id="morale_queue_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
+        '<Panel id="morale_queue_list_army%d" rectAlignment="MiddleRight" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="-20 0" visibility="%s" active="%s">' ..
         '<Text id="morale_queue_list_title_army%d" text="TEST DI MORALE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
         '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..
@@ -633,4 +629,58 @@ function main_getMoraleQueuePanelXml(slot)
         '</Panel>',
         slot, colore, attivo, slot, ARMY[slot].name, rows
     )
+end
+
+-- ============================================================
+-- FUNZIONE: main_doPendingMoraleRoll(player, slot)
+-- Dispatch da engine_diceRoll_start. Risolve la riga attivata
+-- dal click (IEF_MORALE_ACTIVE_ROW[slot]) o, in assenza, la
+-- prima in coda.
+-- ============================================================
+function main_doPendingMoraleRoll(player, slot)
+    local coda = IEF_MORALE_ROLL_PENDING[slot]
+    if not coda or #coda == 0 then return false end
+    if coda.inCorso then return true end
+
+    local idx = IEF_MORALE_ACTIVE_ROW[slot]
+    if not idx or not coda[idx] then idx = 1 end
+    local p = coda[idx]
+
+    coda.inCorso = true
+
+    main_testMorale(p.key, player, p.situazione, p.mod, function(esito, somma, soglia, effetto)
+        coda.inCorso = false
+        if esito == nil then return end
+
+        table.remove(coda, idx)
+        IEF_MORALE_ACTIVE_ROW[slot] = nil
+        callHandler("buildUI")
+
+        if p.callback then p.callback(esito, somma, soglia, effetto) end
+
+        if #coda > 0 then
+            engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+        else
+            engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+        end
+    end)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleRowClick(player, value, id)
+-- Click su una riga del pannello morale: attiva quella riga
+-- come prossima da risolvere col Roll fisico, zooma sui dadi.
+-- ============================================================
+function main_moraleRowClick(player, value, id)
+    local slotStr, idxStr = id:match("^morale_queue_row_btn_(%d)_(%d)$")
+    if not slotStr then return end
+    local slot = tonumber(slotStr)
+    local idx  = tonumber(idxStr)
+
+    local coda = IEF_MORALE_ROLL_PENDING[slot]
+    if not coda or not coda[idx] then return end
+
+    IEF_MORALE_ACTIVE_ROW[slot] = idx
+    engine_diceCameraZoom(player, slot)
 end

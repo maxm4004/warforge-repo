@@ -51,6 +51,7 @@ function main_onSave()
     ief_melee_marked    = IEF_MELEE_MARKED,
     ief_recovery_done   = IEF_RECOVERY_DONE,
     ief_marked_losses = IEF_MARKED_LOSSES,
+    ief_morale_active_row = IEF_MORALE_ACTIVE_ROW,
 }    
     return JSON.encode(saveData)
 end
@@ -147,6 +148,10 @@ function main_restoreState(save_state)
     if data.ief_marked_losses then
         IEF_MARKED_LOSSES = data.ief_marked_losses
     end
+    if data.ief_morale_active_row then
+        IEF_MORALE_ACTIVE_ROW = data.ief_morale_active_row
+    end
+    
     Wait.time(function()
         callHandler("deployment_scanTable")
         callHandler("aggiornaSchedeUnita")
