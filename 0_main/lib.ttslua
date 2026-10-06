@@ -2166,7 +2166,7 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.CHARGE_STOPFIRE]  = {tidy, info},
         [PHASE.CHARGE_AUTO]      = {tidy, info},
         [PHASE.MOVE]             = {tidy, info, form, move},
-        [PHASE.SHOOT]            = {tidy, info, form, shoot},
+        [PHASE.SHOOT]            = {tidy, info, shoot},
         [PHASE.MELEE]            = {tidy, info},
         [PHASE.MELEE_RESOLVE]    = {tidy, info},
         [PHASE.RECOVERY]         = {tidy, info, recovery}

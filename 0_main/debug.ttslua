@@ -499,3 +499,50 @@ function debug_moveUnit(distanzaInch)
     print(string.format("[CARICA] %s mosso di %.2f\" verso %s", unitKey, distanzaInch, targetObj.getName()))
     return true
 end
+
+-- ============================================================
+-- FUNZIONE DI TEST: debug_chargeQueue()
+-- Stampa la coda cariche: una riga per elemento.
+-- ============================================================
+function debug_chargeQueue()
+    if #IEF_CHARGE_QUEUE == 0 then
+        print("[DEBUG] Coda cariche vuota")
+        return
+    end
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        print(string.format("#%s  %s [req=%s resp=%s mosso=%s]  vs  %s [req=%s resp=%s mosso=%s]  step=%s esito=%s",
+            tostring(e.id),
+            tostring(e.unitArmy1Key), tostring(e.requestArmy1), tostring(e.responseArmy1), tostring(e.movedArmy1),
+            tostring(e.unitArmy2Key), tostring(e.requestArmy2), tostring(e.responseArmy2), tostring(e.movedArmy2),
+            tostring(e.step), tostring(e.outcome)))
+    end
+end
+-- ============================================================
+-- FUNZIONE DI TEST: debug_chargeReactions()
+-- Stampa le reazioni: per ogni lato caricato (non reciproco)
+-- la risposta registrata o "DA SCEGLIERE".
+-- ============================================================
+function debug_chargeReactions()
+    local n = 0
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if charge_elementoIsReciprocal(e) then
+            print(string.format("#%s  %s <-> %s : carica reciproca, nessuna reazione",
+                tostring(e.id), tostring(e.unitArmy1Key), tostring(e.unitArmy2Key)))
+            n = n + 1
+        else
+            for slot = 1, 2 do
+                local altro = charge_elementoOtherSlot(slot)
+                if charge_elementoRequest(e, altro) and not charge_elementoRequest(e, slot) then
+                    local risposta = charge_elementoResponse(e, slot)
+                    print(string.format("#%s  %s caricata da %s : %s",
+                        tostring(e.id),
+                        tostring(charge_elementoUnitKey(e, slot)),
+                        tostring(charge_elementoUnitKey(e, altro)),
+                        risposta and tostring(risposta) or "DA SCEGLIERE"))
+                    n = n + 1
+                end
+            end
+        end
+    end
+    if n == 0 then print("[DEBUG] Nessuna reazione in coda") end
+end

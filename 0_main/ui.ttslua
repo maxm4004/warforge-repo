@@ -385,7 +385,7 @@ function getRulesetUiXml()
 </HorizontalLayout>
 </Panel>
 
-<Panel id="confirm_panel_norale"
+<Panel id="confirm_panel_morale"
    rectAlignment="LowerCenter"
    width="260" height="50"
    color="rgba(0,0,0,0.00)"
@@ -400,7 +400,7 @@ function getRulesetUiXml()
             color="rgba(0.7,0.15,0.15,1)"
             textColor="White"
             width="80"
-            onClick=""/>
+            onClick="charge_moraleConfirm"/>
 
     <Button id="btnCancelMorale"
             text="Annulla"
@@ -410,7 +410,7 @@ function getRulesetUiXml()
             color="rgba(0.4,0.4,0.4,1)"
             textColor="White"
             width="80"
-            onClick=""/>
+            onClick="charge_moraleCancel"/>
 </HorizontalLayout>
 </Panel>
 
@@ -454,6 +454,17 @@ function getRulesetUiXml()
             width="80"
             active="false"
             onClick="charge_responseStopfire"/>
+
+    <Button id="btnResponseHold"
+            text="Ferma"
+            font="warforge_font"
+            fontSize="11"
+            image="Sprites/Layout/Button"
+            color="rgba(0.7,0.15,0.15,1)"
+            textColor="White"
+            width="80"
+            active="false"
+            onClick="charge_responseHold"/>            
 
     <Button id="btnResponseMorale"
             text="Morale"

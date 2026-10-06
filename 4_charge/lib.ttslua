@@ -689,41 +689,20 @@ function charge_checkTarget(player, unitKey)
         local testRichiesto = charge_chargeTestFor(session.attackerKey, targetKey) and IEF_CHARGE_TEST_PASSED[session.attackerKey] ~= targetKey
 
         if testRichiesto then
-            UI.setAttribute("btnActionCharge", "text", "Test Morale")
-            setTextColor("btnActionCharge")
-        else
-            UI.setAttribute("btnActionCharge", "text", "Dichiara")
-            setTextColor("btnActionCharge")
-            warningToColor(string.format("la %s è ad una distanza di %.2f %s dalla %s", main_decodeExtendedUnitLabel(session.attackerKey), distanzaMinima, MEASURE_UNIT, main_decodeExtendedUnitLabel(session.targetKey)), player, "Yellow", 5)
-            Wait.time(function ()
-                warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5)
-            end, 5)        
+            charge_openMoralePanel(player)
+            return
         end
 
+        UI.setAttribute("btnActionCharge", "text", "Dichiara")
+        setTextColor("btnActionCharge")
+        warningToColor(string.format("la %s è ad una distanza di %.2f %s dalla %s", main_decodeExtendedUnitLabel(session.attackerKey), distanzaMinima, MEASURE_UNIT, main_decodeExtendedUnitLabel(session.targetKey)), player, "Yellow", 5)
+        Wait.time(function ()
+            warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5)
+        end, 5)
+
+        UI.setAttribute("confirm_panel_morale", "active", "false")
         UI.setAttribute("confirm_panel_charge", "visibility", player.color)
         UI.setAttribute("confirm_panel_charge", "active", "true")
-
-    elseif ENGINE.phase == PHASE.CHARGE_AUTO then
-        local myBase = charge_getUnitBases(session.attackerKey)[1]
-        local inRange = main_isInCommandRange(myBase, slot)
-
-        local elemento = charge_findQueueEntry(slot, session.attackerKey)
-        local distanzaMinima = nil
-        if elemento then
-            local otherSlot = charge_elementoOtherSlot(slot)
-            local elemento = charge_findOrCreateElement(slot, session.attackerKey, otherSlot, session.targetKey)
-            charge_elementoSetRequest(elemento, slot, true)
-            charge_elementoSetDeclareData(elemento, slot, session.pivotUsed, session.distInches)
-
-            local myBases = charge_getUnitBases(session.attackerKey)
-            local targetBases = charge_getUnitBases(session.targetKey)
-            local _, closestTargetBase = charge_closestBasePair(myBases, targetBases)
-            if closestTargetBase then
-                local p = closestTargetBase.getPosition()
-                if slot == 1 then elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
-                else elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
-            end
-        end
     end
 end
 
@@ -807,95 +786,119 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_declareConfirm(player, value, id, buttonConfig)
--- Conferma della dichiarazione. Se la tabella del morale prevede
--- un test per il caricante (evento CHARGE_DECLARE, effetto
--- per_caricare), il test si fa QUI: superato -> carica registrata,
--- fallito -> l'unità non carica in questo turno.
+-- "Dichiara" (confirm_panel_charge): registra la carica. Se il
+-- regolamento richiede un test per caricare non ancora superato
+-- contro questo bersaglio, la carica NON si registra e si apre
+-- il pannello del test (confirm_panel_morale).
 -- ============================================================
 function charge_declareConfirm(player, value, id, buttonConfig)
     local slot = main_getArmyByColor(player)
     local unitKey = slot and IEF_CHARGE_ACTIVE_CONFIRM[slot]
     local session = unitKey and IEF_CHARGE_DECLARE_SESSION[unitKey]
 
-    if not session or not session.targetKey or not session.attackerKey then
-        UI.setAttribute("confirm_panel_charge", "active", "false")
-        return
-    end
+    UI.setAttribute("confirm_panel_charge", "active", "false")
 
-    if IEF_MORALE_ROLL_PENDING[slot] then
-        warningToColor("C'è un test di morale in attesa: tira prima i dadi", player, "Yellow", 5)
-        UI.setAttribute("confirm_panel_charge", "active", "false")
+    if not session or not session.targetKey or not session.attackerKey then
         return
     end
 
     if charge_alreadyDeclared(slot, session.attackerKey) or IEF_CHARGE_TEST_FAILED[session.attackerKey] then
         warningToColor("Questa unità ha già dichiarato (o tentato) una carica questo turno", player, "Yellow", 5)
         charge_close(unitKey)
-        UI.setAttribute("confirm_panel_charge", "active", "false")
         return
     end
-
-    UI.setAttribute("confirm_panel_charge", "active", "false")
 
     local attackerKey = session.attackerKey
     local targetKey   = session.targetKey
-    local pivotUsed   = session.pivotUsed
-    local distInches  = session.distInches
 
-    local function registra()
-        local otherSlot = charge_elementoOtherSlot(slot)
-        local elemento = charge_findOrCreateElement(slot, attackerKey, otherSlot, targetKey)
-        charge_elementoSetRequest(elemento, slot, true)
-        charge_elementoSetDeclareData(elemento, slot, pivotUsed, distInches)
-
-        if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
-            local myBases = charge_getUnitBases(attackerKey)
-            local targetBases = charge_getUnitBases(targetKey)
-            local closestMine, closestTheirs = charge_closestBasePair(myBases, targetBases)
-            if closestMine and closestTheirs then
-                if slot == 1 then
-                    elemento.closestBaseArmy1 = closestMine.getGUID()
-                    elemento.closestBaseArmy2 = closestTheirs.getGUID()
-                else
-                    elemento.closestBaseArmy2 = closestMine.getGUID()
-                    elemento.closestBaseArmy1 = closestTheirs.getGUID()
-                end
-            end
-        end
-
-        warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(attackerKey), main_decodeExtendedUnitLabel(targetKey)), player, "Yellow", 5)
-        charge_close(unitKey)
-        callHandler("buildUI")
-        callHandler("updateCenterPanel")
-    end
-
-   local basiObjs = {}
-    for _, o in ipairs(getAllObjects()) do
-        if main_getUnitKey(o) == unitKey then
-            table.insert(basiObjs, o)
-        end
-    end
-    if #basiObjs == 0 then return end
-
-    -- Test di morale per caricare (tabella IEF_MORALE_SITUATIONS):
-    -- serve solo se non è già stato superato contro questo bersaglio
-    local test = charge_chargeTestFor(attackerKey, targetKey)
-
-    if not test or IEF_CHARGE_TEST_PASSED[attackerKey] == targetKey then
-        registra()
+    if charge_chargeTestFor(attackerKey, targetKey) and IEF_CHARGE_TEST_PASSED[attackerKey] ~= targetKey then
+        charge_openMoralePanel(player)
         return
     end
+
+    local otherSlot = charge_elementoOtherSlot(slot)
+    local elemento = charge_findOrCreateElement(slot, attackerKey, otherSlot, targetKey)
+    charge_elementoSetRequest(elemento, slot, true)
+    charge_elementoSetDeclareData(elemento, slot, session.pivotUsed, session.distInches)
+
+    if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
+        local myBases = charge_getUnitBases(attackerKey)
+        local targetBases = charge_getUnitBases(targetKey)
+        local closestMine, closestTheirs = charge_closestBasePair(myBases, targetBases)
+        if closestMine and closestTheirs then
+            if slot == 1 then
+                elemento.closestBaseArmy1 = closestMine.getGUID()
+                elemento.closestBaseArmy2 = closestTheirs.getGUID()
+            else
+                elemento.closestBaseArmy2 = closestMine.getGUID()
+                elemento.closestBaseArmy1 = closestTheirs.getGUID()
+            end
+        end
+    end
+
+    warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(attackerKey), main_decodeExtendedUnitLabel(targetKey)), player, "Yellow", 5)
+    charge_close(unitKey)
+    callHandler("buildUI")
+    callHandler("updateCenterPanel")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_openMoralePanel(player)
+-- Mostra il pannello "Test Morale / Annulla" al giocatore.
+-- ============================================================
+function charge_openMoralePanel(player)
+    UI.setAttribute("confirm_panel_charge", "active", "false")
+    UI.setAttribute("confirm_panel_morale", "visibility", player.color)
+    UI.setAttribute("confirm_panel_morale", "active", "true")
+    Wait.frames(function()
+        UI.setAttribute("btnActionMorale", "textColor", "White")
+        UI.setAttribute("btnCancelMorale", "textColor", "White")
+    end, 1)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_moraleConfirm(player, value, id)
+-- "Test Morale" (confirm_panel_morale): richiede il test per
+-- caricare (camera sui dadi, tiro col Roll del giocatore).
+-- Superato -> charge_checkTarget riapre il pannello "Dichiara";
+-- fallito -> l'unità non carica in questo turno.
+-- ============================================================
+function charge_moraleConfirm(player, value, id)
+    local slot = main_getArmyByColor(player)
+    local unitKey = slot and IEF_CHARGE_ACTIVE_CONFIRM[slot]
+    local session = unitKey and IEF_CHARGE_DECLARE_SESSION[unitKey]
+
+    UI.setAttribute("confirm_panel_morale", "active", "false")
+
+    if not session or not session.targetKey or not session.attackerKey then
+        return
+    end
+
+    if IEF_MORALE_ROLL_PENDING[slot] then
+        warningToColor("C'è un test di morale in attesa: tira prima i dadi", player, "Yellow", 5)
+        return
+    end
+
+    local attackerKey = session.attackerKey
+    local targetKey   = session.targetKey
+
+    local test = charge_chargeTestFor(attackerKey, targetKey)
+    if not test or IEF_CHARGE_TEST_PASSED[attackerKey] == targetKey then
+        charge_checkTarget(player, unitKey)
+        return
+    end
+
+    local basiObjs = charge_getUnitBases(attackerKey)
 
     local mod, dettaglio = main_moraleModifier(attackerKey)
     printToAll(string.format("[MORALE] %s deve superare un test per caricare (%s), modificatori: %s",
         main_decodeExtendedUnitLabel(attackerKey), test.nome, main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
 
     main_requestMoraleRoll(attackerKey, slot, test.def.effetto or "per_caricare", mod, test.nome, function(esito)
-        local base = charge_getUnitBases(attackerKey)[1]
-        if base then
+        if #basiObjs > 0 then
             main_cameraToUnitPanel(player, basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
         end
-        
+
         if esito == MORALE_RESULT.OK then
             IEF_CHARGE_TEST_PASSED[attackerKey] = targetKey
             warningToColor(string.format("La %s supera il test: conferma la carica", main_decodeExtendedUnitLabel(attackerKey)), player, "Yellow", 5)
@@ -908,6 +911,16 @@ function charge_declareConfirm(player, value, id, buttonConfig)
             callHandler("updateCenterPanel")
         end
     end)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_moraleCancel(player, value, id)
+-- "Annulla" del pannello morale: come l'annulla della
+-- dichiarazione (ripristina posizione e bersaglio).
+-- ============================================================
+function charge_moraleCancel(player, value, id)
+    UI.setAttribute("confirm_panel_morale", "active", "false")
+    charge_declareCancel(player, value, id)
 end
 -- ============================================================
 -- FUNZIONE: charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
@@ -1034,14 +1047,16 @@ function charge_getAttackListPanelXml(slot)
         )
     end
 
+    local titolo = (ENGINE.phase == PHASE.CHARGE_AUTO) and "MOVIMENTI DI CHIUSURA CARICA " or "CARICHE "
+
     return string.format(
         '<Panel id="charge_attack_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
-        '<Text id="charge_attack_list_title_army%d" text="CARICHE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
+        '<Text id="charge_attack_list_title_army%d" text="%s %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
         '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
-        slot, colore, attivo, slot, ARMY[slot].name, rows
+        slot, colore, attivo, slot, titolo, ARMY[slot].name, rows
     )
 end
 -- ============================================================
@@ -1215,6 +1230,7 @@ function charge_defenseRowClick(player, value, id)
 
         UI.setAttribute("btnResponseCharge", "active", "false")
         UI.setAttribute("btnResponseEvadeMove", "active", "false")
+        UI.setAttribute("btnResponseMorale", "active", "false")
 
         for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
             local presente = false
@@ -2142,6 +2158,8 @@ end
 -- FUNZIONE: charge_registerMandatory(dati)
 -- Registra in coda una carica obbligatoria dichiarata in
 -- automatico. dati = { slot, unitKey, targetKey, distInches }
+-- Salva le basi più vicine (closestBaseArmy1/2) come la
+-- dichiarazione manuale (charge_declareConfirm).
 -- ============================================================
 function charge_registerMandatory(dati)
     local slot, unitKey, targetKey = dati.slot, dati.unitKey, dati.targetKey
@@ -2150,16 +2168,23 @@ function charge_registerMandatory(dati)
     charge_elementoSetRequest(elemento, slot, true)
     charge_elementoSetDeclareData(elemento, slot, 0, dati.distInches)
 
-    local bases = charge_getUnitBases(unitKey)
-    local targetBases = charge_getUnitBases(targetKey)
-    local _, closestTargetBase = charge_closestBasePair(bases, targetBases)
-    if closestTargetBase then
-        local p = closestTargetBase.getPosition()
-        if slot == 1 then elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
-        else elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
+    if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
+        local myBases = charge_getUnitBases(unitKey)
+        local targetBases = charge_getUnitBases(targetKey)
+        local closestMine, closestTheirs = charge_closestBasePair(myBases, targetBases)
+        if closestMine and closestTheirs then
+            if slot == 1 then
+                elemento.closestBaseArmy1 = closestMine.getGUID()
+                elemento.closestBaseArmy2 = closestTheirs.getGUID()
+            else
+                elemento.closestBaseArmy2 = closestMine.getGUID()
+                elemento.closestBaseArmy1 = closestTheirs.getGUID()
+            end
+        end
     end
 
-    printToAll(string.format("[CARICA] %s è obbligata a caricare %s (dichiarazione automatica)", unitKey, targetKey), {r=1,g=0.7,b=0.2})
+    printToAll(string.format("[CARICA] %s è obbligata a caricare %s (dichiarazione automatica)",
+        main_decodeExtendedUnitLabel(unitKey), main_decodeExtendedUnitLabel(targetKey)), {r=1,g=0.7,b=0.2})
 end
 
 -- ============================================================
@@ -2238,6 +2263,12 @@ function charge_executeChargeMove(player, unitKey)
     local reciproca = charge_elementoIsReciprocal(elemento)
     local otherResponse = charge_elementoResponse(elemento, otherSlot)
 
+        local otherMoved = (otherSlot == 1 and elemento.movedArmy1) or (otherSlot == 2 and elemento.movedArmy2)
+    if otherResponse == REACTION_TYPE.EVA and not otherMoved then
+        warningToColor(string.format("Attendi l'evasione della %s prima di caricare", main_decodeExtendedUnitLabel(charge_elementoUnitKey(elemento, otherSlot))), player, "Yellow", 5)
+        return
+    end
+
     local myBases = charge_getUnitBases(unitKey)
     if #myBases == 0 then return end
 
@@ -2262,7 +2293,7 @@ function charge_executeChargeMove(player, unitKey)
             elemento.step = CHARGE_STEP.CLO
         end
 
-        warningToColor(string.format("[CARICA] %s percorre %.2f\" (bersaglio evaso, distanza dichiarata)", main_decodeExtendedUnitLabel(unitKey), distanzaDichiarata), player.color, "Yellow", 5)
+        warningToColor(string.format("[CARICA] %s percorre %.2f\" (bersaglio evaso, distanza dichiarata)", main_decodeExtendedUnitLabel(unitKey), distanzaDichiarata), player, "Yellow", 5)
         return
     end
 
@@ -2287,8 +2318,8 @@ function charge_executeChargeMove(player, unitKey)
     local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
-    print(string.format("[DEBUG CHARGEMOVE] myBase.rot=%.1f otherBase.rot=%.1f distanzaTotaleInch=%.3f",
-        myBase.getRotation().y, otherBase.getRotation().y, distanzaTotaleInch))
+    -- print(string.format("[DEBUG CHARGEMOVE] myBase.rot=%.1f otherBase.rot=%.1f distanzaTotaleInch=%.3f",
+    --     myBase.getRotation().y, otherBase.getRotation().y, distanzaTotaleInch))
 
     local distanzaDaPercorrere = distanzaTotaleInch
 
@@ -2304,10 +2335,10 @@ function charge_executeChargeMove(player, unitKey)
     local myOriginBase = charge_closestBaseToPoint(myBases, otherBase.getPosition())
     if not myOriginBase then return end
 
-    print(string.format("[DEBUG CHARGEMOVE] myBase(salvata)=%s myOriginBase(ricalcolata)=%s STESSA=%s",
-        myBase.getGUID(), myOriginBase.getGUID(), tostring(myBase.getGUID() == myOriginBase.getGUID())))
-    print(string.format("[DEBUG CHARGEMOVE] distanzaTotaleInch(da myBase fissata)=%.3f distanzaVerificaOra(da myOriginBase)=%.3f",
-        distanzaTotaleInch, main_distanceInches(myOriginBase, otherBase) or -1))
+    -- print(string.format("[DEBUG CHARGEMOVE] myBase(salvata)=%s myOriginBase(ricalcolata)=%s STESSA=%s",
+    --     myBase.getGUID(), myOriginBase.getGUID(), tostring(myBase.getGUID() == myOriginBase.getGUID())))
+    -- print(string.format("[DEBUG CHARGEMOVE] distanzaTotaleInch(da myBase fissata)=%.3f distanzaVerificaOra(da myOriginBase)=%.3f",
+    --     distanzaTotaleInch, main_distanceInches(myOriginBase, otherBase) or -1))
 
     charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
 
@@ -2413,7 +2444,8 @@ function charge_slotStillNeedsAction(elemento, slot)
     end
 
     local chargingSlot = elemento.requestArmy1 and 1 or (elemento.requestArmy2 and 2 or nil)
-    return chargingSlot == slot
+    local myMoved = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
+    return chargingSlot == slot and not myMoved
 end
 -- ============================================================
 -- FUNZIONE: charge_stopfireMoveToRange(elemento, defenderSlot)
