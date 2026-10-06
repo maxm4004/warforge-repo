@@ -8,7 +8,9 @@ function before_shoot(phaseName, phase)
 end
 -- ============================================================
 -- FUNZIONE: after_shoot()
+-- Fine fase: rimozione delle basi perse marcate durante i tiri.
 -- ============================================================
 function after_shoot(phaseName, phase)
     IEF_FIRED = {}
+    main_removeMarkedLosses()
 end

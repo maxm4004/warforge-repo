@@ -650,7 +650,7 @@ function shoot_doRoll(player, slot)
         engine_diceCameraReturn(player, slot, "SHOOT")
         local hits = successi or 0
         if hits > 0 then
-            shoot_applyHits(targetUnit, targetSlotRef, hits, player, targetObjRef)
+            shoot_resolveHits(targetObjRef, targetSlotRef, hits)
         else
             printToAll("[TIRO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
         end
@@ -809,4 +809,38 @@ function shoot_findNearestEnemy(shooter, shooterSlot, rangeUnits)
     end
 
     return nearest, minDist
+end
+-- ============================================================
+-- FUNZIONE: shoot_resolveHits(targetObj, targetSlot, hits)
+-- Perdite del tiro MARCATE (rimosse a fine fase, after_shoot) e
+-- test di morale della tabella (evento LOSS): IMMEDIATO subito,
+-- FINE_FASE in IEF_MORALE_END_QUEUE (dopo tutti i tiri).
+-- ============================================================
+function shoot_resolveHits(targetObj, targetSlot, hits)
+    local unitKey = targetObj and main_getUnitKey(targetObj)
+    if not unitKey then
+        printToAll("[TIRO] Errore: unitKey bersaglio non trovata", {r=1,g=0.3,b=0.3})
+        return
+    end
+
+    local perse = main_markLosses(unitKey, hits)
+    if perse == 0 then return end
+
+    if not main_isAliveAfterMarks(unitKey) then
+        printToAll("[TIRO] " .. main_decodeExtendedUnitLabel(unitKey) .. " distrutta", {r=1,g=0.3,b=0.3})
+        return
+    end
+    if main_getCohesion(unitKey) == COHESION.ROT then return end
+
+    local subito = {}
+    for _, item in ipairs(main_lossTests(unitKey, targetSlot)) do
+        if item.quando == "FINE_FASE" then
+            table.insert(IEF_MORALE_END_QUEUE, item)
+        else
+            table.insert(subito, item)
+        end
+    end
+    if #subito > 0 then
+        main_runMoraleQueue(subito)
+    end
 end

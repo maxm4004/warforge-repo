@@ -9,6 +9,9 @@ function before_charge_declare(phaseName, phase)
     IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_STOPFIRE_CURRENT = nil
+    IEF_CHARGE_TEST_FAILED = {}
+    IEF_CHARGE_PENDING_TESTS = {}
+    IEF_CHARGE_TEST_PASSED = {}
 
     UI.setAttribute("charge_attack_list_army1", "active", "true")
     UI.setAttribute("charge_attack_list_army2", "active", "true")
@@ -23,6 +26,7 @@ function before_charge_declare(phaseName, phase)
 
     callHandler("buildUI")
     callHandler("updateCenterPanel")
+    charge_runPendingChargeTests()
 end
 -- ============================================================
 -- FUNZIONE: after_charge_declare(phaseName, phase)
@@ -46,7 +50,7 @@ function before_charge_react(phaseName, phase)
 
     callHandler("engine_diceClearLastRoll", 1)
     callHandler("engine_diceClearLastRoll", 2)
-    
+    charge_autoResolveResponses()
     callHandler("buildUI")
     callHandler("updateCenterPanel")
 end

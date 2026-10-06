@@ -31,6 +31,10 @@ IEF_UNIT_BUTTON_BASE = IEF_UNIT_BUTTON_BASE or {}
 IEF_UNIT_BASES_LOST = IEF_UNIT_BASES_LOST or {}
 -- Test di morale da fare a fine fase: { {key, slot, motivo, effetto}, ... }
 IEF_MORALE_END_QUEUE = IEF_MORALE_END_QUEUE or {}
+
+IEF_MARKED_LOSSES = IEF_MARKED_LOSSES or {}
+
+IEF_MORALE_ROLL_PENDING = IEF_MORALE_ROLL_PENDING or {}
 -- ============================================================
 -- Posizioni camera per slot — definite PRIMA di IEF_CAMERA_ZONE
 -- ============================================================
@@ -86,7 +90,7 @@ CAMERA_ZONE = {
 -- IEF_CAMERA_ZONE — ora referenzia tabelle già esistenti
 -- ============================================================
 IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
-    ["ArmyRollDices"] = { position = ArmyRollDicesPos, pitch = 30, yaw = ArmyYaw, distance = 12 },
+    ["ArmyRollDices"] = { position = ArmyRollDicesPos, pitch = 30, yaw=  ArmyYaw, distance = 12 },
     ["ArmyCards"]    = { position = ArmyCardsPos,     pitch = 40, yaw = ArmyYaw, distance =20 },
     ["ArmyBlock"]    = { position = ArmyBlockPos,     pitch = 60, yaw = ArmyYaw, distance = 60 },
     ["ArmyHome"]      = { position = ArmyHomePos,      pitch = 40, yaw = ArmyYaw, distance = 80 },

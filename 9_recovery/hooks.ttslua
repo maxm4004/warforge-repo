@@ -5,11 +5,23 @@ function before_recovery(phaseName, phase)
     if TURN.phase ~= phaseName then main_resetTurnForPhase() end
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
+
+    recovery_resetState()
+
+    callHandler("engine_diceClearLastRoll", 1)
+    callHandler("engine_diceClearLastRoll", 2)
+
+    callHandler("buildUI")
+    callHandler("updateCenterPanel")
 end
 -- ============================================================
 -- FUNZIONE: after_recovery(phaseName, phase)
 -- ============================================================
 function after_recovery(phaseName, phase)
+
+    recovery_resetState()
+    UI.setAttribute("recovery_list_army1", "active", "false")
+    UI.setAttribute("recovery_list_army2", "active", "false")
 
     ENGINE.turn = (ENGINE.turn or 1) + 1
 

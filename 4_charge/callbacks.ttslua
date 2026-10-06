@@ -3,6 +3,12 @@
 -- Conferma "Dichiarazioni Completate" per Army1.
 -- ============================================================
 function charge_declare_btn_army1(player, value, id, buttonConfig)
+
+    if IEF_MORALE_ROLL_PENDING[1] or #IEF_CHARGE_PENDING_TESTS > 0 then
+        warningToColor("Ci sono dei test di morale, per poter caricare, ancora da effettuare", player, "Yellow", 5)
+        return false
+    end
+
     local violazioni = charge_checkMandatoryObligations(1)
     if #violazioni > 0 then
         printToColor("[CARICA] Obbligo di carica non rispettato per: " .. table.concat(violazioni, ", "), player.color, {r=1,g=0.3,b=0.3})
@@ -17,6 +23,12 @@ end
 -- FUNZIONE: charge_declare_btn_army2(player, value, id, buttonConfig)
 -- ============================================================
 function charge_declare_btn_army2(player, value, id, buttonConfig)
+
+    if IEF_MORALE_ROLL_PENDING[2] or #IEF_CHARGE_PENDING_TESTS > 0 then
+        warningToColor("Ci sono dei test di morale, per poter caricare, ancora da effettuare", player, "Yellow", 5)
+        return false
+    end
+
     local violazioni = charge_checkMandatoryObligations(2)
     if #violazioni > 0 then
         printToColor("[CARICA] Obbligo di carica non rispettato per: " .. table.concat(violazioni, ", "), player.color, {r=1,g=0.3,b=0.3})

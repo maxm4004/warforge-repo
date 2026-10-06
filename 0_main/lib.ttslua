@@ -240,7 +240,8 @@ function main_restart()
     IEF_UNIT_BASES_LOST = {}
     IEF_MORALE_END_QUEUE = {}
     IEF_MELEE_MARKED = {}
-
+    IEF_MARKED_LOSSES = {}
+    
     UI.setAttribute("iconWinnerArmy1", "active", "false")
     UI.setAttribute("iconWinnerArmy2", "active", "false")
 

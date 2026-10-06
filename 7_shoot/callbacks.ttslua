@@ -2,6 +2,9 @@
 -- FUNZIONE: shoot_btn_army1()
 -- ============================================================
 function shoot_btn_army1(player, value, id)
+    if shoot_startEndOfPhaseTests(player) then
+        return false
+    end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
 end
@@ -9,6 +12,35 @@ end
 -- FUNZIONE: shoot_btn_army2()
 -- ============================================================
 function shoot_btn_army2(player, value, id)
+    if shoot_startEndOfPhaseTests(player) then
+        return false
+    end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_startEndOfPhaseTests(player)
+-- Dopo tutti i tiri: test di morale FINE_FASE in coda (es. amiche
+-- entro 6" da un'unità in rotta). Tiri automatici; al termine il
+-- giocatore riclicca il bottone di fase.
+-- Ritorna true se ha avviato i test.
+-- ============================================================
+function shoot_startEndOfPhaseTests(player)
+    if IEF_SHOOT_END_TESTS_RUNNING then
+        warningToColor("Test di morale di fine fase in corso", player, "Yellow", 5)
+        return true
+    end
+    if #IEF_MORALE_END_QUEUE == 0 then return false end
+
+    local coda = IEF_MORALE_END_QUEUE
+    IEF_MORALE_END_QUEUE = {}
+    IEF_SHOOT_END_TESTS_RUNNING = true
+    warningToColor("Test di morale di fine fase: " .. #coda, player, "Yellow", 5)
+
+    main_runMoraleQueue(coda, function()
+        IEF_SHOOT_END_TESTS_RUNNING = false
+        printToAll("[TIRO] Test di fine fase completati: cliccare di nuovo per chiudere la fase", {r=1,g=0.8,b=0.3})
+    end, true)
     return true
 end

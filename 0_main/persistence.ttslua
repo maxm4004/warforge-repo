@@ -49,8 +49,9 @@ function main_onSave()
     ief_melee_next_id = IEF_MELEE_NEXT_ID,
     ief_unit_bases_lost = IEF_UNIT_BASES_LOST,
     ief_melee_marked    = IEF_MELEE_MARKED,
-}
-
+    ief_recovery_done   = IEF_RECOVERY_DONE,
+    ief_marked_losses = IEF_MARKED_LOSSES,
+}    
     return JSON.encode(saveData)
 end
 
@@ -139,6 +140,13 @@ function main_restoreState(save_state)
         IEF_MELEE_MARKED = data.ief_melee_marked 
     end
 
+    if data.ief_recovery_done then
+        IEF_RECOVERY_DONE = data.ief_recovery_done
+    end    
+
+    if data.ief_marked_losses then
+        IEF_MARKED_LOSSES = data.ief_marked_losses
+    end
     Wait.time(function()
         callHandler("deployment_scanTable")
         callHandler("aggiornaSchedeUnita")

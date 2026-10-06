@@ -502,6 +502,11 @@ function engine_diceRoll_start(player)
 
     local slot = main_SlotByColor(player.color)
     if not slot then warning("Impossibile usare questo pulsante, scegliere prima un colore", "Yellow") return end
+
+    if IEF_MORALE_ROLL_PENDING and IEF_MORALE_ROLL_PENDING[slot] then
+        main_doPendingMoraleRoll(player, slot)
+        return
+    end
   
     if ENGINE.phase == "INITIATIVE_ROLL" then
         
@@ -562,6 +567,11 @@ function engine_diceRoll_start(player)
         end
         return
     end
+
+    if ENGINE.phase == "RECOVERY" then
+        recovery_doRoll(player, slot)
+        return
+    end
     
     engine_diceClearLastRoll(slot)
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
@@ -587,7 +597,8 @@ function engine_diceCameraZoom(player, slot)
                             ENGINE.phase == "INITIATIVE_ROLL" or
                                          ENGINE.phase == "CHARGE_STOPFIRE" or
                                                 ENGINE.phase == "SHOOT" or
-                                                        ENGINE.phase == "MELEE_RESOLVE" then                                    
+                                                        ENGINE.phase == "MELEE_RESOLVE" or
+                                                                ENGINE.phase == "RECOVERY" then
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)              
    end
 end
@@ -644,6 +655,12 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
     end   
 
     if faseOrigine == "MELEE_RESOLVE" then
+                Wait.time(function()
+                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+                end, 2)
+    end
+
+        if faseOrigine == "RECOVERY" then
                 Wait.time(function()
                     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
                 end, 2)

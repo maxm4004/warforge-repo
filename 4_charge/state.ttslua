@@ -132,3 +132,15 @@ MORALE_RESULT = {
     OK = "SUPERATO",
     KO = "FALLITO",
 }
+
+-- Unità che hanno fallito il test per caricare in questo turno:
+-- [unitKey] = true (azzerata in before_charge_declare)
+IEF_CHARGE_TEST_FAILED = IEF_CHARGE_TEST_FAILED or {}
+
+-- Cariche obbligatorie in attesa del test per caricare:
+-- { {slot, unitKey, targetKey, distInches, test}, ... }
+IEF_CHARGE_PENDING_TESTS = IEF_CHARGE_PENDING_TESTS or {}
+
+-- Test per caricare superati in questo turno:
+-- [attackerKey] = targetKey (azzerata in before_charge_declare)
+IEF_CHARGE_TEST_PASSED = IEF_CHARGE_TEST_PASSED or {}

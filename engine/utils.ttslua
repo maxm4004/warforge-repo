@@ -44,13 +44,12 @@ end
 -- ============================================================
 -- FUNZIONE: warningToColor()
 -- ============================================================
+
+messages = nil
 function warningToColor(warning, player, textColor, second)
 
     local color = textColor == "Yellow" and "#FFD833" or textColor
-
-    print("DEBUG: " .. warning)
-
-    
+    messages = warning
 
     if player then
         UI.setAttribute("playerGameMessage", "Color", color)
@@ -65,8 +64,6 @@ function warningToColor(warning, player, textColor, second)
         Wait.time(function () 
             printToColor("[" .. ENGINE.phase .."] " .. warning, player.color, {1, 1, 1})
         end, 2)
-
-        return
     end
 end
 -- ============================================================

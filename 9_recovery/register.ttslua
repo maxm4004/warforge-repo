@@ -1,0 +1,21 @@
+-- ============================================================
+-- WARFORGE IEF — 9_recovery/register.ttslua
+-- ============================================================
+
+-- ============================================================
+-- RENDERER: 2BtnClickRecoveryList
+-- Come 2BtnClick + liste RECUPERO dei due eserciti.
+-- ============================================================
+registerRenderer("2BtnClickRecoveryList", function(phase)
+    UI.setAttribute("panelBtnUp",   "active", "true")
+    UI.setAttribute("panelBtnDown", "active", "false")
+    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
+    UI.setAttribute("panelDices",   "active", "false")
+    for slot = 1, 2 do
+        local attivo = (#(IEF_RECOVERY_ROWS[slot] or {}) > 0) and "true" or "false"
+        UI.setAttribute("recovery_list_army" .. slot, "active", attivo)
+        UI.setAttribute("melee_list_army" .. slot, "active", "false")
+        UI.setAttribute("charge_attack_list_army" .. slot,  "active", "false")
+        UI.setAttribute("charge_defense_list_army" .. slot, "active", "false")
+    end
+end)

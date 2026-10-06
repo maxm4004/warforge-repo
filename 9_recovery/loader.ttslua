@@ -1,6 +1,6 @@
 -- ============================================================
 -- WARFORGE IEF — Recovery
--- v1.0.0
+-- v1.1.0
 -- ============================================================
 
 
@@ -9,4 +9,4 @@ require("rulesets.imperifeudi.9_recovery.hooks")
 require("rulesets.imperifeudi.9_recovery.lib")
 require("rulesets.imperifeudi.9_recovery.state")
 require("rulesets.imperifeudi.9_recovery.phase")
-
+require("rulesets.imperifeudi.9_recovery.register")

@@ -189,6 +189,8 @@ function getRulesetUiXml()
     local chargeDefense2 = charge_getDefenseListPanelXml(2)
     local meleeList1 = melee_getListPanelXml(1)
     local meleeList2 = melee_getListPanelXml(2)
+    local recoveryList1 = recovery_getListPanelXml(1)
+    local recoveryList2 = recovery_getListPanelXml(2)
 
     return 
     [[
@@ -383,6 +385,35 @@ function getRulesetUiXml()
 </HorizontalLayout>
 </Panel>
 
+<Panel id="confirm_panel_norale"
+   rectAlignment="LowerCenter"
+   width="260" height="50"
+   color="rgba(0,0,0,0.00)"
+   offsetXY="0 100"
+   active="false">
+   <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -100 0">
+    <Button id="btnActionMorale"
+            text="Test Morale"
+            font="warforge_font"
+            fontSize="11"
+            image="Sprites/Layout/Button"
+            color="rgba(0.7,0.15,0.15,1)"
+            textColor="White"
+            width="80"
+            onClick=""/>
+
+    <Button id="btnCancelMorale"
+            text="Annulla"
+            font="warforge_font"
+            fontSize="11"
+            image="Sprites/Layout/Button"
+            color="rgba(0.4,0.4,0.4,1)"
+            textColor="White"
+            width="80"
+            onClick=""/>
+</HorizontalLayout>
+</Panel>
+
 <Panel id="charge_response_panel"
    rectAlignment="LowerCenter"
    width="260" height="50"
@@ -469,5 +500,5 @@ function getRulesetUiXml()
             
 </HorizontalLayout>
 </Panel>
-    ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2
+    ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2 .. recoveryList1 .. recoveryList2
 end

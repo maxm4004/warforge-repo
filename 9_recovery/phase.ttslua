@@ -7,7 +7,7 @@ function recovery_phase()
             before = "before_recovery",
             after  = "after_recovery",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
-            render = "2BtnClick",
+            render = "2BtnClickRecoveryList",
             enforceOwnership = true,
             inputMode = "INITIATIVE",
             buttons = {

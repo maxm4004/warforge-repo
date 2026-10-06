@@ -631,6 +631,12 @@ function charge_checkTarget(player, unitKey)
     local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if not session then return end
 
+    local function setTextColor(id)
+        Wait.frames(function()
+            UI.setAttribute(id, "textColor", "White")
+        end, 1)
+    end
+
     if ENGINE.phase == PHASE.CHARGE_DECLARE then
 
         local targetKey, a, distInches, newHost, startLeft, startRight, endLeft, endRight = charge_findLineTarget(session.attackerKey, slot)
@@ -680,12 +686,23 @@ function charge_checkTarget(player, unitKey)
 
         IEF_CHARGE_ACTIVE_CONFIRM[slot] = unitKey
 
+        local testRichiesto = charge_chargeTestFor(session.attackerKey, targetKey) and IEF_CHARGE_TEST_PASSED[session.attackerKey] ~= targetKey
+
+        if testRichiesto then
+            UI.setAttribute("btnActionCharge", "text", "Test Morale")
+            setTextColor("btnActionCharge")
+        else
+            UI.setAttribute("btnActionCharge", "text", "Dichiara")
+            setTextColor("btnActionCharge")
+            warningToColor(string.format("la %s è ad una distanza di %.2f %s dalla %s", main_decodeExtendedUnitLabel(session.attackerKey), distanzaMinima, MEASURE_UNIT, main_decodeExtendedUnitLabel(session.targetKey)), player, "Yellow", 5)
+            Wait.time(function ()
+                warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5)
+            end, 5)        
+        end
+
         UI.setAttribute("confirm_panel_charge", "visibility", player.color)
         UI.setAttribute("confirm_panel_charge", "active", "true")
-        warningToColor(string.format("la %s è ad una distanza di %.2f %s dalla %s", main_decodeExtendedUnitLabel(session.attackerKey), distanzaMinima, MEASURE_UNIT, main_decodeExtendedUnitLabel(session.targetKey)), player, "Yellow", 5)
-       Wait.time(function ()
-                warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5)
-       end, 5)
+
     elseif ENGINE.phase == PHASE.CHARGE_AUTO then
         local myBase = charge_getUnitBases(session.attackerKey)[1]
         local inRange = main_isInCommandRange(myBase, slot)
@@ -790,6 +807,10 @@ end
 
 -- ============================================================
 -- FUNZIONE: charge_declareConfirm(player, value, id, buttonConfig)
+-- Conferma della dichiarazione. Se la tabella del morale prevede
+-- un test per il caricante (evento CHARGE_DECLARE, effetto
+-- per_caricare), il test si fa QUI: superato -> carica registrata,
+-- fallito -> l'unità non carica in questo turno.
 -- ============================================================
 function charge_declareConfirm(player, value, id, buttonConfig)
     local slot = main_getArmyByColor(player)
@@ -801,38 +822,92 @@ function charge_declareConfirm(player, value, id, buttonConfig)
         return
     end
 
-    if charge_alreadyDeclared(slot, session.attackerKey) then
-        warningToColor("Questa unità ha già dichiarato una carica questo turno", player, "Yellow", 5)
+    if IEF_MORALE_ROLL_PENDING[slot] then
+        warningToColor("C'è un test di morale in attesa: tira prima i dadi", player, "Yellow", 5)
+        UI.setAttribute("confirm_panel_charge", "active", "false")
+        return
+    end
+
+    if charge_alreadyDeclared(slot, session.attackerKey) or IEF_CHARGE_TEST_FAILED[session.attackerKey] then
+        warningToColor("Questa unità ha già dichiarato (o tentato) una carica questo turno", player, "Yellow", 5)
         charge_close(unitKey)
         UI.setAttribute("confirm_panel_charge", "active", "false")
         return
     end
 
-    local otherSlot = charge_elementoOtherSlot(slot)
-    local elemento = charge_findOrCreateElement(slot, session.attackerKey, otherSlot, session.targetKey)
-    charge_elementoSetRequest(elemento, slot, true)
-    charge_elementoSetDeclareData(elemento, slot, session.pivotUsed, session.distInches)
+    UI.setAttribute("confirm_panel_charge", "active", "false")
 
-    if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
-        local myBases = charge_getUnitBases(session.attackerKey)
-        local targetBases = charge_getUnitBases(session.targetKey)
-        local closestMine, closestTheirs = charge_closestBasePair(myBases, targetBases)
-        if closestMine and closestTheirs then
-            if slot == 1 then
-                elemento.closestBaseArmy1 = closestMine.getGUID()
-                elemento.closestBaseArmy2 = closestTheirs.getGUID()
-            else
-                elemento.closestBaseArmy2 = closestMine.getGUID()
-                elemento.closestBaseArmy1 = closestTheirs.getGUID()
+    local attackerKey = session.attackerKey
+    local targetKey   = session.targetKey
+    local pivotUsed   = session.pivotUsed
+    local distInches  = session.distInches
+
+    local function registra()
+        local otherSlot = charge_elementoOtherSlot(slot)
+        local elemento = charge_findOrCreateElement(slot, attackerKey, otherSlot, targetKey)
+        charge_elementoSetRequest(elemento, slot, true)
+        charge_elementoSetDeclareData(elemento, slot, pivotUsed, distInches)
+
+        if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
+            local myBases = charge_getUnitBases(attackerKey)
+            local targetBases = charge_getUnitBases(targetKey)
+            local closestMine, closestTheirs = charge_closestBasePair(myBases, targetBases)
+            if closestMine and closestTheirs then
+                if slot == 1 then
+                    elemento.closestBaseArmy1 = closestMine.getGUID()
+                    elemento.closestBaseArmy2 = closestTheirs.getGUID()
+                else
+                    elemento.closestBaseArmy2 = closestMine.getGUID()
+                    elemento.closestBaseArmy1 = closestTheirs.getGUID()
+                end
             end
         end
+
+        warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(attackerKey), main_decodeExtendedUnitLabel(targetKey)), player, "Yellow", 5)
+        charge_close(unitKey)
+        callHandler("buildUI")
+        callHandler("updateCenterPanel")
     end
 
-    warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(session.attackerKey), main_decodeExtendedUnitLabel(session.targetKey)), player, "Yellow", 5)
-    UI.setAttribute("confirm_panel_charge", "active", "false")
-    charge_close(unitKey)
-    callHandler("buildUI")
-    callHandler("updateCenterPanel")
+   local basiObjs = {}
+    for _, o in ipairs(getAllObjects()) do
+        if main_getUnitKey(o) == unitKey then
+            table.insert(basiObjs, o)
+        end
+    end
+    if #basiObjs == 0 then return end
+
+    -- Test di morale per caricare (tabella IEF_MORALE_SITUATIONS):
+    -- serve solo se non è già stato superato contro questo bersaglio
+    local test = charge_chargeTestFor(attackerKey, targetKey)
+
+    if not test or IEF_CHARGE_TEST_PASSED[attackerKey] == targetKey then
+        registra()
+        return
+    end
+
+    local mod, dettaglio = main_moraleModifier(attackerKey)
+    printToAll(string.format("[MORALE] %s deve superare un test per caricare (%s), modificatori: %s",
+        main_decodeExtendedUnitLabel(attackerKey), test.nome, main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
+
+    main_requestMoraleRoll(attackerKey, slot, test.def.effetto or "per_caricare", mod, test.nome, function(esito)
+        local base = charge_getUnitBases(attackerKey)[1]
+        if base then
+            main_cameraToUnitPanel(player, basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
+        end
+        
+        if esito == MORALE_RESULT.OK then
+            IEF_CHARGE_TEST_PASSED[attackerKey] = targetKey
+            warningToColor(string.format("La %s supera il test: conferma la carica", main_decodeExtendedUnitLabel(attackerKey)), player, "Yellow", 5)
+            charge_checkTarget(player, unitKey)
+        else
+            IEF_CHARGE_TEST_FAILED[attackerKey] = true
+            warningToColor(string.format("La %s non supera il test: non carica", main_decodeExtendedUnitLabel(attackerKey)), player, "Yellow", 5)
+            charge_close(unitKey)
+            callHandler("buildUI")
+            callHandler("updateCenterPanel")
+        end
+    end)
 end
 -- ============================================================
 -- FUNZIONE: charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
@@ -844,7 +919,7 @@ end
 --   - CP senza IMPETO > contro-carica o resta ferma (scelta)
 --   - CL > contro-carica / evasione / resta ferma (scelta)
 --   - FL caricata da non-FL/EL > evasione obbligatoria
---   - FL caricata da FL/EL > stesse opzioni di CL (scelta)
+--   - FL caricata da FL/EL > evasione o resta ferma (scelta)
 --   - FP/FM con arma da tiro > Tiro d'Arresto o resta ferma
 --   - chiunque altro > nessuna risposta
 --
@@ -866,7 +941,7 @@ function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
         return nil, { REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.FER }
     elseif myTipo == "FL" then
         if attackerTipo == "FL" or attackerTipo == "EL" then
-            return nil, { REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.FER }
+            return nil, { REACTION_TYPE.EVA, REACTION_TYPE.FER }
         end
         return REACTION_TYPE.EVA, {}
     elseif (myTipo == "FP" or myTipo == "FM") and charge_hasArmaDaTiro(myArmi) then
@@ -978,8 +1053,8 @@ function charge_getDefenseListPanelXml(slot)
     local righe = {}
 
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if charge_elementoRequest(e, otherSlot) and not charge_elementoIsReciprocal(e) then
-            table.insert(righe, e)
+        if charge_elementoRequest(e, otherSlot) and not charge_elementoIsReciprocal(e) and charge_elementoResponse(e, slot) == nil then
+                table.insert(righe, e)
         end
     end
 
@@ -1046,8 +1121,8 @@ function charge_attackRowClick(player, value, id)
     end
 
     if ENGINE.phase ~= PHASE.CHARGE_AUTO then return end
-
-    local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
+    
+    local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2) or elemento.step == CHARGE_STEP.CLO
     if giaMossoIoStesso then
         warningToColor(string.format("%s è in carica contro %s", main_decodeExtendedUnitLabel(myKey), main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 5)
         return
@@ -1286,7 +1361,7 @@ function charge_responseCounter(player, value, id)
     if not obbligatoria then
         local myBase = charge_getUnitBases(myKey)[1]
         if not main_isInCommandRange(myBase, slot) then
-            warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale,\n non è possibile contro caricare", main_decodeExtendedUnitLabel(myKey)), player.color, "Yellow", 5)
+            warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale,\n non è possibile contro caricare", main_decodeExtendedUnitLabel(myKey)), player, "Yellow", 5)
             return
         end
     end
@@ -1995,13 +2070,34 @@ function charge_checkMandatoryObligations(slot)
     return violazioni
 end
 -- ============================================================
+-- FUNZIONE: charge_chargeTestFor(attackerKey, targetKey)
+-- Situazione della tabella del morale che obbliga il caricante a
+-- un test prima di caricare (evento CHARGE_DECLARE), o nil.
+-- ============================================================
+function charge_chargeTestFor(attackerKey, targetKey)
+    local myMeta     = charge_getUnitMeta(charge_getUnitBases(attackerKey)[1])
+    local targetMeta = charge_getUnitMeta(charge_getUnitBases(targetKey)[1])
+    local situazioni = main_moraleSituationsFor("CHARGE_DECLARE", {
+        tipo           = myMeta and myMeta.unitType,
+        tipoAvversario = targetMeta and targetMeta.unitType,
+        lato           = "FRONTE",   -- TODO: lato reale quando 4_charge calcola il fianco
+        conArmiDaTiro  = charge_hasArmaDaTiro(myMeta and myMeta.armi or {}),
+    })
+    for _, s in ipairs(situazioni) do
+        if s.def.testa == "CARICANTE" then return s end
+    end
+    return nil
+end
+
+-- ============================================================
 -- FUNZIONE: charge_autoDeclareMandatory(slot)
 -- Scorre tutte le unità di ARMY{slot}: se rientra in un obbligo
 -- di carica (charge_isMandatoryCharge) e ha un bersaglio legale
--- raggiungibile (charge_findLineTarget, a valle dei controlli di
--- fattibilità già dentro quella funzione), la dichiara
--- automaticamente creando l'elemento in coda — nessun perno
--- (pivotInches=0, solo bersagli già sulla linea dritta).
+-- raggiungibile (charge_findLineTarget), la dichiara in automatico
+-- (pivotInches=0). Se il regolamento richiede anche un test per
+-- caricare (es. FP/FM con IMPETO armate con armi da tiro), la
+-- carica va in IEF_CHARGE_PENDING_TESTS e viene registrata solo
+-- se il test è superato (charge_runPendingChargeTests).
 -- ============================================================
 function charge_autoDeclareMandatory(slot)
     local unita = main_listUnits()
@@ -2026,25 +2122,74 @@ function charge_autoDeclareMandatory(slot)
                         local targetTipo = targetMeta and targetMeta.unitType
 
                         if charge_isMandatoryCharge(info.tipo, capabilities, targetTipo) then
-                            local otherSlot = charge_elementoOtherSlot(slot)
-                            local elemento = charge_findOrCreateElement(slot, unitKey, otherSlot, targetKey)
-                            charge_elementoSetRequest(elemento, slot, true)
-                            charge_elementoSetDeclareData(elemento, slot, 0, distInches)
-
-                            local _, closestTargetBase = charge_closestBasePair(bases, targetBases)
-                            if closestTargetBase then
-                                local p = closestTargetBase.getPosition()
-                                if slot == 1 then elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
-                                else elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
+                            local dati = { slot = slot, unitKey = unitKey, targetKey = targetKey, distInches = distInches }
+                            local test = charge_chargeTestFor(unitKey, targetKey)
+                            if test then
+                                dati.test = test
+                                table.insert(IEF_CHARGE_PENDING_TESTS, dati)
+                            else
+                                charge_registerMandatory(dati)
                             end
-
-                            printToAll(string.format("[CARICA] %s è obbligata a caricare %s (dichiarazione automatica)", unitKey, targetKey), {r=1,g=0.7,b=0.2})
                         end
                     end
                 end
             end
         end
     end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_registerMandatory(dati)
+-- Registra in coda una carica obbligatoria dichiarata in
+-- automatico. dati = { slot, unitKey, targetKey, distInches }
+-- ============================================================
+function charge_registerMandatory(dati)
+    local slot, unitKey, targetKey = dati.slot, dati.unitKey, dati.targetKey
+    local otherSlot = charge_elementoOtherSlot(slot)
+    local elemento = charge_findOrCreateElement(slot, unitKey, otherSlot, targetKey)
+    charge_elementoSetRequest(elemento, slot, true)
+    charge_elementoSetDeclareData(elemento, slot, 0, dati.distInches)
+
+    local bases = charge_getUnitBases(unitKey)
+    local targetBases = charge_getUnitBases(targetKey)
+    local _, closestTargetBase = charge_closestBasePair(bases, targetBases)
+    if closestTargetBase then
+        local p = closestTargetBase.getPosition()
+        if slot == 1 then elemento.moveTargetArmy1 = Vector(p.x, p.y, p.z)
+        else elemento.moveTargetArmy2 = Vector(p.x, p.y, p.z) end
+    end
+
+    printToAll(string.format("[CARICA] %s è obbligata a caricare %s (dichiarazione automatica)", unitKey, targetKey), {r=1,g=0.7,b=0.2})
+end
+
+-- ============================================================
+-- FUNZIONE: charge_runPendingChargeTests()
+-- Esegue in sequenza i test per caricare delle cariche
+-- obbligatorie in attesa (tiro automatico dal sacchetto del
+-- proprietario). Superato -> carica registrata; fallito -> non
+-- carica in questo turno (IEF_CHARGE_TEST_FAILED).
+-- ============================================================
+function charge_runPendingChargeTests()
+
+    local dati = (#IEF_CHARGE_PENDING_TESTS > 0) and table.remove(IEF_CHARGE_PENDING_TESTS, 1) or nil
+    if not dati then
+        callHandler("buildUI")
+        callHandler("updateCenterPanel")
+        return
+    end
+
+    local mod, dettaglio = main_moraleModifier(dati.unitKey)
+    printToAll(string.format("[MORALE] %s deve superare un test per caricare (%s), modificatori: %s",
+        main_decodeExtendedUnitLabel(dati.unitKey), dati.test.nome, main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
+        main_requestMoraleRoll(dati.unitKey, dati.slot, dati.test.def.effetto or "per_caricare", mod, dati.test.nome, function(esito)   
+        if esito == MORALE_RESULT.OK then
+            charge_registerMandatory(dati)
+        else
+            IEF_CHARGE_TEST_FAILED[dati.unitKey] = true
+            printToAll(string.format("[CARICA] %s non supera il test: non carica", main_decodeExtendedUnitLabel(dati.unitKey)), {r=1,g=0.6,b=0.4})
+        end
+        Wait.time(charge_runPendingChargeTests, 1)
+    end)
 end
 -- ============================================================
 -- FUNZIONE: charge_closestBasePair(basesA, basesB)
@@ -2085,7 +2230,7 @@ function charge_executeChargeMove(player, unitKey)
 
     local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
     if giaMossoIoStesso then
-        warningToColor("L'unità ha già eseguito il movimento di carica", player.color, "Yellow", 5)
+        warningToColor("L'unità ha già eseguito il movimento di carica", player, "Yellow", 5)
         return
     end
 
@@ -2128,7 +2273,7 @@ function charge_executeChargeMove(player, unitKey)
     local myBaseGUID = (slot == 1) and elemento.closestBaseArmy1 or elemento.closestBaseArmy2
     local otherBaseGUID = (slot == 1) and elemento.closestBaseArmy2 or elemento.closestBaseArmy1
     if not myBaseGUID or not otherBaseGUID then
-        warningToColor("[CARICA] Nessuna base di riferimento salvata per " .. main_decodeExtendedUnitLabel(unitKey), player.color, "Yellow", 5)
+        warningToColor("[CARICA] Nessuna base di riferimento salvata per " .. main_decodeExtendedUnitLabel(unitKey), player, "Yellow", 5)
         return
     end
 
@@ -2167,9 +2312,9 @@ function charge_executeChargeMove(player, unitKey)
     charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
 
     elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
-
+    
+    if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
     if isCounterCharge then
-        if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
         if elemento.movedArmy1 and elemento.movedArmy2 then
             elemento.step = CHARGE_STEP.CLO
         end
@@ -2301,4 +2446,66 @@ function charge_stopfireMoveToRange(elemento, defenderSlot)
     local myOriginBase = charge_closestBaseToPoint(chargingBases, otherBase.getPosition())
     if not myOriginBase then return end
     charge_moveTowardPoint(chargingBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
+end
+-- ============================================================
+-- FUNZIONE: charge_autoResolveResponses()
+-- Ingresso in CHARGE_REACT: per ogni carica NON reciproca, il
+-- lato caricato che non ha una vera scelta riceve subito la
+-- risposta:
+--   - risposta obbligatoria (KN / CP+IMPETO contro-carica,
+--     FL evasione) -> applicata;
+--   - nessuna opzione disponibile -> Ferma.
+-- Così in lista restano solo le unità che devono SCEGLIERE e il
+-- gate charge_reactQueueHasPending non resta bloccato.
+-- ============================================================
+function charge_autoResolveResponses()
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if not charge_elementoIsReciprocal(e) and e.step ~= CHARGE_STEP.CLO then
+            for slot = 1, 2 do
+                local otherSlot = charge_elementoOtherSlot(slot)
+                if charge_elementoRequest(e, otherSlot)
+                   and not charge_elementoRequest(e, slot)
+                   and charge_elementoResponse(e, slot) == nil then
+
+                    local myKey    = charge_elementoUnitKey(e, slot)
+                    local otherKey = charge_elementoUnitKey(e, otherSlot)
+                    local myBases    = charge_getUnitBases(myKey)
+                    local otherBases = charge_getUnitBases(otherKey)
+                    local myMeta     = myBases[1] and charge_getUnitMeta(myBases[1])
+                    local otherMeta  = otherBases[1] and charge_getUnitMeta(otherBases[1])
+
+                    local obbligato, opzioni = charge_determineResponses(
+                        myMeta and myMeta.unitType,
+                        myMeta and myMeta.armi or {},
+                        myMeta and myMeta.capabilities or {},
+                        otherMeta and otherMeta.unitType)
+
+                    local risposta = obbligato
+                    if not risposta and #opzioni == 0 then
+                        risposta = REACTION_TYPE.FER
+                    end
+
+                    if risposta then
+                        charge_elementoSetResponse(e, slot, risposta)
+
+                        if risposta == REACTION_TYPE.COC and not e.closestBaseArmy1 and not e.closestBaseArmy2 then
+                            local closestMine, closestTheirs = charge_closestBasePair(myBases, otherBases)
+                            if closestMine and closestTheirs then
+                                if slot == 1 then
+                                    e.closestBaseArmy1 = closestMine.getGUID()
+                                    e.closestBaseArmy2 = closestTheirs.getGUID()
+                                else
+                                    e.closestBaseArmy2 = closestMine.getGUID()
+                                    e.closestBaseArmy1 = closestTheirs.getGUID()
+                                end
+                            end
+                        end
+
+                        printToAll(string.format("[CARICA] %s: %s (automatica)",
+                            main_decodeExtendedUnitLabel(myKey), risposta), {r=0.8,g=0.8,b=0.8})
+                    end
+                end
+            end
+        end
+    end
 end

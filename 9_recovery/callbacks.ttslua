@@ -1,11 +1,21 @@
 -- rulesets/imperifeudi/9_recovery/callbacks.ttslua
 
+-- ============================================================
+-- FUNZIONE: recovery_btn_army1(player, value, id, buttonConfig)
+-- "Recupero Completato": i test sono facoltativi, si blocca
+-- solo se un test è in corso.
+-- ============================================================
 function recovery_btn_army1(player, value, id, buttonConfig)
+    if not recovery_canComplete(player, 1) then return false end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
 end
 
+-- ============================================================
+-- FUNZIONE: recovery_btn_army2(player, value, id, buttonConfig)
+-- ============================================================
 function recovery_btn_army2(player, value, id, buttonConfig)
+    if not recovery_canComplete(player, 2) then return false end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end

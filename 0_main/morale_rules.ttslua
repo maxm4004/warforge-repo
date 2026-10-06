@@ -46,7 +46,7 @@ IEF_MORALE_SITUATIONS = {
         evento = "CHARGE_DECLARE",
         testa = "CARICANTE",
         tipi = { "CL" },
-        tipiAvversario = { "KN", "CP", "FM", "FP" },
+        tipiAvversarioEsclusi = { "CL", "FL", "ART" },
         lato = "FRONTE",
         effetto = "per_caricare",
         quando = "IMMEDIATO",
@@ -55,9 +55,9 @@ IEF_MORALE_SITUATIONS = {
         evento = "CHARGE_DECLARE",
         testa = "CARICANTE",
         tipi = { "FP", "FM" },
-        soloArmiDaTiro = true,
+        conArmiDaTiro  = true,
         armiEscluse = { "GIAVELLOTTI" },
-        tipiAvversarioEsclusi = { "FL" },
+        tipiAvversarioEsclusi = { "FL", "ART" },
         effetto = "per_caricare",
         quando = "IMMEDIATO",
     },
@@ -133,8 +133,8 @@ end
 -- ============================================================
 -- FUNZIONE: main_moraleSituationsFor(evento, ctx)
 -- Situazioni della tabella che si applicano. ctx:
---   tipo, tipoAvversario, terreno, lato, soloArmiDaTiro,
---   tipoOrigine, origineGiaInFuga
+-- conArmiDaTiro : l'unità che testa ha armi da tiro
+-- tipoOrigine, origineGiaInFuga
 -- Ritorna lista { nome, def } ordinata per nome.
 -- ============================================================
 function main_moraleSituationsFor(evento, ctx)
@@ -147,7 +147,7 @@ function main_moraleSituationsFor(evento, ctx)
         if ok and def.tipiAvversarioEsclusi and main_listHas(def.tipiAvversarioEsclusi, ctx.tipoAvversario) then ok = false end
         if ok and def.terreno and def.terreno ~= ctx.terreno then ok = false end
         if ok and def.lato and def.lato ~= ctx.lato then ok = false end
-        if ok and def.soloArmiDaTiro and not ctx.soloArmiDaTiro then ok = false end
+        if ok and def.conArmiDaTiro and not ctx.conArmiDaTiro then ok = false end
         if ok and def.tipiOrigineEsclusi and main_listHas(def.tipiOrigineEsclusi, ctx.tipoOrigine) then ok = false end
         if ok and def.escludiGiaInFuga and ctx.origineGiaInFuga then ok = false end
         if ok then table.insert(out, { nome = nome, def = def }) end
@@ -356,4 +356,239 @@ function main_getUnitTerrain(unitKey)
         end
     end
     return peggiore
+end
+
+-- ============================================================
+-- PERDITE MARCATE (tiro, e in futuro Tiro d'Arresto): le basi
+-- perse si evidenziano e si rimuovono solo a fine fase.
+-- [unitKey] = { guid, ... }
+-- ============================================================
+IEF_MARKED_LOSSES = IEF_MARKED_LOSSES or {}
+
+-- ============================================================
+-- FUNZIONE: main_markedCount(unitKey)
+-- ============================================================
+function main_markedCount(unitKey)
+    return #(IEF_MARKED_LOSSES[unitKey] or {})
+end
+
+-- ============================================================
+-- FUNZIONE: main_markLosses(unitKey, hits)
+-- Marca floor(hits / figures_per_base) basi nell'ordine di
+-- main_lossOrder (rango posteriore, da destra), saltando quelle
+-- già marcate. Colpi in eccesso persi. Ritorna: basi marcate ora
+-- ============================================================
+function main_markLosses(unitKey, hits)
+    if not hits or hits <= 0 then return 0 end
+
+    local ordinate, fpb = main_lossOrder(unitKey)
+    if not fpb or fpb <= 0 then return 0 end
+
+    IEF_MARKED_LOSSES[unitKey] = IEF_MARKED_LOSSES[unitKey] or {}
+    local gia = {}
+    for _, guid in ipairs(IEF_MARKED_LOSSES[unitKey]) do gia[guid] = true end
+
+    local n, marcate = math.floor(hits / fpb), 0
+    for _, obj in ipairs(ordinate) do
+        if marcate >= n then break end
+        local guid = obj.getGUID()
+        if not gia[guid] then
+            table.insert(IEF_MARKED_LOSSES[unitKey], guid)
+            obj.highlightOn({1, 0, 0})
+            marcate = marcate + 1
+        end
+    end
+
+    printToAll(string.format("[PERDITE] %s: %d colpi -> %d basi perse (rimosse a fine fase)",
+        main_decodeExtendedUnitLabel(unitKey), hits, marcate), {r=1,g=0.4,b=0.4})
+    return marcate
+end
+
+-- ============================================================
+-- FUNZIONE: main_removeMarkedLosses()
+-- Fine fase: rimuove tutte le basi marcate (main_removeBases).
+-- ============================================================
+function main_removeMarkedLosses()
+    for unitKey, guids in pairs(IEF_MARKED_LOSSES) do
+        local objs = {}
+        for _, guid in ipairs(guids) do
+            local obj = getObjectFromGUID(guid)
+            if obj then
+                obj.highlightOff()
+                table.insert(objs, obj)
+            end
+        end
+        main_removeBases(unitKey, objs)
+    end
+    IEF_MARKED_LOSSES = {}
+end
+
+-- ============================================================
+-- FUNZIONE: main_isAliveAfterMarks(unitKey)
+-- L'unità ha ancora basi non marcate.
+-- ============================================================
+function main_isAliveAfterMarks(unitKey)
+    return #main_getUnitBases(unitKey) > main_markedCount(unitKey)
+end
+
+-- ============================================================
+-- FUNZIONE: main_routMove(unitKey)
+-- Movimento di rotta immediato, come l'evasione: cambio fronte
+-- di 180° e mossa piena in linea retta.
+-- NON ancora: blocco (distruzione) e disordine delle amiche
+-- attraversate.
+-- ============================================================
+function main_routMove(unitKey)
+    local bases = main_getUnitBases(unitKey)
+    if #bases == 0 then return end
+
+    local meta = main_getUnitMeta(bases[1])
+    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+    local moveInches = (ut and ut.move_inches) or 0
+
+    local oldFwd = bases[1].getTransformForward()
+    local fleeXZ = Vector(-oldFwd.x, 0, -oldFwd.z):normalized()
+    local delta = moveInches * INCH_TO_TTS
+
+    for _, obj in ipairs(bases) do
+        local rot = obj.getRotation()
+        obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
+        local p = obj.getPosition()
+        obj.setPosition(Vector(p.x + fleeXZ.x * delta, p.y, p.z + fleeXZ.z * delta))
+    end
+
+    printToAll(string.format("[ROTTA] %s fugge di %s\"", main_decodeExtendedUnitLabel(unitKey), tostring(moveInches)), {r=1,g=0.3,b=0.3})
+end
+
+-- ============================================================
+-- FUNZIONE: main_onRout(unitKey, slot, pushItem)
+-- Unità appena andata in ROTTA: test delle amiche secondo le
+-- situazioni FRIEND_ROUT (valutate prima della fuga), passati a
+-- pushItem(item, quando); poi movimento di rotta.
+-- ============================================================
+function main_onRout(unitKey, slot, pushItem)
+    local bases = main_getUnitBases(unitKey)
+    local meta = bases[1] and main_getUnitMeta(bases[1])
+
+    for _, s in ipairs(main_moraleSituationsFor("FRIEND_ROUT", { tipoOrigine = meta and meta.unitType, origineGiaInFuga = false })) do
+        if s.def.testa == "AMICHE_IN_RAGGIO" then
+            for altraKey, altreBasi in pairs(main_unitsOfSlot(slot)) do
+                if altraKey ~= unitKey and not main_isGeneralKey(altraKey)
+                   and main_getCohesion(altraKey) ~= COHESION.ROT then
+                    local d = main_unitsDistanceInches(bases, altreBasi)
+                    if d and d <= (s.def.raggio or 0) then
+                        pushItem({ key = altraKey, slot = slot, motivo = s.nome, effetto = s.def.effetto }, s.def.quando)
+                    end
+                end
+            end
+        end
+    end
+
+    main_routMove(unitKey)
+end
+
+-- ============================================================
+-- FUNZIONE: main_lowerAndCheckRout(unitKey, slot, pushItem)
+-- ============================================================
+function main_lowerAndCheckRout(unitKey, slot, pushItem)
+    local prima = main_getCohesion(unitKey)
+    local dopo = main_lowerCohesion(unitKey)
+    if prima ~= COHESION.ROT and dopo == COHESION.ROT then
+        main_onRout(unitKey, slot, pushItem)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_runMoraleQueue(coda, onDone)
+-- Esegue in sequenza (tiro automatico dal sacchetto del
+-- giocatore proprietario) i test di una coda { {key, slot,
+-- motivo, effetto}, ... }. Fallito -> -1 coesione; se va in
+-- ROTTA, i nuovi test IMMEDIATO si accodano qui, quelli FINE_FASE
+-- in IEF_MORALE_END_QUEUE (o qui se finePhase = true).
+-- ============================================================
+function main_runMoraleQueue(coda, onDone, finePhase)
+    local function push(item, quando)
+        if quando == "FINE_FASE" and not finePhase then
+            table.insert(IEF_MORALE_END_QUEUE, item)
+        else
+            table.insert(coda, item)
+        end
+    end
+
+    local function prossimo()
+        local item = table.remove(coda, 1)
+        if not item then
+            if onDone then onDone() end
+            return
+        end
+        if main_getCohesion(item.key) == COHESION.ROT or not main_isAliveAfterMarks(item.key) then
+            prossimo()
+            return
+        end
+
+        local mod, dettaglio = main_moraleModifier(item.key, { basiInSospeso = main_markedCount(item.key) })
+        printToAll(string.format("[MORALE] %s testa (%s), modificatori: %s",
+            main_decodeExtendedUnitLabel(item.key), item.motivo or "", main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
+
+        main_requestMoraleRoll(item.key, item.slot, item.effetto or "altre_situazioni", mod, item.motivo, function(esito)
+        if esito == MORALE_RESULT.KO then
+                main_lowerAndCheckRout(item.key, item.slot, push)
+        end
+        Wait.time(prossimo, 1)
+        end)
+    end
+    prossimo()
+end
+
+-- ============================================================
+-- FUNZIONE: main_lossTests(unitKey, slot)
+-- Test previsti dalla tabella per l'evento LOSS (basi perse).
+-- ============================================================
+function main_lossTests(unitKey, slot)
+    local out = {}
+    local meta = main_getUnitMeta(main_getUnitBases(unitKey)[1])
+    for _, s in ipairs(main_moraleSituationsFor("LOSS", { tipo = meta and meta.unitType })) do
+        if s.def.testa == "VITTIMA" then
+            table.insert(out, { key = unitKey, slot = slot, motivo = s.nome, effetto = s.def.effetto, quando = s.def.quando })
+        end
+    end
+    return out
+end
+-- ============================================================
+-- FUNZIONE: main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
+-- Prepara il test: porta la camera del proprietario sulla zona
+-- dadi e attende il suo Roll. callback(esito, somma, soglia, effetto)
+-- ============================================================
+function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
+    IEF_MORALE_ROLL_PENDING[slot] = {
+        key = unitKey, situazione = situazione, mod = mod or 0,
+        motivo = motivo, callback = callback, inCorso = false,
+    }
+    local player = Player[ARMY[slot].color]
+    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+    warningToColor(string.format("%s: test di morale (%s) - tira i dadi", main_decodeExtendedUnitLabel(unitKey), motivo or situazione), player, "Yellow", 8)
+    
+end
+
+-- ============================================================
+-- FUNZIONE: main_doPendingMoraleRoll(player, slot)
+-- Dispatch da engine_diceRoll_start. Ritorna true se c'era un
+-- test in attesa per lo slot (il Roll è stato consumato).
+-- ============================================================
+function main_doPendingMoraleRoll(player, slot)
+    local p = IEF_MORALE_ROLL_PENDING[slot]
+    if not p then return false end
+    if p.inCorso then return true end
+    p.inCorso = true
+
+    main_testMorale(p.key, player, p.situazione, p.mod, function(esito, somma, soglia, effetto)
+        if esito == nil then
+            p.inCorso = false
+            return
+        end
+        IEF_MORALE_ROLL_PENDING[slot] = nil
+        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+        if p.callback then p.callback(esito, somma, soglia, effetto) end
+    end)
+    return true
 end
