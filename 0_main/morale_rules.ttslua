@@ -559,14 +559,23 @@ end
 -- Prepara il test: porta la camera del proprietario sulla zona
 -- dadi e attende il suo Roll. callback(esito, somma, soglia, effetto)
 -- ============================================================
+-- function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
+--     IEF_MORALE_ROLL_PENDING[slot] = {
+--         key = unitKey, situazione = situazione, mod = mod or 0,
+--         motivo = motivo, callback = callback, inCorso = false,
+--     }
+--     local player = Player[ARMY[slot].color]
+--     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+--     warningToColor(string.format("%s: test di morale (%s) - tira i dadi", main_decodeExtendedUnitLabel(unitKey), motivo or situazione), player, "Yellow", 8)
+-- end
+
 function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
-    IEF_MORALE_ROLL_PENDING[slot] = {
+    IEF_MORALE_ROLL_PENDING[slot] = IEF_MORALE_ROLL_PENDING[slot] or {}
+    table.insert(IEF_MORALE_ROLL_PENDING[slot], {
         key = unitKey, situazione = situazione, mod = mod or 0,
-        motivo = motivo, callback = callback, inCorso = false,
-    }
-    local player = Player[ARMY[slot].color]
-    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
-    warningToColor(string.format("%s: test di morale (%s) - tira i dadi", main_decodeExtendedUnitLabel(unitKey), motivo or situazione), player, "Yellow", 8)
+        motivo = motivo, callback = callback,
+    })
+    -- Wait.frames(function() callHandler("buildUI") end, 1)
 end
 
 -- ============================================================
@@ -684,3 +693,9 @@ function main_moraleRowClick(player, value, id)
     IEF_MORALE_ACTIVE_ROW[slot] = idx
     engine_diceCameraZoom(player, slot)
 end
+-- ============================================================
+-- FUNZIONE: main_refreshMoraleQueuePanel(slot)
+-- Aggiorna SOLO via UI.setAttribute le righe del pannello (già
+-- esistenti nell'XML base) in base a IEF_MORALE_ROLL_PENDING[slot].
+-- Mai UI.setXml/buildUI.
+-- ============================================================
