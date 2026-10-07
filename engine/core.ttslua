@@ -235,26 +235,26 @@ end
 -- ============================================================
 -- FUNZIONE: engine_buttonBarClick()
 -- ============================================================
-function engine_buttonBarClick(player, value, id)
+-- function engine_buttonBarClick(player, value, id)
 
-    engine_buttonBarInit()
+--     engine_buttonBarInit()
 
-    local slotNumber = engine_buttonBarParseSlotFromId(id)
+--     local slotNumber = engine_buttonBarParseSlotFromId(id)
 
-    if slotNumber == nil then
-        printToAll("[BUTTONBAR] id bottone non valido: " .. tostring(id), {r=1,g=0.3,b=0.3})
-        return false
-    end
+--     if slotNumber == nil then
+--         printToAll("[BUTTONBAR] id bottone non valido: " .. tostring(id), {r=1,g=0.3,b=0.3})
+--         return false
+--     end
 
-    local slot = ENGINE_BUTTONBAR.slots[slotNumber]
+--     local slot = ENGINE_BUTTONBAR.slots[slotNumber]
 
-    if slot == nil then return false end
-    if slot.enabled ~= true then return false end
+--     if slot == nil then return false end
+--     if slot.enabled ~= true then return false end
 
-    if slot.callBack == nil or slot.callBack == "" then
-        printToAll("[BUTTONBAR] slot senza callBack: " .. tostring(slotNumber), {r=1,g=0.6,b=0})
-        return false
-    end
-    print("engine_buttonBarClick")
-    return callHandler(slot.callBack, player, value, id, slot)
-end
+--     if slot.callBack == nil or slot.callBack == "" then
+--         printToAll("[BUTTONBAR] slot senza callBack: " .. tostring(slotNumber), {r=1,g=0.6,b=0})
+--         return false
+--     end
+--     print("engine_buttonBarClick")
+--     return callHandler(slot.callBack, player, value, id, slot)
+-- end

@@ -375,7 +375,7 @@ function melee_getListPanelXml(slot)
                     '<Button id="melee_row_%d_%d" text="%s%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" onClick="melee_rowClick"/>' ..
                 '</Cell>' ..
                 '<Cell>' ..
-                    '<Button id="melee_row_btn_%d_%d" text="" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="melee_rowClick"/>' ..
+                    '<Button id="melee_row_btn_%d_%d" text="Attacca" font="warforge_font" fontSize="11" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="melee_rowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
             slot, g.id, melee_groupLabel(g, slot), stato,
@@ -874,7 +874,7 @@ function melee_markLosses(unitKey, hits)
         local guid = obj.getGUID()
         if not giaMarcate[guid] then
             table.insert(IEF_MELEE_MARKED[unitKey], guid)
-            obj.highlightOn({1, 0, 0})
+            obj.setColorTint(LOSS_HIGHLIGHT_COLOR)
             marcate = marcate + 1
         end
     end

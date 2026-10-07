@@ -8,7 +8,7 @@
 -- Engine
 registerHandler("engine_validatePhases",        function()             return engine_validatePhases()                  end)
 registerHandler("engine_resetState",            function()             return engine_resetState()                      end)
-registerHandler("engine_buttonBarLoadJson",     function(j)            return engine_buttonBarLoadJson(j)              end)
+--registerHandler("engine_buttonBarLoadJson",     function(j)            return engine_buttonBarLoadJson(j)              end)
 registerHandler("engine_diceButtons3DShow",     function()             return engine_diceButtons3DShow()               end)
 registerHandler("engine_diceClearLastRoll",     function(slot)         return engine_diceClearLastRoll(slot)           end)
 registerHandler("engine_cameraResetAll",     function()                return engine_cameraResetAll()                  end)
@@ -51,7 +51,7 @@ registerHandler("resetTurnForPhase",            function()             return ma
 registerHandler("dice_check",                   function()             return main_dice_check()                       end)
 
 -- Measure
-registerHandler("engine_measure",               function(p,v,i,b)      return engine_measure(p,v,i,b)                 end)
+registerHandler("engine_measure",               function(p)      return engine_measure(p)                 end)
 
 -- Data layer
 registerHandler("ief_data_ready",               function()             return main_boot()                             end)

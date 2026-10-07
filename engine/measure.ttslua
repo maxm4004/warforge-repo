@@ -58,7 +58,7 @@ end
 -- ============================================================
 -- FUNZIONE: engine_measure(player)
 -- ============================================================
-function engine_measure(player, value, id, buttonConfig)
+function engine_measure(player)
 
     local selected = main_SelectedObjects(player)
 

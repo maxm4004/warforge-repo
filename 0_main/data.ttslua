@@ -30,7 +30,6 @@ IEF_URL_CAPABILITIES  = IEF_JSON_BASE_URL .. "capabilities.json"
 IEF_URL_TERRAIN       = IEF_JSON_BASE_URL .. "terrain.json"
 IEF_URL_ARMY_CODES    = IEF_JSON_BASE_URL .. "army_codes.json"
 IEF_URL_ENEMY_ALIASES = IEF_JSON_BASE_URL .. "enemy_aliases.json"
-IEF_URL_BUTTONBAR     = IEF_JSON_BASE_URL .. "buttonbar.json"
 IEF_URL_FIELD_TERRAIN_VARIANTS = IEF_JSON_BASE_URL .. "field_terrain_variants.json"
 
 -- ============================================================

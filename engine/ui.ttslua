@@ -4,45 +4,45 @@
 
 function getEngineUiXml()
 
-    engine_buttonBarInit()
+    -- engine_buttonBarInit()
 
-    local buttons = ""
-    local positions = {
-        {x=-192, y=275}, 
-        {x=-192, y=222}, 
-        {x=-192, y=169},
-        {x=-192, y=116}, 
-        {x=-192, y=63}, 
-        {x=-192, y=10},
-        {x=-192, y=-43},
-        {x=-192, y=-96},
-        {x=-192, y=-149},
-        {x=-192, y=-202},
-        {x=-192, y=-255},
-    }
-    local widths  = {100,100,100,100,100,100,100,100,100,100,100}
-    local heights = {45,45,45,45,45,45,45,45,45,45,45}
+    -- local buttons = ""
+    -- local positions = {
+    --     {x=-192, y=275}, 
+    --     {x=-192, y=222}, 
+    --     {x=-192, y=169},
+    --     {x=-192, y=116}, 
+    --     {x=-192, y=63}, 
+    --     {x=-192, y=10},
+    --     {x=-192, y=-43},
+    --     {x=-192, y=-96},
+    --     {x=-192, y=-149},
+    --     {x=-192, y=-202},
+    --     {x=-192, y=-255},
+    -- }
+    -- local widths  = {100,100,100,100,100,100,100,100,100,100,100}
+    -- local heights = {45,45,45,45,45,45,45,45,45,45,45}
 
-    for i = 1, ENGINE_BUTTONBAR.slotCount do
-        local slot    = ENGINE_BUTTONBAR.slots[i]
-        local id      = engine_buttonBarSlotId(i)
-        local pos     = positions[i]
-        local w       = widths[i]
-        local h       = heights[i]
-        local label   = slot and slot.label    or ""
-        local colors   = slot and slot.colors    or "rgba(0.15,0.15,0.15,1)"
-        local tcol    = slot and slot.textColor or "Orange"
-        local active  = (slot and slot.visible) and "true" or "false"
-        local onclick = slot and slot.onClick  or "engine_buttonBarClick"
+    -- for i = 1, ENGINE_BUTTONBAR.slotCount do
+    --     local slot    = ENGINE_BUTTONBAR.slots[i]
+    --     local id      = engine_buttonBarSlotId(i)
+    --     local pos     = positions[i]
+    --     local w       = widths[i]
+    --     local h       = heights[i]
+    --     local label   = slot and slot.label    or ""
+    --     local colors   = slot and slot.colors    or "rgba(0.15,0.15,0.15,1)"
+    --     local tcol    = slot and slot.textColor or "Orange"
+    --     local active  = (slot and slot.visible) and "true" or "false"
+    --     local onclick = slot and slot.onClick  or "engine_buttonBarClick"
 
-        buttons = buttons .. string.format(
-            '<Button id="%s" text="%s" font="warforge_font" fontSize="10" fontStyle="Bold" width="%d" height="%d" ' ..
-            'position="%d %g 0" color="%s" textColor="%s" active="%s" ' ..
-            'onClick="%s" image="Sprites/Layout/Button" ' ..
-            'outline="#3A2A1AFF" outlineSize="1"/>\n',
-            id, label:upper(), w, h, pos.x, pos.y, colors, tcol, active, onclick
-        )
-    end
+    --     buttons = buttons .. string.format(
+    --         '<Button id="%s" text="%s" font="warforge_font" fontSize="10" fontStyle="Bold" width="%d" height="%d" ' ..
+    --         'position="%d %g 0" color="%s" textColor="%s" active="%s" ' ..
+    --         'onClick="%s" image="Sprites/Layout/Button" ' ..
+    --         'outline="#3A2A1AFF" outlineSize="1"/>\n',
+    --         id, label:upper(), w, h, pos.x, pos.y, colors, tcol, active, onclick
+    --     )
+    --end
 
     local panels = [[
         <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="true">
@@ -60,9 +60,7 @@ function getEngineUiXml()
             offsetXY="-700 -320">
             <Text id="versione" text="" font="warforge_font" fontSize="13" color="Yellow" alignment="MiddleCenter" outline="#000000" outlineSize="1"/>
         </Panel> 
-        <Panel id="warforgeBar" position="1098 0" rectAlignment="MiddleRight">
-        ]] .. buttons .. [[
-        </Panel>    
+        
         <Panel id="measure_cancel_panel"
         rectAlignment="LowerCenter"
         width="150" height="50"

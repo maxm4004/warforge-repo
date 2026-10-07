@@ -18,8 +18,9 @@ function shoot_buttonBaseClick(obj, player_color, alt_click)
 
     if #basiObjs == 0 then return end
 
-    shoot_range_and_target(Player[ARMY[slot].color], basiObjs)
-
+    local player = Player[ARMY[slot].color]
+    main_cameraToPoint(player, slot, obj.getPosition())
+    shoot_range_and_target(player, basiObjs)
 end
 -- ============================================================
 -- FUNZIONE: shoot_range_and_target(player, selection)

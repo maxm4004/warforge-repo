@@ -987,18 +987,6 @@ function charge_hasArmaDaTiro(armi)
     return false
 end
 -- ============================================================
--- FUNZIONE: charge_cameraToPoint(player, slot, position)
--- Sposta la telecamera del giocatore su un punto qualsiasi del
--- tavolo (punto medio attaccante/bersaglio di una carica). Riusa
--- engine_diceCamera (engine/lib.ttslua), che accetta una
--- posizione libera, non solo le zone camera fisse.
--- ============================================================
-function charge_cameraToPoint(player, slot, position)
-    local yaw = (slot == 1) and 0 or 180
-    engine_diceCamera(player, position, 40, yaw, 15)
-end
-
--- ============================================================
 -- FUNZIONE: charge_getAttackListPanelXml(slot)
 -- ============================================================
 function charge_getAttackListPanelXml(slot)
@@ -1090,7 +1078,7 @@ function charge_getDefenseListPanelXml(slot)
                     '<Button id="charge_defense_row_%d_%s" text="La %s %s dalla %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475"/>' ..
                 '</Cell>' ..
                 '<Cell>' ..
-                    '<Button id="charge_defense_row_btn_%d_%s" tooltip="charge_defense_row_btn_%d_%s" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_defenseRowClick"/>' ..
+                    '<Button id="charge_defense_row_btn_%d_%s" text="Azione" font="warforge_font" fontSize="11" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_defenseRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
             slot, otherKey,
@@ -1132,7 +1120,7 @@ function charge_attackRowClick(player, value, id)
     local targetBases = charge_getUnitBases(otherKey)
     if myBases[1] and targetBases[1] then
         local p1, p2 = myBases[1].getPosition(), targetBases[1].getPosition()
-        charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
+        main_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
     end
 
     if ENGINE.phase ~= PHASE.CHARGE_AUTO then return end
@@ -1186,7 +1174,7 @@ function charge_defenseRowClick(player, value, id)
 
     if myBases[1] and attackerBases[1] then
         local p1, p2 = myBases[1].getPosition(), attackerBases[1].getPosition()
-        charge_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
+        main_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
     end
 
     if ENGINE.phase == PHASE.CHARGE_REACT then

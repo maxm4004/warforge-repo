@@ -800,17 +800,17 @@ end
 -- ============================================================
 -- FUNZIONE: ief_loadButtonBar()
 -- ============================================================
-function main_loadButtonBar(callback)
-    WebRequest.get(IEF_URL_BUTTONBAR, function(request)
-        if request.is_error then
-            printToAll("[IEF] Errore download buttonbar.json", {r=1,g=0.3,b=0.3})
-            if callback then callback(false) end
-            return
-        end
-        local ok = callHandler("engine_buttonBarLoadJson", request.text)
-        if callback then callback(ok) end
-    end)
-end
+-- function main_loadButtonBar(callback)
+--     WebRequest.get(IEF_URL_BUTTONBAR, function(request)
+--         if request.is_error then
+--             printToAll("[IEF] Errore download buttonbar.json", {r=1,g=0.3,b=0.3})
+--             if callback then callback(false) end
+--             return
+--         end
+--         local ok = callHandler("engine_buttonBarLoadJson", request.text)
+--         if callback then callback(ok) end
+--     end)
+-- end
 -- ============================================================
 -- FUNZIONE: ief_loadArmy(nome, callback)
 -- Carica on-demand l'esercito richiesto (cache in IEF_DATA.armies).
@@ -916,9 +916,6 @@ end
 -- FUNZIONE: ief_data_reset()
 -- ============================================================
 function main_getMoraleModifier(chiave)
-
-   print("main_getMoraleModifier")
-
     local mods = IEF_DATA.morale and IEF_DATA.morale.morale_modifiers
     if not mods then
         print("[IEF_DATA] morale_modifiers non caricato"); return nil
@@ -2034,9 +2031,6 @@ end
 -- Unità assente da IEF_UNIT_COHESION = SALDA.
 -- ============================================================
 function main_getCohesion(unitKey)
-
-    print("main_getCohesion")
-
     local c = unitKey and IEF_UNIT_COHESION[unitKey]
     return (c and c.level) or COHESION.SAL
 end
@@ -2452,6 +2446,16 @@ function main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
     local center = Vector(sumX / n, (sumY / n) + 2, sumZ / n)
 
     engine_cameraByPosition(player, center, pitch, yaw, distance)
+end
+-- ============================================================
+-- FUNZIONE: main_cameraToPoint(player, slot, position)
+-- Sposta la telecamera del giocatore su un punto qualsiasi del
+-- tavolo. Riusa engine_diceCamera (engine/lib.ttslua), che
+-- accetta una posizione libera, non solo le zone camera fisse.
+-- ============================================================
+function main_cameraToPoint(player, slot, position)
+    local yaw = (slot == 1) and 0 or 180
+    engine_diceCamera(player, position, 40, yaw, 15)
 end
 -- ============================================================
 -- FUNZIONE: main_findGenerals(slot)

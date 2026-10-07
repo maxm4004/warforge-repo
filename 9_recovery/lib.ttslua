@@ -42,9 +42,9 @@ function recovery_highlightUnit(unitKey, acceso)
     if not unitKey then return end
     for _, obj in ipairs(main_getUnitBases(unitKey)) do
         if acceso then
-            obj.highlightOn(RECOVERY_HIGHLIGHT_COLOR)
+            obj.setColorTint(RECOVERY_HIGHLIGHT_COLOR)
         else
-            obj.highlightOff()
+            obj.setColorTint({0, 0, 0})
         end
     end
 end

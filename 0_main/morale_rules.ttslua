@@ -394,7 +394,7 @@ function main_markLosses(unitKey, hits)
         local guid = obj.getGUID()
         if not gia[guid] then
             table.insert(IEF_MARKED_LOSSES[unitKey], guid)
-            obj.highlightOn({1, 0, 0})
+            obj.setColorTint(LOSS_HIGHLIGHT_COLOR)
             marcate = marcate + 1
         end
     end
@@ -414,7 +414,7 @@ function main_removeMarkedLosses()
         for _, guid in ipairs(guids) do
             local obj = getObjectFromGUID(guid)
             if obj then
-                obj.highlightOff()
+                obj.setColorTint({0, 0, 0})
                 table.insert(objs, obj)
             end
         end
@@ -556,88 +556,17 @@ function main_lossTests(unitKey, slot)
 end
 -- ============================================================
 -- FUNZIONE: main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
--- Prepara il test: porta la camera del proprietario sulla zona
--- dadi e attende il suo Roll. callback(esito, somma, soglia, effetto)
+-- Accoda il test ed aggiorna il pannello (solo UI.setAttribute,
+-- mai buildUI/UI.setXml — causa un freeze se chiamato da dentro
+-- la catena dei dadi).
 -- ============================================================
--- function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
---     IEF_MORALE_ROLL_PENDING[slot] = {
---         key = unitKey, situazione = situazione, mod = mod or 0,
---         motivo = motivo, callback = callback, inCorso = false,
---     }
---     local player = Player[ARMY[slot].color]
---     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
---     warningToColor(string.format("%s: test di morale (%s) - tira i dadi", main_decodeExtendedUnitLabel(unitKey), motivo or situazione), player, "Yellow", 8)
--- end
-
 function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
     IEF_MORALE_ROLL_PENDING[slot] = IEF_MORALE_ROLL_PENDING[slot] or {}
     table.insert(IEF_MORALE_ROLL_PENDING[slot], {
         key = unitKey, situazione = situazione, mod = mod or 0,
         motivo = motivo, callback = callback,
     })
-    -- Wait.frames(function() callHandler("buildUI") end, 1)
-end
-
--- ============================================================
--- FUNZIONE: main_doPendingMoraleRoll(player, slot)
--- Dispatch da engine_diceRoll_start. Ritorna true se c'era un
--- test in attesa per lo slot (il Roll è stato consumato).
--- ============================================================
-function main_doPendingMoraleRoll(player, slot)
-    local p = IEF_MORALE_ROLL_PENDING[slot]
-    if not p then return false end
-    if p.inCorso then return true end
-    p.inCorso = true
-
-    main_testMorale(p.key, player, p.situazione, p.mod, function(esito, somma, soglia, effetto)
-        if esito == nil then
-            p.inCorso = false
-            return
-        end
-        IEF_MORALE_ROLL_PENDING[slot] = nil
-        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
-        if p.callback then p.callback(esito, somma, soglia, effetto) end
-    end)
-    return true
-end
-
--- ============================================================
--- FUNZIONE: main_getMoraleQueuePanelXml(slot)
--- ============================================================
-function main_getMoraleQueuePanelXml(slot)
-
-    local coda = IEF_MORALE_ROLL_PENDING[slot] or {}
-
-    local colore = ARMY[slot] and ARMY[slot].color or "White"
-    local attivo = (#coda > 0) and "true" or "false"
-
-    local rows = ""
-    for i, item in ipairs(coda) do
-        rows = rows .. string.format(
-            '<Row preferredHeight="25">' ..
-                '<Cell>' ..
-                    '<Button id="morale_queue_row_%d_%d" text="%s: test di morale (%s)" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" />' ..
-                '</Cell>' ..
-                '<Cell>' ..
-                    '<Button id="morale_queue_row_btn_%d_%d" text="" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="main_moraleRowClick"/>' ..
-                '</Cell>' ..
-            '</Row>',
-            slot, i,
-            main_decodeExtendedUnitLabel(item.key),
-            item.motivo or item.situazione or "",
-            slot, i
-        )
-    end
-
-    return string.format(
-        '<Panel id="morale_queue_list_army%d" rectAlignment="MiddleRight" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="-20 0" visibility="%s" active="%s">' ..
-        '<Text id="morale_queue_list_title_army%d" text="TEST DI MORALE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
-        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
-        '%s' ..
-        '</TableLayout>' ..
-        '</Panel>',
-        slot, colore, attivo, slot, ARMY[slot].name, rows
-    )
+    main_refreshMoraleQueuePanel(slot)
 end
 
 -- ============================================================
@@ -663,7 +592,7 @@ function main_doPendingMoraleRoll(player, slot)
 
         table.remove(coda, idx)
         IEF_MORALE_ACTIVE_ROW[slot] = nil
-        callHandler("buildUI")
+        main_refreshMoraleQueuePanel(slot)
 
         if p.callback then p.callback(esito, somma, soglia, effetto) end
 
@@ -693,9 +622,70 @@ function main_moraleRowClick(player, value, id)
     IEF_MORALE_ACTIVE_ROW[slot] = idx
     engine_diceCameraZoom(player, slot)
 end
+
+-- ============================================================
+-- Pannello morale: righe fisse pre-costruite nell'XML base
+-- (main_getMoraleQueuePanelXml, generato una volta sola a
+-- buildUI/game start). Aggiungere o togliere un test aggiorna
+-- SOLO testo e visibilità via UI.setAttribute
+-- (main_refreshMoraleQueuePanel) — mai UI.setXml/buildUI.
+-- ============================================================
+MORALE_QUEUE_MAX_ROWS = 6
+
+-- ============================================================
+-- FUNZIONE: main_getMoraleQueuePanelXml(slot)
+-- ============================================================
+function main_getMoraleQueuePanelXml(slot)
+
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
+
+    local rows = ""
+    for i = 1, MORALE_QUEUE_MAX_ROWS do
+        rows = rows .. string.format(
+            '<Row preferredHeight="25" active="false" id="morale_queue_row_container_%d_%d">' ..
+                '<Cell>' ..
+                    '<Button id="morale_queue_row_%d_%d" text="" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" />' ..
+                '</Cell>' ..
+                '<Cell>' ..
+                    '<Button id="morale_queue_row_btn_%d_%d" text="" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="main_moraleRowClick"/>' ..
+                '</Cell>' ..
+            '</Row>',
+            slot, i, slot, i, slot, i
+        )
+    end
+
+    return string.format(
+        '<Panel id="morale_queue_list_army%d" rectAlignment="MiddleRight" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="-20 0" visibility="%s" active="false">' ..
+        '<Text id="morale_queue_list_title_army%d" text="TEST DI MORALE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
+        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
+        '%s' ..
+        '</TableLayout>' ..
+        '</Panel>',
+        slot, colore, slot, ARMY[slot].name, rows
+    )
+end
+
 -- ============================================================
 -- FUNZIONE: main_refreshMoraleQueuePanel(slot)
 -- Aggiorna SOLO via UI.setAttribute le righe del pannello (già
 -- esistenti nell'XML base) in base a IEF_MORALE_ROLL_PENDING[slot].
 -- Mai UI.setXml/buildUI.
 -- ============================================================
+function main_refreshMoraleQueuePanel(slot)
+    local coda = IEF_MORALE_ROLL_PENDING[slot] or {}
+
+    UI.setAttribute("morale_queue_list_army" .. slot, "active", (#coda > 0) and "true" or "false")
+
+    for i = 1, MORALE_QUEUE_MAX_ROWS do
+        local item = coda[i]
+        local containerId = "morale_queue_row_container_" .. slot .. "_" .. i
+        local textId = "morale_queue_row_" .. slot .. "_" .. i
+
+        if item then
+            UI.setAttribute(containerId, "active", "true")
+            UI.setAttribute(textId, "text", main_decodeExtendedUnitLabel(item.key) .. ": test di morale (" .. (item.motivo or item.situazione or "") .. ")")
+        else
+            UI.setAttribute(containerId, "active", "false")
+        end
+    end
+end
