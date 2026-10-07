@@ -1038,7 +1038,7 @@ function charge_getAttackListPanelXml(slot)
     local titolo = (ENGINE.phase == PHASE.CHARGE_AUTO) and "MOVIMENTI DI CHIUSURA CARICA " or "CARICHE "
 
     return string.format(
-        '<Panel id="charge_attack_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
+        '<Panel id="charge_attack_list_army%d" rectAlignment="LowerRight" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
         '<Text id="charge_attack_list_title_army%d" text="%s %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
         '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..
@@ -1091,7 +1091,7 @@ function charge_getDefenseListPanelXml(slot)
     end
 
     return string.format(
-        '<Panel id="charge_defense_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
+        '<Panel id="charge_defense_list_army%d" rectAlignment="LowerRight" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
         '<Text id="charge_defense_list_title_army%d" text="REAZIONI %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
         '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..
@@ -1779,6 +1779,7 @@ function charge_stopfireDoRoll(player, slot)
     end
 
     IEF_DICE_ROLL_TRY[slot] = { dadi = numDadi, soglia = soglia }
+    IEF_FIRED[defenderKey] = true
 
     warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", defenderKey, numDadi, soglia), player, "Yellow", 7)
 

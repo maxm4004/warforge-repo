@@ -384,7 +384,7 @@ function melee_getListPanelXml(slot)
     end
 
     return string.format(
-        '<Panel id="melee_list_army%d" rectAlignment="LowerCenter" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
+        '<Panel id="melee_list_army%d" rectAlignment="LowerRight" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
         '<Text id="melee_list_title_army%d" text="MISCHIE %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
         '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
         '%s' ..

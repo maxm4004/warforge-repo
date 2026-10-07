@@ -5,6 +5,7 @@ function before_charge_declare(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
 
+    IEF_FIRED = {}
     IEF_CHARGE_QUEUE = {}
     IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
