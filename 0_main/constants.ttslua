@@ -63,6 +63,13 @@ COHESION = {
     ROT = "ROTTA",
 }
 
+-- Tinta delle basi per livello di coesione (SALDA = tinta normale)
+COHESION_TINT = {
+    [COHESION.SAL] = {0, 0, 0},
+    [COHESION.DIS] = {1, 0.5, 0},
+    [COHESION.ROT] = {1, 0, 0},
+}
+
     UNIT = {CM = "cm", INCH = "inch"}
 
     MEASURE_UNIT = UNIT.INCH

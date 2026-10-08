@@ -3,6 +3,11 @@
 -- ============================================================
 function shoot_btn_army1(player, value, id)
 
+    if shoot_rollPending(1) then
+        engine_diceCameraZoom(player, 1)
+        return false
+    end
+
     if main_moraleBlocksPhase(player, 1) then return false end
 
     if shoot_startEndOfPhaseTests(player) then
@@ -16,7 +21,12 @@ end
 -- ============================================================
 function shoot_btn_army2(player, value, id)
 
-        if main_moraleBlocksPhase(player, 2) then return false end
+    if shoot_rollPending(2) then
+        engine_diceCameraZoom(player, 2)
+        return false
+    end
+
+    if main_moraleBlocksPhase(player, 2) then return false end
 
     if shoot_startEndOfPhaseTests(player) then
         return false

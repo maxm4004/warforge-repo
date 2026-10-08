@@ -1549,6 +1549,13 @@ function charge_executeEvade(evadingSlot, elemento)
             local p = obj.getPosition()
             obj.setPosition(Vector(p.x + fleeXZ.x*deltaUnits, p.y, p.z + fleeXZ.z*deltaUnits))
         end
+
+        -- Dopo il dietrofront il rango posteriore è cambiato: il
+        -- pulsante va sulla nuova base d'angolo (come in formazione).
+        -- Qualche frame di attesa: rotazione/posizione già applicate.
+        Wait.frames(function()
+            main_riposizionaPulsanteFormazione(evadingKey, charge_getUnitBases(evadingKey))
+        end, 5)
     end
 
     IEF_UNIT_NO_MOVE_NEXT_TURN[evadingKey] = true
@@ -1623,55 +1630,25 @@ end
 -- la sotto-fase, mai una chiusura silenziosa automatica.
 -- ============================================================
 function charge_stopfireRedraw()
-
-    print("charge_stopfireRedraw")
-
     local cur = IEF_STOPFIRE_CURRENT
     if not cur then return end
-    local elemento = cur.elemento
     local defenderSlot = cur.slot
     local attackerSlot = (cur.slot == 1) and 2 or 1
 
-    local function setTextColor(id)
-        Wait.frames(function()
-            UI.setAttribute(id, "textColor", "White")
-        end, 1)
+    local slot, label
+    if cur.subStep == "TIRO" then
+        slot, label = defenderSlot, "Tira i dadi per colpire"
+    elseif cur.subStep == "MORALE" then
+        slot, label = attackerSlot, "Tira i dadi morale"
+    else
+        slot, label = attackerSlot, "Fine Tiro di Arresto"
     end
-
-    if cur.subStep == "ESCI" then
-        UI.setAttribute("BTN_ARMY" .. defenderSlot, "text", "Tira i dadi")
-        UI.setAttribute("BTN_ARMY" .. defenderSlot, "color", "Grey")
-        UI.setAttribute("BTN_ARMY" .. defenderSlot, "textColor", "Black")
-        UI.setAttribute("BTN_ARMY" .. defenderSlot, "interactable", "false") 
-        UI.setAttribute("BTN_ARMY" .. attackerSlot, "text", "Fine Tiro di Arresto")
-        setTextColor("BTN_ARMY"    .. attackerSlot)
-        UI.setAttribute("BTN_ARMY" .. attackerSlot, "interactable", "true")
-        return
-    end
-
-    local labels  = { [1] = "In attesa...", [2] = "In attesa..." }
-    local enabled = { [1] = false, [2] = false }
-
-    labels[defenderSlot]  = "Tira i dadi"
-    enabled[defenderSlot] = (cur.subStep == "TIRO")
-    labels[attackerSlot]  = "Fai Test del Morale"
-    enabled[attackerSlot] = (cur.subStep == "MORALE")
 
     Wait.time(function()
-        for slot = 1, 2 do
-            local btnId = "BTN_ARMY" .. slot
-            UI.setAttribute(btnId, "text", labels[slot])
-
-            if not enabled[slot] then
-                UI.setAttribute(btnId, "color", "Grey")
-            else
-                UI.setAttribute(btnId, "color", slot == 1 and COLOR.ARMY1 or COLOR.ARMY2)
-                setTextColor(btnId)
-            end
-        end
+        if IEF_STOPFIRE_CURRENT ~= cur then return end
+        main_setRollButtons(slot, label)
     end, 0.5)
 end
-
 -- ============================================================
 -- FUNZIONE: charge_hasCapability(capabilities, nome)
 -- Helper generico: vero se "nome" è fra le capacità dell'unità.
@@ -1735,12 +1712,7 @@ function charge_stopfireDoRoll(player, slot)
     local rangeUnits = weapon.range_inches * INCH_TO_TTS
     local basiPronte = shoot_basiPronte(defenderBases, attackerBases, rangeUnits)
 
-    local numDadi = basiPronte
-    if charge_hasCapability(capabilities, "RAFFICA") then
-        local coppie = math.floor(basiPronte / 2)
-        local resto  = basiPronte % 2
-        numDadi = coppie * 3 + (resto > 0 and 2 or 0)
-    end
+    local numDadi = shoot_numDice(defenderKey, basiPronte, charge_hasCapability(capabilities, "RAFFICA"))
 
     if numDadi <= 0 then
         printToColor("[TIRO D'ARRESTO] Nessuna base in gittata con LOS", player.color, {r=0.7,g=0.7,b=0.7})
@@ -1750,32 +1722,7 @@ function charge_stopfireDoRoll(player, slot)
         return
     end
 
-    local soglia = weapon.hit_threshold or DEFAULT_HIT_THRESHOLD
-    local mods = weapon.modifiers or {}
-
-    local attackerMeta = charge_getUnitMeta(attackerBases[1])
-    local attackerArmi = attackerMeta and attackerMeta.armi or {}
-    local haScudo = false
-    for _, a in ipairs(attackerArmi) do
-        if a == "SCUDO" then haScudo = true end
-    end
-    if not haScudo and mods.vs_bersaglio_senza_scudo then
-        soglia = soglia - mods.vs_bersaglio_senza_scudo
-    end
-
-    local attackerTipo = attackerMeta and attackerMeta.unitType
-    local function tipoInLista(tipo, lista)
-        for t in lista:gmatch("[^_]+") do if t == tipo then return true end end
-        return false
-    end
-    for chiave, valore in pairs(mods) do
-        local listaTipi = chiave:match("^vs_(.+)$")
-        if listaTipi and listaTipi ~= "bersaglio_senza_scudo" and listaTipi ~= "unita_in_copertura" then
-            if tipoInLista(attackerTipo, listaTipi) then
-                soglia = soglia - valore
-            end
-        end
-    end
+    local soglia = shoot_hitThreshold(weapon, attackerKey)
 
     IEF_DICE_ROLL_TRY[slot] = { dadi = numDadi, soglia = soglia }
     IEF_FIRED[defenderKey] = true
@@ -2094,6 +2041,34 @@ end
 -- carica va in IEF_CHARGE_PENDING_TESTS e viene registrata solo
 -- se il test è superato (charge_runPendingChargeTests).
 -- ============================================================
+function charge_runPendingChargeTests()
+    local tests = IEF_CHARGE_PENDING_TESTS
+    IEF_CHARGE_PENDING_TESTS = {}
+
+    for _, dati in ipairs(tests) do
+        main_requestMoraleRoll(dati.unitKey, dati.slot, dati.test.def.effetto or "per_caricare", nil, dati.test.nome, function(esito)
+            if esito == MORALE_RESULT.OK then
+                charge_registerMandatory(dati)
+            else
+                IEF_CHARGE_TEST_FAILED[dati.unitKey] = true
+                printToAll(string.format("[CARICA] %s non supera il test: non carica", main_decodeExtendedUnitLabel(dati.unitKey)), {r=1,g=0.6,b=0.4})
+            end
+        end)
+    end
+
+    callHandler("buildUI")
+    callHandler("updateCenterPanel")
+end
+-- ============================================================
+-- FUNZIONE: charge_autoDeclareMandatory(slot)
+-- Scorre tutte le unità di ARMY{slot}: se rientra in un obbligo
+-- di carica (charge_isMandatoryCharge) e ha un bersaglio legale
+-- raggiungibile (charge_findLineTarget), la dichiara in automatico
+-- (pivotInches=0). Se il regolamento richiede anche un test per
+-- caricare (es. FP/FM con IMPETO armate con armi da tiro), la
+-- carica va in IEF_CHARGE_PENDING_TESTS e viene registrata solo
+-- se il test è superato (charge_runPendingChargeTests).
+-- ============================================================
 function charge_autoDeclareMandatory(slot)
     local unita = main_listUnits()
 
@@ -2132,7 +2107,6 @@ function charge_autoDeclareMandatory(slot)
         end
     end
 end
-
 -- ============================================================
 -- FUNZIONE: charge_registerMandatory(dati)
 -- Registra in coda una carica obbligatoria dichiarata in

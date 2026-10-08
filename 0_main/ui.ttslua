@@ -189,8 +189,6 @@ function getRulesetUiXml()
     local chargeDefense2 = charge_getDefenseListPanelXml(2)
     local meleeList1 = melee_getListPanelXml(1)
     local meleeList2 = melee_getListPanelXml(2)
-    local recoveryList1 = recovery_getListPanelXml(1)
-    local recoveryList2 = recovery_getListPanelXml(2)
     local moraleQueue1 = main_getMoraleQueuePanelXml(1)
     local moraleQueue2 = main_getMoraleQueuePanelXml(2)
 
@@ -513,5 +511,5 @@ function getRulesetUiXml()
             
 </HorizontalLayout>
 </Panel>
-    ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2 .. recoveryList1 .. recoveryList2 .. moraleQueue1 .. moraleQueue2
+    ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2 .. moraleQueue1 .. moraleQueue2
 end

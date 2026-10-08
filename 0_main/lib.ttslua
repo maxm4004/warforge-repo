@@ -230,7 +230,6 @@ function main_restart()
     IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_STOPFIRE_CURRENT = nil
-    IEF_UNIT_COHESION = {}
     IEF_MELEE_LIST = {}
     IEF_MELEE_NEXT_ID = 0
     IEF_MELEE_CURRENT = nil
@@ -260,6 +259,13 @@ function main_restart()
             obj.destruct()
         end
     end
+       
+    for key, _ in pairs(IEF_UNIT_COHESION or {}) do
+        for _, obj in ipairs(main_getUnitBases(key)) do
+            obj.setColorTint(COHESION_TINT[COHESION.SAL])
+        end
+    end
+    IEF_UNIT_COHESION = {}
 
     main_initUI()
     main_resetPlayers()
@@ -2001,28 +2007,21 @@ function main_testMorale(unitKey, player, situazione, modificatori, callback)
         return
     end
 
+    engine_diceClearLastRoll(slot)
     IEF_DICE_ROLL_TRY[slot] = { dadi = 2, soglia = nil }
-
-    engine_diceCameraZoom(player, slot)
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         if not risultati[1] or not risultati[2] then return end
-        local faseCorrente = ENGINE.phase
         local somma = risultati[1] + risultati[2] + (modificatori or 0)
+        local esito = (somma >= soglia) and MORALE_RESULT.OK or MORALE_RESULT.KO
+        local effetto = main_getMoraleEffect(esito, situazione)
 
-        Wait.time(function()
-            local esito = (somma >= soglia) and MORALE_RESULT.OK or MORALE_RESULT.KO
-            local effetto = main_getMoraleEffect(esito, situazione)
+        printToColor(string.format("[MORALE] %s: %d+%d%s = %d vs soglia %d -> %s",
+            unitKey, risultati[1], risultati[2],
+            (modificatori and modificatori ~= 0) and string.format(" (%+d)", modificatori) or "",
+            somma, soglia, esito), player.color, {r=0.9,g=0.9,b=0.3})
 
-            printToColor(string.format("[MORALE] %s: %d+%d%s = %d vs soglia %d -> %s",
-                unitKey, risultati[1], risultati[2],
-                (modificatori and modificatori ~= 0) and string.format(" (%+d)", modificatori) or "",
-                somma, soglia, esito), player.color, {r=0.9,g=0.9,b=0.3})
-
-            engine_diceCameraReturn(player, slot, faseCorrente)
-
-            if callback then callback(esito, somma, soglia, effetto) end
-        end, 2)
+        if callback then callback(esito, somma, soglia, effetto) end
     end)
 end
 -- ============================================================
@@ -2059,6 +2058,27 @@ function main_setCohesion(unitKey, level)
     if prima ~= level then
         printToAll(string.format("[COESIONE] %s: %s -> %s",
             main_decodeExtendedUnitLabel(unitKey), prima, level), {r=1,g=0.8,b=0.3})
+    end
+
+        main_applyCohesionTint(unitKey)
+end
+-- ============================================================
+-- FUNZIONE: main_applyCohesionTint(unitKey)
+-- Colora le basi dell'unità secondo la coesione (COHESION_TINT).
+-- Le basi marcate come perse restano rosse.
+-- ============================================================
+function main_applyCohesionTint(unitKey)
+    if not unitKey then return end
+    local tinta = COHESION_TINT[main_getCohesion(unitKey)] or COHESION_TINT[COHESION.SAL]
+
+    local marcate = {}
+    for _, guid in ipairs((IEF_MARKED_LOSSES or {})[unitKey] or {}) do marcate[guid] = true end
+    for _, guid in ipairs((IEF_MELEE_MARKED or {})[unitKey] or {}) do marcate[guid] = true end
+
+    for _, obj in ipairs(main_getUnitBases(unitKey)) do
+        if not marcate[obj.getGUID()] then
+            obj.setColorTint(tinta)
+        end
     end
 end
 
@@ -2808,4 +2828,43 @@ function main_applyLosses(unitKey, hits)
         main_decodeExtendedUnitLabel(unitKey), hits, n, colpiPersi), {r=1,g=0.4,b=0.4})
 
     return n, colpiPersi
+end
+-- ============================================================
+-- FUNZIONE: main_setRollButton(slot, label)
+-- Solo il bottone centrale di ARMY{slot}: colore esercito,
+-- label data, cliccabile. L'altro bottone non viene toccato.
+-- ============================================================
+function main_setRollButton(slot, label)
+    local id = "BTN_ARMY" .. slot
+    UI.setAttribute(id, "text", label)
+    UI.setAttribute(id, "color", slot == 1 and COLOR.ARMY1 or COLOR.ARMY2)
+    UI.setAttribute(id, "interactable", "true")
+    Wait.frames(function()
+        UI.setAttribute(id, "textColor", "White")
+    end, 1)
+end
+-- ============================================================
+-- FUNZIONE: main_setRollButtons(rollerSlot, label)
+-- Bottoni centrali durante un tiro: chi tira ha il colore del
+-- proprio esercito e la label data, l'altro "In attesa
+-- avversario" grigio e non cliccabile.
+-- ============================================================
+function main_setRollButtons(rollerSlot, label)
+    for slot = 1, 2 do
+        local id = "BTN_ARMY" .. slot
+        if slot == rollerSlot then
+            UI.setAttribute(id, "text", label)
+            UI.setAttribute(id, "color", slot == 1 and COLOR.ARMY1 or COLOR.ARMY2)
+            UI.setAttribute(id, "interactable", "true")
+        else
+            UI.setAttribute(id, "text", "In attesa avversario")
+            UI.setAttribute(id, "color", "Grey")
+            UI.setAttribute(id, "interactable", "false")
+        end
+    end
+    Wait.frames(function()
+        for slot = 1, 2 do
+            UI.setAttribute("BTN_ARMY" .. slot, "textColor", (slot == rollerSlot) and "White" or "Black")
+        end
+    end, 1)
 end

@@ -2,8 +2,6 @@
 
 -- ============================================================
 -- FUNZIONE: recovery_btn_army1(player, value, id, buttonConfig)
--- "Recupero Completato": i test sono facoltativi; si blocca solo
--- se ci sono test di recupero scelti e non ancora tirati.
 -- ============================================================
 function recovery_btn_army1(player, value, id, buttonConfig)
     if main_moraleBlocksPhase(player, 1) then return false end

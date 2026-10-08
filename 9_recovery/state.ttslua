@@ -1,15 +1,3 @@
--- ============================================================
--- rulesets/imperifeudi/9_recovery/state.ttslua
--- Stato FASE RECUPERO (Fase 6).
--- Non salvato: azzerato a inizio e fine fase.
--- ============================================================
-
 -- Unità che hanno già tentato il test in questa fase: [unitKey] = true
 IEF_RECOVERY_DONE = IEF_RECOVERY_DONE or {}
 
--- Unità scelte dalla lista con il test nel pannello morale, in
--- attesa del Roll: [unitKey] = slot
-IEF_RECOVERY_CURRENT = IEF_RECOVERY_CURRENT or {}
-
--- Righe della lista generate da buildUI: [slot][idx] = unitKey
-IEF_RECOVERY_ROWS = IEF_RECOVERY_ROWS or { [1] = {}, [2] = {} }

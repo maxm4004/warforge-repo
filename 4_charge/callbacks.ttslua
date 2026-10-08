@@ -5,11 +5,6 @@
 function charge_declare_btn_army1(player, value, id, buttonConfig)
 
     if main_moraleBlocksPhase(player, 1) then return false end
-    if #IEF_CHARGE_PENDING_TESTS > 0 then
-        warningToColor("Ci sono dei test di morale, per poter caricare, ancora da effettuare", player, "Yellow", 5)
-        return false
-    end
-
     local violazioni = charge_checkMandatoryObligations(1)
     if #violazioni > 0 then
         printToColor("[CARICA] Obbligo di carica non rispettato per: " .. table.concat(violazioni, ", "), player.color, {r=1,g=0.3,b=0.3})
@@ -26,11 +21,6 @@ end
 function charge_declare_btn_army2(player, value, id, buttonConfig)
 
     if main_moraleBlocksPhase(player, 2) then return false end
-    if #IEF_CHARGE_PENDING_TESTS > 0 then
-        warningToColor("Ci sono dei test di morale, per poter caricare, ancora da effettuare", player, "Yellow", 5)
-        return false
-    end
-
     local violazioni = charge_checkMandatoryObligations(2)
     if #violazioni > 0 then
         printToColor("[CARICA] Obbligo di carica non rispettato per: " .. table.concat(violazioni, ", "), player.color, {r=1,g=0.3,b=0.3})

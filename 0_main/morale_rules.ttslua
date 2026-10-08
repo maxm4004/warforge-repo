@@ -567,14 +567,8 @@ end
 -- se l'esercito ha ancora test di morale da tirare.
 -- ============================================================
 function main_moraleBlocksPhase(player, slot)
-    local n = main_moraleQueueCount(slot)
-    if n > 0 then
-        warningToColor(string.format("Ci sono ancora %d test di morale da tirare", n), player, "Yellow", 5)
-        return true
-    end
-    return false
+    return main_moraleSelectTest(player, slot, IEF_MORALE_ACTIVE_ROW[slot])
 end
-
 -- ============================================================
 -- FUNZIONE: main_moraleCurrentModifier(unitKey)
 -- Modificatore del test calcolato ADESSO: basi perse marcate e
@@ -661,12 +655,67 @@ function main_doPendingMoraleRoll(player, slot)
 
              main_moraleRefreshUI()
 
-        if #coda > 0 then
-            engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
-        else
-            engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
-        end
+            if #coda == 0 then
+                Wait.time(function()
+                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+                end, 1.5)
+            end
     end)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleTestInfo(p)
+-- Righe informative di un test in coda: unità e coesione, motivo,
+-- modificatori (calcolati ora se il test non li ha fissi) e
+-- risultato da ottenere sui 2D6.
+-- ============================================================
+function main_moraleTestInfo(p)
+    local bases = main_getUnitBases(p.key)
+    local meta = bases[1] and main_getUnitMeta(bases[1])
+    local classe = meta and meta.morale
+    local moraleData = classe and main_getMorale(classe)
+    local soglia = moraleData and moraleData.threshold
+
+    local mod, dettaglio = p.mod, nil
+    if mod == nil then
+        mod, dettaglio = main_moraleCurrentModifier(p.key)
+    end
+    mod = mod or 0
+
+    local righe = {
+        string.format("%s - %s", main_decodeExtendedUnitLabel(p.key), main_getCohesion(p.key)),
+        string.format("Test: %s", p.motivo or p.situazione or ""),
+        string.format("Modificatori: %s (totale %+d)",
+            dettaglio and main_moraleModifierText(dettaglio) or "fissi", mod),
+    }
+    if soglia then
+        table.insert(righe, string.format("Morale %s: serve %d+ (2D6 %+d), cioè almeno %d sui dadi",
+            tostring(classe), soglia, mod, soglia - mod))
+    end
+    return righe
+end
+-- ============================================================
+-- FUNZIONE: main_moraleSelectTest(player, slot, idx)
+-- Seleziona il test idx (o il primo) della coda di ARMY{slot}:
+-- info del test, camera sui dadi, bottone "Tira i dadi morale".
+-- Ritorna false se la coda è vuota.
+-- ============================================================
+function main_moraleSelectTest(player, slot, idx)
+    local coda = IEF_MORALE_ROLL_PENDING[slot]
+    if not coda or #coda == 0 then return false end
+    if not idx or not coda[idx] then idx = 1 end
+
+    IEF_MORALE_ACTIVE_ROW[slot] = idx
+
+    local righe = main_moraleTestInfo(coda[idx])
+    if #coda > 1 then
+        table.insert(righe, 1, string.format("%d test di morale da tirare", #coda))
+    end
+    warningListToColor(righe, player, "Yellow", 8)
+
+    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+    main_setRollButton(slot, "Tira i dadi morale")
     return true
 end
 -- ============================================================
@@ -681,13 +730,9 @@ function main_moraleRowClick(player, value, id)
     end
     if not slotStr then return end
     local slot = tonumber(slotStr)
-    local idx  = tonumber(idxStr)
+    if main_getArmyByColor(player) ~= slot then return end
 
-    local coda = IEF_MORALE_ROLL_PENDING[slot]
-    if not coda or not coda[idx] then return end
-
-    IEF_MORALE_ACTIVE_ROW[slot] = idx
-    engine_diceCameraZoom(player, slot)
+    main_moraleSelectTest(player, slot, tonumber(idxStr))
 end
 
 -- ============================================================

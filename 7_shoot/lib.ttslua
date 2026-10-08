@@ -6,6 +6,11 @@ function shoot_buttonBaseClick(obj, player_color, alt_click)
     local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
     if not slot then return end
 
+    if IEF_SHOOT_STATE and IEF_SHOOT_STATE.confermato then
+        warningToColor("C'è un tiro confermato: tira prima i dadi", Player[player_color], "Yellow", 5)
+        return
+    end
+
     local unitKey = main_getUnitKey(obj)
     if not unitKey then return end
 
@@ -123,10 +128,7 @@ function shoot_range_and_target(player, selection)
     local rankStep = (tonumber(utData.base_depth_cm) or 3) * CM_TO_TTS
     local rankTolerance = rankStep * 0.6
 
-    local maxRanghi = 1
-    if shooterUnit.tipo == "SKC" and shooterUnit.arma == "ARC" then
-        maxRanghi = 2
-    end
+    local maxRanghi = 2   -- primo e secondo rango (regolamento Fase 4)
 
     -- Solo le basi di primo rango (fronte, proiezione massima = più avanti
     -- nella direzione verso cui l'unità guarda) contano da qui in poi
@@ -610,39 +612,33 @@ function shoot_Confirm(player)
 
     local unitKey = main_getUnitKey(state.shooter)
     IEF_FIRED[unitKey] = true
+    state.confermato = true
 
     engine_diceCameraZoom(player, state.shooterSlot)
     shoot_ResetLines(player)
+    main_setRollButtons(state.shooterSlot, "Tira i dadi per colpire")
 end
 -- ============================================================
 -- FUNZIONE: shoot_doRoll(player, slot)
 -- Lancio fisico dal bottone 3D Roll — legge lo stato preparato
 -- da shoot_Confirm, calcola numDadi/soglia e tira dal sacchetto.
 -- ============================================================
-function shoot_doRoll(player, slot)
-
+function shoot_doRoll(player, slot)    
     local state = IEF_SHOOT_STATE
-    if not state.shooter or not state.target or state.shooterSlot ~= slot then return end
-
+    if not state.shooter or not state.target or not state.confermato or state.shooterSlot ~= slot then return end
     local shooterUnit = state.shooterUnit
     local targetUnit  = state.targetUnit
     local weapon = shoot_getWeapon(main_getUnitKey(state.shooter))
 
-    local soglia = DEFAULT_HIT_THRESHOLD
-    if weapon and weapon.min_to_hit then
-        if type(weapon.min_to_hit) == "table" then
-            soglia = weapon.min_to_hit[targetUnit.tipo] or weapon.min_to_hit.default or DEFAULT_HIT_THRESHOLD
-        else
-            soglia = tonumber(weapon.min_to_hit) or DEFAULT_HIT_THRESHOLD
-        end
-    end
-
-    local numDadi = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits)
+    local soglia = weapon and shoot_hitThreshold(weapon, main_getUnitKey(state.target)) or DEFAULT_HIT_THRESHOLD
+    local basiPronte = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits)
+    local numDadi = shoot_numDice(main_getUnitKey(state.shooter), basiPronte, false)
 
     if numDadi <= 0 then
         printToColor("[TIRO] Nessuna base in gittata con LOS", player.color, {r=1,g=0.6,b=0})
         engine_diceCameraReturn(player, slot, "SHOOT")
         shoot_Reset()
+        callHandler("updateCenterPanel")
         return
     end
 
@@ -664,6 +660,7 @@ function shoot_doRoll(player, slot)
             printToAll("[TIRO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
         end
         shoot_Reset()
+        callHandler("updateCenterPanel")
     end)
 end
 -- ============================================================
@@ -852,4 +849,72 @@ function shoot_resolveHits(targetObj, targetSlot, hits)
     if #subito > 0 then
         main_runMoraleQueue(subito)
     end
+end
+-- ============================================================
+-- FUNZIONE: shoot_rollPending(slot)
+-- true se ARMY{slot} ha un tiro confermato da lanciare.
+-- ============================================================
+function shoot_rollPending(slot)
+    local state = IEF_SHOOT_STATE
+    return state and state.confermato and state.shooterSlot == slot or false
+end
+-- ============================================================
+-- FUNZIONE: shoot_numDice(shooterKey, basiPronte, raffica)
+-- Dadi di tiro (regolamento Fase 4): 1D6 per base pronta;
+-- FL 1D6 ogni 2 basi; ART 2D6 per base; RAFFICA (solo Tiro
+-- d'Arresto) 3D6 ogni 2 basi; DISORDINATA metà (per difetto).
+-- ============================================================
+function shoot_numDice(shooterKey, basiPronte, raffica)
+    local bases = main_getUnitBases(shooterKey)
+    local meta = bases[1] and main_getUnitMeta(bases[1])
+    local tipo = meta and meta.unitType
+
+    local n = basiPronte
+    if tipo == "FL" then
+        n = math.floor(basiPronte / 2)
+    elseif tipo == "ART" then
+        n = basiPronte * 2
+    elseif raffica then
+        n = math.floor(basiPronte / 2) * 3 + ((basiPronte % 2 > 0) and 2 or 0)
+    end
+
+    if main_getCohesion(shooterKey) == COHESION.DIS then
+        n = math.floor(n / 2)
+    end
+    return n
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_hitThreshold(weapon, targetKey)
+-- Soglia per colpire: hit_threshold dell'arma meno i
+-- modificatori di weapons.json (senza scudo, vs_<tipi>).
+-- ============================================================
+function shoot_hitThreshold(weapon, targetKey)
+    local soglia = weapon.hit_threshold or DEFAULT_HIT_THRESHOLD
+    local mods = weapon.modifiers or {}
+
+    local bases = main_getUnitBases(targetKey)
+    local meta = bases[1] and main_getUnitMeta(bases[1])
+    local tipo = meta and meta.unitType
+
+    local haScudo = false
+    for _, a in ipairs(meta and meta.armi or {}) do
+        if a == "SCUDO" then haScudo = true end
+    end
+    if not haScudo and mods.vs_bersaglio_senza_scudo then
+        soglia = soglia - mods.vs_bersaglio_senza_scudo
+    end
+
+    for chiave, valore in pairs(mods) do
+        local lista = chiave:match("^vs_(.+)$")
+        if lista and lista ~= "bersaglio_senza_scudo" and lista ~= "unita_in_copertura" then
+            for t in lista:gmatch("[^_]+") do
+                if t == tipo then
+                    soglia = soglia - valore
+                    break
+                end
+            end
+        end
+    end
+    return soglia
 end

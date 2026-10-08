@@ -7,6 +7,7 @@ function before_recovery(phaseName, phase)
     TURN.completed = { Army1 = false, Army2 = false }
 
     recovery_resetState()
+    recovery_queueTests()
 
     callHandler("engine_diceClearLastRoll", 1)
     callHandler("engine_diceClearLastRoll", 2)
@@ -20,8 +21,6 @@ end
 function after_recovery(phaseName, phase)
 
     recovery_resetState()
-    UI.setAttribute("recovery_list_army1", "active", "false")
-    UI.setAttribute("recovery_list_army2", "active", "false")
 
     ENGINE.turn = (ENGINE.turn or 1) + 1
 
