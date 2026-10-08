@@ -547,10 +547,6 @@ end
             charge_stopfireDoRoll(player, slot)
             return
         end
-        if IEF_STOPFIRE_CURRENT.subStep == "MORALE" and IEF_STOPFIRE_CURRENT.slot ~= slot then
-            charge_stopfireDoMorale(player, slot)
-            return
-        end
         return
     end
 
@@ -562,14 +558,7 @@ end
     if ENGINE.phase == "MELEE_RESOLVE" and IEF_MELEE_CURRENT then
         if IEF_MELEE_CURRENT.subStep == "TIRO" then
             melee_doRoll(player, slot)
-        elseif IEF_MELEE_CURRENT.subStep == "MORALE" then
-            melee_doMorale(player, slot)
-        end
-        return
-    end
-
-    if ENGINE.phase == "RECOVERY" then
-        recovery_doRoll(player, slot)
+        end    
         return
     end
     

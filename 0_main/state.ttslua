@@ -101,15 +101,15 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
 }
 
  UNIT_TYPE_LABELS = {
-    KN  = "Cavalieri",
-    CP  = "Cavalleria Pesante",
-    CL  = "Cavalleria Leggera",
-    FP  = "Fanteria Pesante",
-    FM  = "Fanteria Media",
-    FL  = "Fanteria Leggera",
-    ART = "Artiglieria",
-    EL  = "Elefanti",
-    GEN = "Generale",
+    KN  = "KN",
+    CP  = "CP",
+    CL  = "CL",
+    FP  = "FP",
+    FM  = "FM",
+    FL  = "FL",
+    ART = "ART",
+    EL  = "EL",
+    GEN = "GEN",
 }
 
 ARMIES_LABELS = {
@@ -117,7 +117,7 @@ ARMIES_LABELS = {
 ["VIK"] = "Vichinga",				
 ["NOR"] = "Normanna",				
 ["FRA"] = "Franca",			
-["IRL"] = "Irlandesi",		
+["IRL"] = "Irlandese",		
 ["COM"] = "Italiana",			
 ["LON"] = "Longobarda",				
 ["BIZ"] = "Bizantina",			

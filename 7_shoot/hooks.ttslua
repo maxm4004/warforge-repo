@@ -4,18 +4,17 @@
 function before_shoot(phaseName, phase)
     if TURN.phase ~= phaseName then main_resetTurnForPhase() end
     TURN.phase = phaseName
-    
+
     UI.setAttribute("morale_queue_list_army1", "active", "true")
     UI.setAttribute("morale_queue_list_army2", "active", "true")
 
     IEF_MORALE_ROLL_PENDING[1] = {}
     IEF_MORALE_ROLL_PENDING[2] = {}
-    
-    IEF_MORALE_ACTIVE_ROW[1] = {}
-    IEF_MORALE_ACTIVE_ROW[2] = {}
-    
-    IEF_MORALE_END_QUEUE[1] = {}
-    IEF_MORALE_END_QUEUE[2] = {}
+
+    IEF_MORALE_ACTIVE_ROW[1] = nil
+    IEF_MORALE_ACTIVE_ROW[2] = nil
+
+    IEF_MORALE_END_QUEUE = {}
 
     TURN.completed = { Army1 = false, Army2 = false }
 end

@@ -76,20 +76,51 @@ function engine_validatePhases()
         end
     end
 end
-
 -- ============================================================
 -- FUNZIONE: engine_handleAction()
 -- ============================================================
 function engine_handleAction(action)
     if DEBUG then print("engine_handleAction") end
 
+    if ENGINE.transitionPending then return end
     if not engine_isAllowed(action.type) then return end
 
     engine_execute(action)
+
+    -- Cambio fase in arrivo: prima mostra i bottoni aggiornati
+    -- (grigio), poi transita dopo ENGINE_TRANSITION_DELAY secondi.
+    if engine_willTransition(action) then
+        local fromPhase = ENGINE.phase
+        ENGINE.transitionPending = true
+        callHandler("updateCenterPanel")
+        Wait.time(function()
+            ENGINE.transitionPending = false
+            if ENGINE.phase ~= fromPhase then return end   -- fase già cambiata (goToPhase/restart)
+            engine_transition(action)
+            callHandler("updateCenterPanel")
+        end, ENGINE_TRANSITION_DELAY)
+        return
+    end
+
     engine_transition(action)
     callHandler("updateCenterPanel")
 end
-
+-- ============================================================
+-- FUNZIONE: engine_willTransition(action)
+-- true se una transizione della fase corrente scatterebbe con
+-- questa azione (stesso controllo di engine_transition, senza
+-- eseguirla).
+-- ============================================================
+function engine_willTransition(action)
+    local phase = ENGINE.phases[ENGINE.phase]
+    if not phase then return false end
+    for i = 1, #phase.transitions do
+        if checkConditions(phase.transitions[i].conditions or {}, action) then
+            return true
+        end
+    end
+    return false
+end
 -- ============================================================
 -- FUNZIONE: engine_isAllowed()
 -- ============================================================

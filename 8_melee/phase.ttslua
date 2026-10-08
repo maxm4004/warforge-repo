@@ -31,8 +31,6 @@ function melee_phase()
                 BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira i dadi", textColor="White", color="Red",   callback="melee_resolve_btn_army1" },
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Tira i dadi", textColor="White", color="Green", callback="melee_resolve_btn_army2" },
             },
-            -- Il ritorno a MELEE avviene via main_goToPhase da
-            -- melee_resolveEnd (stesso principio di CHARGE_STOPFIRE).
             transitions = {
                 { to="MELEE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }

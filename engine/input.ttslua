@@ -5,6 +5,8 @@ function engine_handleButton(slot, player, value, id)
 
     if DEBUG then print("engine_handleButton: " .. tostring(slot)) end
 
+    if ENGINE and ENGINE.transitionPending then return end
+
     local phase = ENGINE and ENGINE.phases and ENGINE.phases[ENGINE.phase]
     if not phase or not phase.buttons then return end
 

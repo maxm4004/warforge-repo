@@ -24,12 +24,13 @@ end
 
 -- ============================================================
 -- FUNZIONE: deploy_position_btn_army1()
+-- Esercito pronto solo se lo schieramento è valido; le hidden
+-- zone si tolgono in after_deploy_position (entrambi pronti).
 -- ============================================================
 function deploy_position_btn_army1(player, value, id)
-    TURN.completed.Army1 = true
     local esito = deployment_validateDeploy(player)
     if esito then
-            deployment_destroyArmy1HiddenZones()
+        TURN.completed.Army1 = true
     end
     return esito
 end
@@ -38,10 +39,9 @@ end
 -- FUNZIONE: deploy_position_btn_army2()
 -- ============================================================
 function deploy_position_btn_army2(player, value, id)
-    TURN.completed.Army2 = true
     local esito = deployment_validateDeploy(player)
     if esito then
-            deployment_destroyArmy2HiddenZones()
+        TURN.completed.Army2 = true
     end
     return esito
 end

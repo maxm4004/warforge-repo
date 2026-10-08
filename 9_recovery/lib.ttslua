@@ -6,8 +6,9 @@
 -- 2) in ROTTA (non andate in rotta in questo turno) con un
 --    Generale aggregato possono tentare il test; se falliscono
 --    vengono rimosse dal tavolo.
--- Test: main_testMorale(..., "per_riordinare", ...), superato =
--- recupera un livello di coesione.
+-- Test "per_riordinare" nel pannello morale (main_requestMoraleRoll):
+-- la lista sceglie l'unità, il Roll del giocatore tira il test.
+-- Superato = recupera un livello di coesione.
 -- ============================================================
 
 -- Colore di selezione dell'unità in attesa del Roll
@@ -26,15 +27,13 @@ end
 -- Azzera lo stato della fase e spegne le evidenziazioni.
 -- ============================================================
 function recovery_resetState()
-    for slot = 1, 2 do
-        local cur = IEF_RECOVERY_CURRENT[slot]
-        if cur then recovery_highlightUnit(cur.key, false) end
+    for key, _ in pairs(IEF_RECOVERY_CURRENT) do
+        recovery_highlightUnit(key, false)
     end
     IEF_RECOVERY_DONE    = {}
     IEF_RECOVERY_CURRENT = {}
     IEF_RECOVERY_ROWS    = { [1] = {}, [2] = {} }
 end
-
 -- ============================================================
 -- FUNZIONE: recovery_highlightUnit(unitKey, acceso)
 -- ============================================================
@@ -108,26 +107,27 @@ function recovery_getListPanelXml(slot)
 
     local rows = ""
     for idx, key in ipairs(chiavi) do
-        local mod = main_moraleModifier(key, nil)
+        local mod = main_moraleCurrentModifier(key)
+        local stato = IEF_RECOVERY_CURRENT[key] and "  [test nel pannello morale]" or ""
         rows = rows .. string.format(
-            '<Row id="recovery_rowline_%d_%d" preferredHeight="25">' ..
+            '<Row preferredHeight="25">' ..
                 '<Cell>' ..
-                    '<Button id="recovery_row_%d_%d" text="%s - %s (mod %+d)" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" onClick="recovery_rowClick"/>' ..
+                    '<Button id="recovery_row_%d_%d" text="%s - %s (mod %+d)%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" onClick="recovery_rowClick"/>' ..
                 '</Cell>' ..
                 '<Cell>' ..
-                    '<Button id="recovery_row_btn_%d_%d" text="" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.55,0.1,1)" textColor="White" onClick="recovery_rowClick"/>' ..
+                    '<Button id="recovery_row_btn_%d_%d" text="Procedi" fontSize="14" fontStyle="Bold" color="rgba(0.7,0.55,0.1,1)" textColor="White" onClick="recovery_rowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
             slot, idx,
-            slot, idx, main_decodeExtendedUnitLabel(key), main_getCohesion(key), mod,
+            slot, idx, main_decodeExtendedUnitLabel(key), main_getCohesion(key), mod, stato,
             slot, idx
         )
     end
 
     return string.format(
-        '<Panel id="recovery_list_army%d" rectAlignment="LowerRight" color="rgba(0,0,0,0.35)" width="500" height="160" offsetXY="0 110" visibility="%s" active="%s">' ..
-        '<Text id="recovery_list_title_army%d" text="RECUPERO %s" font="warforge_font" fontSize="14" fontStyle="Bold" outlineColor="Black" outlineSize="1" color="White" position="0 65 0" alignment="MiddleCenter" width="300" height="22"/>' ..
-        '<TableLayout width="500" height="120" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="460 40" position="0 -5 0">' ..
+        '<Panel id="recovery_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -110" visibility="%s" active="%s">' ..
+        '<Text id="melee_list_title_army%d" text="ELENCO RECUPERI %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
+        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="335 65" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
@@ -137,8 +137,10 @@ end
 
 -- ============================================================
 -- FUNZIONE: recovery_rowClick(player, value, id)
--- Seleziona l'unità (highlight) e porta la camera sui dadi:
--- il tiro parte dal pulsante fisico Roll (recovery_doRoll).
+-- Sceglie l'unità da recuperare: highlight, test "per_riordinare"
+-- nel pannello morale e camera sui dadi. Il Roll del giocatore
+-- risolve il test dal pannello (main_doPendingMoraleRoll).
+-- Un'unità già in pannello: solo camera sui dadi.
 -- ============================================================
 function recovery_rowClick(player, value, id)
     local slotStr, idxStr = id:match("^recovery_row_btn_(%d)_(%d+)$")
@@ -154,84 +156,47 @@ function recovery_rowClick(player, value, id)
     local key = IEF_RECOVERY_ROWS[slot] and IEF_RECOVERY_ROWS[slot][idx]
     if not key or IEF_RECOVERY_DONE[key] then return end
 
-    local cur = IEF_RECOVERY_CURRENT[slot]
-    if cur and cur.inCorso then
-        warningToColor("C'è già un test di recupero in corso", player, "Yellow", 5)
+    if IEF_RECOVERY_CURRENT[key] then
+        engine_diceCameraZoom(player, slot)
         return
     end
-    if cur and cur.key ~= key then recovery_highlightUnit(cur.key, false) end
 
-    IEF_RECOVERY_CURRENT[slot] = { key = key, idx = idx, inCorso = false }
+    if not recovery_isEligible(key, slot) then
+        warningToColor("L'unità non può più tentare il recupero", player, "Yellow", 5)
+        return
+    end
+
+    local livello = main_getCohesion(key)
+    IEF_RECOVERY_CURRENT[key] = slot
     recovery_highlightUnit(key, true)
+
+    main_requestMoraleRoll(key, slot, "per_riordinare", nil, "RECUPERO", function(esito)
+        recovery_onResult(key, livello, esito)
+    end)
 
     engine_diceClearLastRoll(slot)
     engine_diceCameraZoom(player, slot)
 end
 
 -- ============================================================
--- FUNZIONE: recovery_doRoll(player, slot)
--- Dispatch da engine_diceRoll_start: test di morale
--- "per_riordinare" dell'unità selezionata.
+-- FUNZIONE: recovery_onResult(key, livello, esito)
+-- Esito del test di recupero (callback del pannello morale).
+-- Superato -> +1 livello; fallito in ROTTA -> unità rimossa;
+-- fallito DISORDINATA -> resta com'è. Un solo tentativo per fase.
 -- ============================================================
-function recovery_doRoll(player, slot)
-    local cur = IEF_RECOVERY_CURRENT[slot]
-    if not cur or cur.inCorso then return end
+function recovery_onResult(key, livello, esito)
+    IEF_RECOVERY_DONE[key] = true
+    IEF_RECOVERY_CURRENT[key] = nil
+    recovery_highlightUnit(key, false)
 
-    local key = cur.key
-    if not recovery_isEligible(key, slot) then
-        warningToColor("L'unità non può più tentare il recupero", player, "Yellow", 5)
-        recovery_highlightUnit(key, false)
-        IEF_RECOVERY_CURRENT[slot] = nil
-        engine_diceCameraReturn(player, slot, PHASE.RECOVERY)
-        return
+    if esito == MORALE_RESULT.OK then
+        main_raiseCohesion(key)
+    elseif livello == COHESION.ROT then
+        printToAll(string.format("[RECUPERO] %s fallisce il recupero dalla rotta: rimossa dal tavolo",
+            main_decodeExtendedUnitLabel(key)), {r=1,g=0.4,b=0.4})
+        main_removeBases(key, main_getUnitBases(key))
+    else
+        printToAll(string.format("[RECUPERO] %s non si riordina: resta %s",
+            main_decodeExtendedUnitLabel(key), livello), {r=1,g=0.6,b=0.4})
     end
-
-    cur.inCorso = true
-    local livello = main_getCohesion(key)
-    local mod, dettaglio = main_moraleModifier(key, nil)
-
-    printToAll(string.format("[RECUPERO] %s (%s) testa, modificatori: %s",
-        main_decodeExtendedUnitLabel(key), livello, main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
-
-    main_testMorale(key, player, "per_riordinare", mod, function(esito)
-        if IEF_RECOVERY_CURRENT[slot] ~= cur then return end
-        if esito == nil then
-            cur.inCorso = false
-            return
-        end
-
-        IEF_RECOVERY_DONE[key] = true
-        IEF_RECOVERY_CURRENT[slot] = nil
-        recovery_highlightUnit(key, false)
-        UI.setAttribute(string.format("recovery_rowline_%d_%d", slot, cur.idx), "active", "false")
-
-        if esito == MORALE_RESULT.OK then
-            main_raiseCohesion(key)
-        elseif livello == COHESION.ROT then
-            printToAll(string.format("[RECUPERO] %s fallisce il recupero dalla rotta: rimossa dal tavolo",
-                main_decodeExtendedUnitLabel(key)), {r=1,g=0.4,b=0.4})
-            main_removeBases(key, main_getUnitBases(key))
-        else
-            printToAll(string.format("[RECUPERO] %s non si riordina: resta %s",
-                main_decodeExtendedUnitLabel(key), livello), {r=1,g=0.6,b=0.4})
-        end
-    end)
-end
-
--- ============================================================
--- FUNZIONE: recovery_canComplete(player, slot)
--- "Recupero Completato" bloccato solo da un test in corso;
--- una selezione non tirata viene annullata.
--- ============================================================
-function recovery_canComplete(player, slot)
-    local cur = IEF_RECOVERY_CURRENT[slot]
-    if cur and cur.inCorso then
-        warningToColor("C'è un test di recupero in corso", player, "Yellow", 5)
-        return false
-    end
-    if cur then
-        recovery_highlightUnit(cur.key, false)
-        IEF_RECOVERY_CURRENT[slot] = nil
-    end
-    return true
 end

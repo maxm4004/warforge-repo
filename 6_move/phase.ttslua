@@ -3,7 +3,7 @@ function move_phase()
     return {
         MOVE = {
             title = "FASE 3: MANOVRA E MOVIMENTO",
-            desc  = "I comandanti muovono le loro unità",
+            desc  = "I COMANDANTI MUOVONO LE LORO UNITÀ",
             before = "before_move",
             after  = "after_move",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
@@ -11,8 +11,8 @@ function move_phase()
             enforceOwnership = true,
             inputMode = "INITIATIVE",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Movimento Completato", textColor="White", color="Red",   callback="move_btn_army1" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Movimento Completato", textColor="White", color="Green", callback="move_btn_army2" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Fase Successiva", textColor="White", color="Red",   callback="move_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Fase Successiva", textColor="White", color="Green", callback="move_btn_army2" },
             },
             transitions = {
                 { to="SHOOT", conditions={ COND.BOTH_PLAYERS_SELECTED } }

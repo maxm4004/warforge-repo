@@ -27,6 +27,10 @@ end
 -- FUNZIONE: after_deploy_position()
 -- ============================================================
 function after_deploy_position(phaseName, phase)
+
+    deployment_destroyArmy1HiddenZones()
+    deployment_destroyArmy2HiddenZones()
+
     TURN.completed = { Army1 = false, Army2 = false }
     linee_deploy = false
     callHandler("aggiornaLinee")

@@ -11,8 +11,8 @@ function initiative_phase()
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira dado Iniziativa", textColor="White", color="Red",   callback="roll_btn_all" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tira dado Iniziativa", textColor="White", color="Green", callback="roll_btn_all" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira dado", textColor="White", color="Red",   callback="roll_btn_all" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tira dado", textColor="White", color="Green", callback="roll_btn_all" },
             },
             transitions = {
                 { to="INITIATIVE_CHOICE", conditions={ COND.WINNER } }
@@ -20,7 +20,7 @@ function initiative_phase()
         },
         INITIATIVE_CHOICE = {
             title = "INIZIATIVA",
-            desc  = "ASSEGNA L'INIZIATIVA",
+            desc  = "IL VINCITORE DELL'INIZIATIVA SCEGLI SE TENERLA O CEDERLA",
             before = "before_initiative_choice",
             after  = "after_initiative_choice",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },

@@ -4,7 +4,8 @@
 -- ============================================================
 function charge_declare_btn_army1(player, value, id, buttonConfig)
 
-    if IEF_MORALE_ROLL_PENDING[1] or #IEF_CHARGE_PENDING_TESTS > 0 then
+    if main_moraleBlocksPhase(player, 1) then return false end
+    if #IEF_CHARGE_PENDING_TESTS > 0 then
         warningToColor("Ci sono dei test di morale, per poter caricare, ancora da effettuare", player, "Yellow", 5)
         return false
     end
@@ -24,7 +25,8 @@ end
 -- ============================================================
 function charge_declare_btn_army2(player, value, id, buttonConfig)
 
-    if IEF_MORALE_ROLL_PENDING[2] or #IEF_CHARGE_PENDING_TESTS > 0 then
+    if main_moraleBlocksPhase(player, 2) then return false end
+    if #IEF_CHARGE_PENDING_TESTS > 0 then
         warningToColor("Ci sono dei test di morale, per poter caricare, ancora da effettuare", player, "Yellow", 5)
         return false
     end
@@ -41,6 +43,9 @@ end
 -- FUNZIONE: charge_react_btn_army1(player, value, id, buttonConfig)
 -- ============================================================
 function charge_react_btn_army1(player, value, id, buttonConfig)
+
+    if main_moraleBlocksPhase(player, 1) then return false end
+
     if charge_reactQueueHasPending() then
         printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
         return false
@@ -53,6 +58,9 @@ end
 -- FUNZIONE: charge_react_btn_army2(player, value, id, buttonConfig)
 -- ============================================================
 function charge_react_btn_army2(player, value, id, buttonConfig)
+
+    if main_moraleBlocksPhase(player, 2) then return false end
+
     if charge_reactQueueHasPending() then
         printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
         return false
@@ -94,11 +102,20 @@ end
 -- FUNZIONE: charge_auto_btn_army1(player, value, id, buttonConfig)
 -- ============================================================
 function charge_auto_btn_army1(player, value, id, buttonConfig)
+
+    if main_moraleBlocksPhase(player, 1) then print("morale"); return false end
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
         if charge_slotStillNeedsAction(e, 1) then
-            printToColor("[CARICA] Ci sono ancora cariche da risolvere per il tuo esercito", player.color, {r=1,g=0.6,b=0})
+            warningToColor("Ci sono ancora cariche da risolvere per il tuo esercito", player, "Yellow", 5)
             return false
         end
+    end
+    if #IEF_MORALE_END_QUEUE > 0 then
+        local coda = IEF_MORALE_END_QUEUE
+        IEF_MORALE_END_QUEUE = {}
+        main_runMoraleQueue(coda, nil, true)
+        warningToColor("Test di morale di fine fase: tirali dal pannello, poi chiudi la fase", player, "Yellow", 5)
+        return false
     end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
     return true
@@ -107,11 +124,21 @@ end
 -- FUNZIONE: charge_auto_btn_army2(player, value, id, buttonConfig)
 -- ============================================================
 function charge_auto_btn_army2(player, value, id, buttonConfig)
+
+    if main_moraleBlocksPhase(player, 2) then  return false end
+
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
         if charge_slotStillNeedsAction(e, 2) then
-            printToColor("[CARICA] Ci sono ancora cariche da risolvere per il tuo esercito", player.color, {r=1,g=0.6,b=0})
+            warningToColor("Ci sono ancora cariche da risolvere per il tuo esercito", player, "Yellow", 5)
             return false
         end
+    end
+    if #IEF_MORALE_END_QUEUE > 0 then
+        local coda = IEF_MORALE_END_QUEUE
+        IEF_MORALE_END_QUEUE = {}
+        main_runMoraleQueue(coda, nil, true)
+        warningToColor("Test di morale di fine fase: tirali dal pannello, poi chiudi la fase", player, "Yellow", 5)
+        return false
     end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true

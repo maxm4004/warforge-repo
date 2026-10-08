@@ -358,17 +358,25 @@ function shoot_range_and_target(player, selection)
         
         IEF_SHOOTING.activeLines = nil
         
-    else
-        warningToColor(string.format("Nessun bersaglio entro gittata di %.0f\")", rangeUnits / INCH_TO_TTS), player, "Yellow", 5)
-        IEF_SHOOTING.activeLines = nil
+     else
+        -- Nessun nemico in gittata: niente popup di conferma, solo
+        -- l'avviso. Pulisce un eventuale bersaglio precedente, mostra
+        -- il cono per qualche secondo e poi lo toglie.
+        shoot_ResetLines(player)
+        shoot_Reset()
+        warningToColor(string.format("Nessun bersaglio entro gittata di %.0f\"", rangeUnits / INCH_TO_TTS), player, "Yellow", 5)
 
-        UI.setAttribute("confirm_panel_shoot", "active", "true")
-        UI.setAttribute("btnActionShoot", "active", "true")
-        UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
-      
-        if IEF_SHOOTING.activeShooter then
-              IEF_SHOOTING.activeShooter.setVectorLines({})
-        end
+        shooter.setVectorLines(conoLines)
+        IEF_SHOOTING.activeShooter = shooter
+        callHandler("aggiornaLinee")
+
+        Wait.time(function()
+            if IEF_SHOOTING.activeShooter == shooter and not IEF_SHOOT_STATE.target then
+                shooter.setVectorLines({})
+                IEF_SHOOTING.activeShooter = nil
+            end
+        end, 5)
+        return false
     end
 
     shooter.setVectorLines(conoLines)

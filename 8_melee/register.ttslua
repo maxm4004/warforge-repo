@@ -13,8 +13,6 @@ registerRenderer("2BtnClickMeleeList", function(phase)
     local attivo = (#melee_getGroups() > 0) and "true" or "false"
     UI.setAttribute("melee_list_army1", "active", attivo)
     UI.setAttribute("melee_list_army2", "active", attivo)
-    UI.setAttribute("melee_list_army1", "offsetXY", "0 110")
-    UI.setAttribute("melee_list_army2", "offsetXY", "0 110")
     UI.setAttribute("charge_attack_list_army1",  "active", "false")
     UI.setAttribute("charge_attack_list_army2",  "active", "false")
     UI.setAttribute("charge_defense_list_army1", "active", "false")

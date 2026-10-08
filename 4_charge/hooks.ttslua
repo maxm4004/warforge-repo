@@ -106,5 +106,5 @@ end
 -- FUNZIONE: after_charge_auto(phaseName, phase)
 -- ============================================================
 function after_charge_auto(phaseName, phase)
-
+    main_removeMarkedLosses()
 end

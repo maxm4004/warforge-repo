@@ -2,6 +2,9 @@
 -- FUNZIONE: shoot_btn_army1()
 -- ============================================================
 function shoot_btn_army1(player, value, id)
+
+    if main_moraleBlocksPhase(player, 1) then return false end
+
     if shoot_startEndOfPhaseTests(player) then
         return false
     end
@@ -12,6 +15,9 @@ end
 -- FUNZIONE: shoot_btn_army2()
 -- ============================================================
 function shoot_btn_army2(player, value, id)
+
+        if main_moraleBlocksPhase(player, 2) then return false end
+
     if shoot_startEndOfPhaseTests(player) then
         return false
     end
