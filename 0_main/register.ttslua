@@ -60,3 +60,10 @@ registerHandler("shoot_range_and_target",       function(p,v)          return sh
 
 registerHandler("main_parseNickname",           function(nickname)     return main_parseNickname(nickname)            end)
 registerHandler("main_refreshAllBaseButtons",   function()             return main_refreshAllBaseButtons()            end)
+
+-- Sottofasi trasversali (0_main/subphase.ttslua)
+registerSubphases(main_subphases())
+registerHandler("main_moraleTestEnter",         function(c,s,r)        return main_moraleTestEnter(c,s,r)              end)
+registerHandler("main_moraleTestFocus",         function(c,s,p,r)      return main_moraleTestFocus(c,s,p,r)            end)
+registerHandler("main_moraleTestRoll",          function(c,s,p,r)      return main_moraleTestRoll(c,s,p,r)             end)
+registerHandler("main_moraleTestDone",          function(c,res,s)      return main_moraleTestDone(c,res,s)             end)

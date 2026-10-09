@@ -1,0 +1,405 @@
+-- ============================================================
+-- engine/subphase.ttslua
+-- Livello secondario delle fasi: SOTTOFASI.
+--
+-- Una sottofase si apre da una fase (o da un'altra sottofase),
+-- ha N step con inizio e fine, e alla chiusura torna dove era
+-- partita chiamando l'handler onDone con un risultato.
+--
+-- scope "shared": serve a entrambi i giocatori, una sola alla
+--                 volta, blocca i bottoni di fase di entrambi.
+-- scope "player": azione di un solo giocatore, una pila per
+--                 giocatore (in parallelo), blocca solo i suoi.
+--
+-- Stato (salvato): ENGINE.sub = { shared = rec|nil,
+--                                 army1 = {rec...}, army2 = {rec...} }
+-- rec = { name, step, slot, ctx, onDone }  -- solo dati semplici:
+-- onDone e gli handler sono NOMI registrati con registerHandler.
+--
+-- Definizioni (registerSubphases, dai register delle cartelle):
+-- NOME = {
+--   scope = "shared"|"player", title = "...", first = "STEP",
+--   anywhere = true|nil,          -- apribile da qualsiasi fase
+--   onEnter = "handler", onExit = "handler",  -- (ctx, slot, rec)
+--   subphases = { "ALTRA", ... }, -- sottofasi che può aprire
+--   steps = {
+--     STEP = { render = "subAction", actor = "owner"|"both"|<campo ctx>,
+--              label = "...", onEnter = "h", onClick = "h", onRoll = "h" },
+--   },
+-- }
+-- Handler di step: onEnter(ctx, slot, rec)
+--                  onClick(ctx, slot, player, rec)
+--                  onRoll (ctx, slot, player, rec)
+-- onDone della sottofase: (ctx, result, slot)
+-- ============================================================
+
+SUBPHASES    = SUBPHASES    or {}
+SUBRENDERERS = SUBRENDERERS or {}
+
+-- Grafica dei pannelli sottofase (sotto il pannello centrale)
+SUBPANEL = SUBPANEL or {
+    offsetXY = "0 -280",
+    width    = 450,
+    height   = 92,
+    bg       = "rgba(0,0,0,0.55)",
+}
+
+-- ============================================================
+-- FUNZIONE: registerSubphases(tabella)
+-- ============================================================
+function registerSubphases(tabella)
+    for nome, def in pairs(tabella or {}) do
+        SUBPHASES[nome] = def
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: registerSubRenderer(nome, fn)
+-- fn(rec, def, step, slot, isActor) -> view
+-- view = { title = "...", info = "...", button = "label"|nil, wait = "..."|nil }
+-- ============================================================
+function registerSubRenderer(nome, fn)
+    SUBRENDERERS[nome] = fn
+end
+
+-- ============================================================
+-- Stato
+-- ============================================================
+function engine_subInitState()
+    ENGINE = ENGINE or {}
+    ENGINE.sub = { shared = nil, army1 = {}, army2 = {} }
+end
+
+local function subState()
+    ENGINE = ENGINE or {}
+    if not ENGINE.sub then engine_subInitState() end
+    ENGINE.sub.army1 = ENGINE.sub.army1 or {}
+    ENGINE.sub.army2 = ENGINE.sub.army2 or {}
+    return ENGINE.sub
+end
+
+local function stackOf(slot)
+    if slot ~= 1 and slot ~= 2 then return {} end
+    return subState()["army" .. slot]
+end
+
+-- ============================================================
+-- Interrogazioni
+-- ============================================================
+function engine_subShared()
+    return subState().shared
+end
+
+function engine_subPrivate(slot)
+    local pila = stackOf(slot)
+    return pila[#pila]
+end
+
+-- Sottofase attiva per lo slot: privata in cima, altrimenti shared
+function engine_subTop(slot)
+    return engine_subPrivate(slot) or engine_subShared()
+end
+
+-- true se i bottoni di fase dello slot devono essere bloccati
+function engine_subBlocksPhase(slot)
+    return engine_subShared() ~= nil or engine_subPrivate(slot) ~= nil
+end
+
+function engine_subAnyOpen()
+    local s = subState()
+    return s.shared ~= nil or #s.army1 > 0 or #s.army2 > 0
+end
+
+-- Slot che agiscono nello step corrente: { [1]=true, [2]=true }
+function engine_subActors(rec)
+    local def  = rec and SUBPHASES[rec.name]
+    local step = def and def.steps and def.steps[rec.step]
+    local a = (step and step.actor) or "owner"
+    if a == "both" then return { [1] = true, [2] = true } end
+    if a == "owner" then return rec.slot and { [rec.slot] = true } or {} end
+    local s = rec.ctx and rec.ctx[a]
+    return s and { [s] = true } or {}
+end
+
+local function stepDef(rec)
+    local def = rec and SUBPHASES[rec.name]
+    return def, def and def.steps and def.steps[rec.step]
+end
+
+-- ============================================================
+-- Apertura: whitelist della fase corrente, delle sottofasi
+-- aperte, oppure anywhere = true.
+-- ============================================================
+local function inList(lista, nome)
+    for _, n in ipairs(lista or {}) do
+        if n == nome then return true end
+    end
+    return false
+end
+
+local function canOpen(nome, def)
+    if def.anywhere then return true end
+    local phase = ENGINE.phases and ENGINE.phases[ENGINE.phase]
+    if phase and inList(phase.subphases, nome) then return true end
+    local s = subState()
+    local aperte = { s.shared }
+    for _, r in ipairs(s.army1) do table.insert(aperte, r) end
+    for _, r in ipairs(s.army2) do table.insert(aperte, r) end
+    for _, r in ipairs(aperte) do
+        local d = SUBPHASES[r.name]
+        if d and inList(d.subphases, nome) then return true end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: engine_subOpen(nome, slot, ctx, onDone)
+-- slot: proprietario (player) o nil (shared).
+-- Ritorna il record aperto oppure nil.
+-- ============================================================
+function engine_subOpen(nome, slot, ctx, onDone)
+    local def = SUBPHASES[nome]
+    if not def then
+        print("[SUB] Sottofase non registrata: " .. tostring(nome))
+        return nil
+    end
+    if not canOpen(nome, def) then
+        print("[SUB] " .. nome .. " non apribile in " .. tostring(ENGINE.phase))
+        return nil
+    end
+    if onDone ~= nil and type(onDone) ~= "string" then
+        print("[SUB] onDone deve essere il nome di un handler: " .. nome)
+        return nil
+    end
+
+    local rec = { name = nome, step = def.first, slot = slot, ctx = ctx or {}, onDone = onDone }
+
+    if def.scope == "shared" then
+        if engine_subShared() then
+            print("[SUB] C'è già una sottofase condivisa aperta: " .. engine_subShared().name)
+            return nil
+        end
+        rec.slot = nil
+        subState().shared = rec
+    else
+        if slot ~= 1 and slot ~= 2 then
+            print("[SUB] Sottofase player senza slot: " .. nome)
+            return nil
+        end
+        table.insert(stackOf(slot), rec)
+    end
+
+    if def.onEnter then callHandler(def.onEnter, rec.ctx, rec.slot, rec) end
+    local _, step = stepDef(rec)
+    if step and step.onEnter then callHandler(step.onEnter, rec.ctx, rec.slot, rec) end
+
+    callHandler("updateCenterPanel")
+    return rec
+end
+
+-- ============================================================
+-- Ricerca del record per nome (shared o privato dello slot)
+-- ============================================================
+local function findRec(nome, slot)
+    local sh = engine_subShared()
+    if sh and sh.name == nome and (slot == nil or SUBPHASES[nome].scope == "shared") then
+        return sh
+    end
+    local pila = stackOf(slot)
+    for i = #pila, 1, -1 do
+        if pila[i].name == nome then return pila[i], i end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: engine_subStep(nome, slot, nuovoStep)
+-- ============================================================
+function engine_subStep(nome, slot, nuovoStep)
+    local rec = findRec(nome, slot)
+    if not rec then return false end
+    local def = SUBPHASES[nome]
+    if not (def.steps and def.steps[nuovoStep]) then
+        print("[SUB] Step inesistente: " .. nome .. "." .. tostring(nuovoStep))
+        return false
+    end
+
+    rec.step = nuovoStep
+    local step = def.steps[nuovoStep]
+    if step.onEnter then callHandler(step.onEnter, rec.ctx, rec.slot, rec) end
+
+    callHandler("updateCenterPanel")
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: engine_subClose(nome, slot, result)
+-- Toglie la sottofase, onExit, poi onDone(ctx, result, slot)
+-- del livello che l'ha aperta. Se non resta nessuna sottofase
+-- aperta, riprova le transizioni della fase (click arrivati
+-- mentre la fase era congelata).
+-- ============================================================
+function engine_subClose(nome, slot, result)
+    local rec, idx = findRec(nome, slot)
+    if not rec then return false end
+    local def = SUBPHASES[nome]
+
+    if def.scope == "shared" then
+        subState().shared = nil
+    else
+        table.remove(stackOf(rec.slot), idx)
+    end
+
+    if def.onExit then callHandler(def.onExit, rec.ctx, rec.slot, rec) end
+    if rec.onDone then callHandler(rec.onDone, rec.ctx, result, rec.slot) end
+
+    callHandler("updateCenterPanel")
+
+    if not engine_subAnyOpen() then
+        engine_tryTransition(nil)
+    end
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: engine_subRoll(player, slot)
+-- Dispatch del Roll fisico. true = gestito (anche se ignorato
+-- perché lo slot non agisce in questo step).
+-- ============================================================
+function engine_subRoll(player, slot)
+    local rec = engine_subTop(slot)
+    if not rec then return false end
+
+    local _, step = stepDef(rec)
+    if step and step.onRoll and engine_subActors(rec)[slot] then
+        callHandler(step.onRoll, rec.ctx, slot, player, rec)
+    else
+        warningToColor("Non è il momento di tirare i dadi", player, "Yellow", 3)
+    end
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: engine_subButtonClick(player, value, id)
+-- Bottone del pannello sottofase (sub_btn_army1/2).
+-- ============================================================
+function engine_subButtonClick(player, value, id)
+    local slot = tonumber(id:match("^sub_btn_army(%d)$"))
+    if not slot or main_SlotByColor(player.color) ~= slot then return end
+
+    local rec = engine_subTop(slot)
+    if not rec or not engine_subActors(rec)[slot] then return end
+
+    local _, step = stepDef(rec)
+    if step and step.onClick then
+        callHandler(step.onClick, rec.ctx, slot, player, rec)
+    end
+end
+
+-- ============================================================
+-- Grafica
+-- ============================================================
+
+-- Vista corrente del pannello sottofase dello slot (nil = nascosto)
+function engine_subView(slot)
+    local rec = engine_subTop(slot)
+    if not rec then return nil end
+    local def, step = stepDef(rec)
+    local isActor = engine_subActors(rec)[slot] == true
+    local renderer = SUBRENDERERS[(step and step.render) or "subAction"] or SUBRENDERERS.subAction
+    local view = renderer(rec, def or {}, step or {}, slot, isActor) or {}
+    view.title = view.title or (def and def.title) or rec.name
+    return view
+end
+
+local function xmlEsc(t)
+    t = tostring(t or "")
+    t = t:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"):gsub("\n", "&#10;")
+    return t
+end
+
+-- XML dei pannelli, già con lo stato corrente (buildUI è
+-- asincrono: un setAttribute subito dopo potrebbe andare perso)
+function engine_subPanelsXml()
+    local xml = ""
+    for slot = 1, 2 do
+        local colore = slot == 1 and COLOR.ARMY1 or COLOR.ARMY2
+        local v = engine_subView(slot)
+        xml = xml .. string.format(
+            '<Panel id="sub_panel_army%d" rectAlignment="UpperCenter" width="%d" height="%d" offsetXY="%s" color="%s" outline="%s" outlineSize="2" visibility="%s" active="%s">' ..
+                '<Text id="sub_title_army%d" text="%s" font="warforge_font" fontSize="12" fontStyle="Bold" color="White" rectAlignment="UpperCenter" offsetXY="0 -4" width="%d" height="20" alignment="MiddleCenter"/>' ..
+                '<Text id="sub_info_army%d" text="%s" font="warforge_font" fontSize="11" color="#DDDDDD" rectAlignment="UpperCenter" offsetXY="0 -24" width="%d" height="30" alignment="MiddleCenter"/>' ..
+                '<Text id="sub_wait_army%d" text="%s" font="warforge_font" fontSize="12" fontStyle="Italic" color="#AAAAAA" rectAlignment="LowerCenter" offsetXY="0 6" width="%d" height="28" alignment="MiddleCenter" active="%s"/>' ..
+                '<Button id="sub_btn_army%d" text="%s" font="warforge_font" fontSize="13" fontStyle="Bold" color="rgba(0,0,0,0.6)" textColor="White" outline="%s" outlineSize="1" rectAlignment="LowerCenter" offsetXY="0 6" width="240" height="30" onClick="engine_subButtonClick" active="%s"/>' ..
+            '</Panel>',
+            slot, SUBPANEL.width, SUBPANEL.height, SUBPANEL.offsetXY, SUBPANEL.bg, colore, colore, v and "true" or "false",
+            slot, xmlEsc(v and v.title), SUBPANEL.width - 20,
+            slot, xmlEsc(v and v.info),  SUBPANEL.width - 20,
+            slot, xmlEsc(v and v.wait),  SUBPANEL.width - 20, (v and not v.button and v.wait) and "true" or "false",
+            slot, xmlEsc(v and v.button), colore, (v and v.button) and "true" or "false"
+        )
+    end
+    return xml
+end
+
+-- ============================================================
+-- FUNZIONE: engine_subRedraw()
+-- Applica lo stato delle sottofasi ai pannelli e blocca i
+-- bottoni di fase. Chiamata in coda a updateCenterPanel.
+-- ============================================================
+function engine_subRedraw()
+    for slot = 1, 2 do
+        local p = "sub_panel_army" .. slot
+        local v = engine_subView(slot)
+
+        if not v then
+            UI.setAttribute(p, "active", "false")
+        else
+            UI.setAttribute(p, "active", "true")
+            UI.setAttribute("sub_title_army" .. slot, "text", v.title or "")
+            UI.setAttribute("sub_info_army"  .. slot, "text", v.info or "")
+
+            if v.button then
+                UI.setAttribute("sub_btn_army"  .. slot, "text", v.button)
+                UI.setAttribute("sub_btn_army"  .. slot, "active", "true")
+                UI.setAttribute("sub_wait_army" .. slot, "active", "false")
+            else
+                UI.setAttribute("sub_btn_army"  .. slot, "active", "false")
+                UI.setAttribute("sub_wait_army" .. slot, "text", v.wait or "")
+                UI.setAttribute("sub_wait_army" .. slot, "active", v.wait and "true" or "false")
+            end
+        end
+
+        if engine_subBlocksPhase(slot) then
+            UI.setAttribute("BTN_ARMY" .. slot, "interactable", "false")
+        end
+    end
+    if engine_subAnyOpen() then
+        UI.setAttribute("BTN_SINGLE", "interactable", "false")
+    end
+end
+
+-- ============================================================
+-- Renderer di base
+-- ============================================================
+local function nomeAltro(slot)
+    local altro = (slot == 1) and 2 or 1
+    return (ARMY and ARMY[altro] and ARMY[altro].name) or ("Army" .. altro)
+end
+
+registerSubRenderer("subAction", function(rec, def, step, slot, isActor)
+    return {
+        title  = def.title,
+        info   = step.info,
+        button = isActor and (step.label or "Avanti") or nil,
+        wait   = (not isActor) and ("In attesa di " .. nomeAltro(slot) .. "…") or nil,
+    }
+end)
+
+registerSubRenderer("subWait", function(rec, def, step, slot, isActor)
+    return {
+        title = def.title,
+        info  = step.info,
+        wait  = step.label or "In attesa…",
+    }
+end)

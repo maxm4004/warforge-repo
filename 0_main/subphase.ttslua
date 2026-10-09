@@ -1,0 +1,128 @@
+-- ============================================================
+-- WARFORGE IEF — 0_main/subphase.ttslua
+-- Sottofasi trasversali (usabili da qualsiasi fase).
+--
+-- MORALE_TEST (scope player): il test di morale attivo di un
+-- giocatore. Si apre SOLO dal pannello morale (main_moraleRowClick)
+-- su una richiesta della coda IEF_MORALE_ROLL_PENDING[slot].
+--   ROLL  : info del test nel pannello sottofase, camera sui
+--           dadi, si tira col Roll fisico.
+--   ESITO : risultato per 1,5 s, poi chiusura.
+-- Alla chiusura main_moraleTestDone toglie la richiesta dalla
+-- coda e chiama il suo onDone.
+-- ============================================================
+
+-- Tiro in corso per slot (non salvato: un tiro non sopravvive
+-- a un ricaricamento, si ritira)
+IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
+
+-- ============================================================
+-- FUNZIONE: main_subphases()
+-- ============================================================
+function main_subphases()
+    return {
+        MORALE_TEST = {
+            scope    = "player",
+            anywhere = true,
+            title    = "TEST DI MORALE",
+            first    = "ROLL",
+            onEnter  = "main_moraleTestEnter",
+            steps = {
+                ROLL  = { render = "moraleRoll",  actor = "owner", label = "Vai ai dadi", onClick = "main_moraleTestFocus", onRoll = "main_moraleTestRoll" },
+                ESITO = { render = "moraleEsito", actor = "owner" },
+            },
+        },
+    }
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleCamera(player)
+-- Unica funzione camera dei test di morale.
+-- ============================================================
+function main_moraleCamera(player)
+    if player then
+        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleTestEnter(ctx, slot, rec)
+-- ============================================================
+function main_moraleTestEnter(ctx, slot, rec)
+    IEF_MORALE_TEST_ROLLING[slot] = false
+    main_clearWarning()
+    engine_diceClearLastRoll(slot)
+    main_moraleRefreshUI()     
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleTestFocus(ctx, slot, player, rec)
+-- Bottone del pannello sottofase: riporta la camera sui dadi.
+-- ============================================================
+function main_moraleTestFocus(ctx, slot, player, rec)
+    main_moraleCamera(player)
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleTestRoll(ctx, slot, player, rec)
+-- Roll fisico durante lo step ROLL.
+-- ============================================================
+function main_moraleTestRoll(ctx, slot, player, rec)
+    if IEF_MORALE_TEST_ROLLING[slot] then return end
+
+    local req = main_moraleFindRequest(slot, ctx.reqId)
+    if not req then
+        engine_subClose("MORALE_TEST", slot, nil)
+        return
+    end
+
+    local mod = req.mod
+    if mod == nil then
+        local dettaglio
+        mod, dettaglio = main_moraleCurrentModifier(req.key)
+        printToAll(string.format("[MORALE] %s testa (%s), modificatori: %s",
+            main_decodeExtendedUnitLabel(req.key), req.motivo or req.situazione or "",
+            main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
+    end
+
+    IEF_MORALE_TEST_ROLLING[slot] = true
+
+    main_testMorale(req.key, player, req.situazione, mod, function(esito, somma, soglia, effetto)
+        IEF_MORALE_TEST_ROLLING[slot] = false
+        if esito == nil then return end         -- lettura dadi fallita: si ritira
+
+        ctx.esito, ctx.somma, ctx.soglia = esito, somma, soglia
+        engine_subStep("MORALE_TEST", slot, "ESITO")
+
+        Wait.time(function()
+            engine_subClose("MORALE_TEST", slot, { esito = esito, somma = somma, soglia = soglia, effetto = effetto })
+        end, 1.5)
+    end)
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleTestDone(ctx, result, slot)
+-- onDone di MORALE_TEST: toglie la richiesta dalla coda e
+-- chiama il suo onDone (nome handler oppure funzione).
+-- ============================================================
+function main_moraleTestDone(ctx, result, slot)
+    local req, idx = main_moraleFindRequest(slot, ctx.reqId)
+    if req then
+        table.remove(IEF_MORALE_ROLL_PENDING[slot], idx)
+    end
+
+    if req and result and result.esito then
+        if type(req.onDone) == "function" then
+            req.onDone(result.esito, result.somma, result.soglia, result.effetto)
+        elseif type(req.onDone) == "string" then
+            callHandler(req.onDone, req.ctx or {}, result.esito, result.somma, result.soglia, result.effetto)
+        end
+    end
+
+    main_moraleRefreshUI()
+
+    if main_moraleQueueCount(slot) == 0 then
+        local player = Player[ARMY[slot].color]
+        if player then engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME) end
+    end
+end

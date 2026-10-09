@@ -874,8 +874,8 @@ function charge_moraleConfirm(player, value, id)
         return
     end
 
-    if IEF_MORALE_ROLL_PENDING[slot] then
-        warningToColor("C'è un test di morale in attesa: tira prima i dadi", player, "Yellow", 5)
+    if main_moraleQueueCount(slot) > 0 then
+        warningToColor("C'è un test di morale in attesa: tiralo dal pannello morale", player, "Yellow", 5)
         return
     end
 
@@ -888,26 +888,37 @@ function charge_moraleConfirm(player, value, id)
         return
     end
 
-    local basiObjs = charge_getUnitBases(attackerKey)
-
-    main_requestMoraleRoll(attackerKey, slot, test.def.effetto or "per_caricare", nil, test.nome, function(esito)
-        if #basiObjs > 0 then
-            main_cameraToUnitPanel(player, basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
-        end
-
-        if esito == MORALE_RESULT.OK then
-            IEF_CHARGE_TEST_PASSED[attackerKey] = targetKey
-            warningToColor(string.format("La %s supera il test: conferma la carica", main_decodeExtendedUnitLabel(attackerKey)), player, "Yellow", 5)
-            charge_checkTarget(player, unitKey)
-        else
-            IEF_CHARGE_TEST_FAILED[attackerKey] = true
-            warningToColor(string.format("La %s non supera il test: non carica", main_decodeExtendedUnitLabel(attackerKey)), player, "Yellow", 5)
-            charge_close(unitKey)
-            callHandler("buildUI")
-            callHandler("updateCenterPanel")
-        end
-    end)
+    main_requestMoraleRoll(attackerKey, slot, test.def.effetto or "per_caricare", nil, test.nome,
+        "charge_declareTestDone",
+        { attackerKey = attackerKey, targetKey = targetKey, unitKey = unitKey, slot = slot })
 end
+
+-- ============================================================
+-- FUNZIONE: charge_declareTestDone(ctx, esito)
+-- Esito del test per caricare chiesto da charge_moraleConfirm.
+-- ============================================================
+function charge_declareTestDone(ctx, esito)
+    local slot   = ctx.slot
+    local player = Player[ARMY[slot].color]
+    local basiObjs = charge_getUnitBases(ctx.attackerKey)
+
+    if player and #basiObjs > 0 then
+        main_cameraToUnitPanel(player, basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
+    end
+
+    if esito == MORALE_RESULT.OK then
+        IEF_CHARGE_TEST_PASSED[ctx.attackerKey] = ctx.targetKey
+        warningToColor(string.format("La %s supera il test: conferma la carica", main_decodeExtendedUnitLabel(ctx.attackerKey)), player, "Yellow", 5)
+        charge_checkTarget(player, ctx.unitKey)
+    else
+        IEF_CHARGE_TEST_FAILED[ctx.attackerKey] = true
+        warningToColor(string.format("La %s non supera il test: non carica", main_decodeExtendedUnitLabel(ctx.attackerKey)), player, "Yellow", 5)
+        charge_close(ctx.unitKey)
+        callHandler("buildUI")
+        callHandler("updateCenterPanel")
+    end
+end
+registerHandler("charge_declareTestDone", function(ctx, esito) return charge_declareTestDone(ctx, esito) end)
 
 -- ============================================================
 -- FUNZIONE: charge_moraleCancel(player, value, id)
@@ -2066,19 +2077,26 @@ function charge_runPendingChargeTests()
     IEF_CHARGE_PENDING_TESTS = {}
 
     for _, dati in ipairs(tests) do
-        main_requestMoraleRoll(dati.unitKey, dati.slot, dati.test.def.effetto or "per_caricare", nil, dati.test.nome, function(esito)
-            if esito == MORALE_RESULT.OK then
-                charge_registerMandatory(dati)
-            else
-                IEF_CHARGE_TEST_FAILED[dati.unitKey] = true
-                printToAll(string.format("[CARICA] %s non supera il test: non carica", main_decodeExtendedUnitLabel(dati.unitKey)), {r=1,g=0.6,b=0.4})
-            end
-        end)
+        main_requestMoraleRoll(dati.unitKey, dati.slot, dati.test.def.effetto or "per_caricare", nil, dati.test.nome,
+            "charge_mandatoryTestDone", dati)
     end
 
     callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
+-- ============================================================
+-- FUNZIONE: charge_mandatoryTestDone(dati, esito)
+-- Esito del test per caricare di una carica obbligatoria.
+-- ============================================================
+function charge_mandatoryTestDone(dati, esito)
+    if esito == MORALE_RESULT.OK then
+        charge_registerMandatory(dati)
+    else
+        IEF_CHARGE_TEST_FAILED[dati.unitKey] = true
+        printToAll(string.format("[CARICA] %s non supera il test: non carica", main_decodeExtendedUnitLabel(dati.unitKey)), {r=1,g=0.6,b=0.4})
+    end
+end
+registerHandler("charge_mandatoryTestDone", function(dati, esito) return charge_mandatoryTestDone(dati, esito) end)
 -- ============================================================
 -- FUNZIONE: charge_autoDeclareMandatory(slot)
 -- ============================================================

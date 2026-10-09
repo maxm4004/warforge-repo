@@ -1,0 +1,1 @@
+registerHandler("recovery_onMoraleDone", function(ctx, esito) return recovery_onMoraleDone(ctx, esito) end)

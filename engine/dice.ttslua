@@ -503,10 +503,14 @@ function engine_diceRoll_start(player)
     local slot = main_SlotByColor(player.color)
     if not slot then warning("Impossibile usare questo pulsante, scegliere prima un colore", "Yellow") return end
 
-    if IEF_MORALE_ROLL_PENDING and IEF_MORALE_ROLL_PENDING[slot] and #IEF_MORALE_ROLL_PENDING[slot] > 0 then
-        main_doPendingMoraleRoll(player, slot)
-    return
-end
+     -- Sottofasi: il Roll va prima alla sottofase attiva dello slot
+    if engine_subRoll(player, slot) then return end
+
+    -- Test di morale in coda: si tirano solo dal pannello morale
+    if main_moraleQueueCount(slot) > 0 then
+        warningToColor("Scegli il test dal pannello morale", player, "Yellow", 4)
+        return
+    end
   
     if ENGINE.phase == "INITIATIVE_ROLL" then
         

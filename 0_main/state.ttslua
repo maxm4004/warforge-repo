@@ -36,7 +36,8 @@ IEF_MARKED_LOSSES = IEF_MARKED_LOSSES or {}
 
 IEF_MORALE_ROLL_PENDING = IEF_MORALE_ROLL_PENDING or {}
 
-IEF_MORALE_ACTIVE_ROW = IEF_MORALE_ACTIVE_ROW or {}
+-- Id progressivo delle richieste di test (main_requestMoraleRoll)
+IEF_MORALE_NEXT_ID = IEF_MORALE_NEXT_ID or 0
 
 IEF_MORALE_QUEUE_LAST_SHOWN = IEF_MORALE_QUEUE_LAST_SHOWN or {}
 -- ============================================================

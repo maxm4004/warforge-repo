@@ -11,9 +11,6 @@ function before_shoot(phaseName, phase)
     IEF_MORALE_ROLL_PENDING[1] = {}
     IEF_MORALE_ROLL_PENDING[2] = {}
 
-    IEF_MORALE_ACTIVE_ROW[1] = nil
-    IEF_MORALE_ACTIVE_ROW[2] = nil
-
     IEF_MORALE_END_QUEUE = {}
 
     TURN.completed = { Army1 = false, Army2 = false }

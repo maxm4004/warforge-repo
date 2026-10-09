@@ -63,9 +63,7 @@ function recovery_queueTests()
     for slot = 1, 2 do
         for _, key in ipairs(recovery_getCandidates(slot)) do
             local livello = main_getCohesion(key)
-            main_requestMoraleRoll(key, slot, "per_riordinare", nil, "RECUPERO", function(esito)
-                recovery_onResult(key, livello, esito)
-            end)
+            main_requestMoraleRoll(key, slot, "per_riordinare", nil, "RECUPERO","recovery_onMoraleDone", { key = key, livello = livello })
         end
     end
 end
@@ -88,4 +86,11 @@ function recovery_onResult(key, livello, esito)
         printToAll(string.format("[RECUPERO] %s non si riordina: resta %s",
             main_decodeExtendedUnitLabel(key), livello), {r=1,g=0.6,b=0.4})
     end
+end
+-- ============================================================
+-- FUNZIONE: recovery_onMoraleDone(ctx, esito)
+-- onDone del test di recupero (pannello morale).
+-- ============================================================
+function recovery_onMoraleDone(ctx, esito)
+    recovery_onResult(ctx.key, ctx.livello, esito)
 end

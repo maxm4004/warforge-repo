@@ -122,5 +122,5 @@ function buildUI()
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="XmlLayout ../../../Configuration/XmlLayout.xsd">]]
     local bottom = "</XmlLayout>"
-    UI.setXml(header .. rulesetXml .. enginePanels .. handPreview .. bottom)
+        UI.setXml(header .. rulesetXml .. enginePanels .. handPreview .. engine_subPanelsXml() .. bottom)
 end

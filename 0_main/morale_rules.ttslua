@@ -567,7 +567,10 @@ end
 -- se l'esercito ha ancora test di morale da tirare.
 -- ============================================================
 function main_moraleBlocksPhase(player, slot)
-    return main_moraleSelectTest(player, slot, IEF_MORALE_ACTIVE_ROW[slot])
+    local n = main_moraleQueueCount(slot)
+    if n == 0 then return false end
+    warningToColor(string.format("%d test di morale da tirare: usa il pannello morale", n), player, "Yellow", 4)
+    return true
 end
 -- ============================================================
 -- FUNZIONE: main_moraleCurrentModifier(unitKey)
@@ -601,71 +604,51 @@ function main_moraleRefreshUI()
     end, 0.5)
 end
 -- ============================================================
--- FUNZIONE: main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
--- Accoda il test in IEF_MORALE_ROLL_PENDING[slot] e rigenera il
--- pannello come le altre liste (buildUI). Il rebuild è rimandato
--- con Wait.time: la chiamata arriva spesso dalla catena dei dadi.
--- mod = nil -> modificatore calcolato al momento del Roll
--- (main_moraleCurrentModifier); un numero lo fissa.
+-- FUNZIONE: main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, onDone, ctx)
+-- Accoda il test (riga nel pannello morale); si tira aprendo la
+-- sottofase MORALE_TEST dal pannello. mod = nil -> calcolato al Roll.
+-- onDone: NOME di un handler, chiamato con (ctx, esito, somma,
+-- soglia, effetto) — salvabile; oppure una funzione (esito, somma,
+-- soglia, effetto) — formato vecchio, NON salvato (da eliminare
+-- con la migrazione di Tiro d'Arresto e mischia).
 -- ============================================================
-function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, callback)
+function main_requestMoraleRoll(unitKey, slot, situazione, mod, motivo, onDone, ctx)
+    IEF_MORALE_NEXT_ID = (IEF_MORALE_NEXT_ID or 0) + 1
     IEF_MORALE_ROLL_PENDING[slot] = IEF_MORALE_ROLL_PENDING[slot] or {}
     table.insert(IEF_MORALE_ROLL_PENDING[slot], {
+        id = IEF_MORALE_NEXT_ID,
         key = unitKey, situazione = situazione, mod = mod,
-        motivo = motivo, callback = callback,
+        motivo = motivo, onDone = onDone, ctx = ctx,
     })
     main_moraleRefreshUI()
+    return IEF_MORALE_NEXT_ID
 end
 
 -- ============================================================
--- FUNZIONE: main_doPendingMoraleRoll(player, slot)
--- Dispatch da engine_diceRoll_start. Risolve la riga attivata
--- dal click (IEF_MORALE_ACTIVE_ROW[slot]) o, in assenza, la
--- prima in coda. Il modificatore si calcola qui, al Roll, se il
--- test non ne ha uno fisso. Tolta la riga, il pannello si
--- rigenera con buildUI (rimandato: siamo dentro la catena dei dadi).
+-- FUNZIONE: main_moraleFindRequest(slot, id)
 -- ============================================================
-function main_doPendingMoraleRoll(player, slot)
-    local coda = IEF_MORALE_ROLL_PENDING[slot]
-    if not coda or #coda == 0 then return false end
-    if coda.inCorso then return true end
-
-    main_clearWarning()
-
-    local idx = IEF_MORALE_ACTIVE_ROW[slot]
-    if not idx or not coda[idx] then idx = 1 end
-    local p = coda[idx]
-
-    local mod = p.mod
-    if mod == nil then
-        local dettaglio
-        mod, dettaglio = main_moraleCurrentModifier(p.key)
-        printToAll(string.format("[MORALE] %s testa (%s), modificatori: %s",
-            main_decodeExtendedUnitLabel(p.key), p.motivo or p.situazione or "", main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
+function main_moraleFindRequest(slot, id)
+    for i, req in ipairs(IEF_MORALE_ROLL_PENDING[slot] or {}) do
+        if req.id == id then return req, i end
     end
-
-    coda.inCorso = true
-
-    main_testMorale(p.key, player, p.situazione, mod, function(esito, somma, soglia, effetto)
-        coda.inCorso = false
-        if esito == nil then return end
-
-        table.remove(coda, idx)
-        IEF_MORALE_ACTIVE_ROW[slot] = nil
-
-        if p.callback then p.callback(esito, somma, soglia, effetto) end
-
-             main_moraleRefreshUI()
-
-            if #coda == 0 then
-                Wait.time(function()
-                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
-                end, 1.5)
-            end
-    end)
-    return true
+    return nil
 end
 
+-- ============================================================
+-- FUNZIONE: main_moraleSerializableQueue()
+-- Copia della coda per il salvataggio: solo onDone per nome.
+-- ============================================================
+function main_moraleSerializableQueue()
+    local out = { [1] = {}, [2] = {} }
+    for slot = 1, 2 do
+        for _, req in ipairs(IEF_MORALE_ROLL_PENDING[slot] or {}) do
+            if type(req.onDone) ~= "function" then
+                table.insert(out[slot], req)
+            end
+        end
+    end
+    return out
+end
 -- ============================================================
 -- FUNZIONE: main_moraleTestInfo(p)
 -- Righe informative di un test in coda: unità e coesione, motivo,
@@ -705,33 +688,10 @@ function main_clearWarning()
     IEF_WARNING_ACTIVE = false
     UI.setAttribute("playerGameMessage", "active", "false")
 end
--- ============================================================
--- FUNZIONE: main_moraleSelectTest(player, slot, idx)
--- Seleziona il test idx (o il primo) della coda di ARMY{slot}:
--- info del test, camera sui dadi, bottone "Tira i dadi morale".
--- Ritorna false se la coda è vuota.
--- ============================================================
-function main_moraleSelectTest(player, slot, idx)
-    local coda = IEF_MORALE_ROLL_PENDING[slot]
-    if not coda or #coda == 0 then return false end
-    if not idx or not coda[idx] then idx = 1 end
 
-    IEF_MORALE_ACTIVE_ROW[slot] = idx
-
-    local righe = main_moraleTestInfo(coda[idx])
-    if #coda > 1 then
-        table.insert(righe, 1, string.format("%d test di morale da tirare", #coda))
-    end
-    warningListToColor(righe, player, "Yellow", 8)
-
-    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
-    main_setRollButton(slot, "Tira i dadi morale")
-    return true
-end
 -- ============================================================
 -- FUNZIONE: main_moraleRowClick(player, value, id)
--- Click su una riga del pannello morale: attiva quella riga
--- come prossima da risolvere col Roll fisico, zooma sui dadi.
+-- Ferma un warningListToColor in corso e nasconde il messaggio.
 -- ============================================================
 function main_moraleRowClick(player, value, id)
     local slotStr, idxStr = id:match("^morale_queue_row_btn_(%d)_(%d+)$")
@@ -742,9 +702,29 @@ function main_moraleRowClick(player, value, id)
     local slot = tonumber(slotStr)
     if main_getArmyByColor(player) ~= slot then return end
 
-    main_moraleSelectTest(player, slot, tonumber(idxStr))
+    local req = (IEF_MORALE_ROLL_PENDING[slot] or {})[tonumber(idxStr)]
+    if not req then return end
+
+    local aperta = engine_subPrivate(slot)
+    if aperta then
+        if aperta.name == "MORALE_TEST" and aperta.ctx.reqId == req.id then
+            return
+        else
+            warningToColor("Completa prima il test in corso", player, "Yellow", 3)
+        end
+        return
+    end
+
+    engine_subOpen("MORALE_TEST", slot, { reqId = req.id }, "main_moraleTestDone")
 end
 
+-- ============================================================
+-- FUNZIONE: main_moraleIsActive(slot, id)
+-- ============================================================
+function main_moraleIsActive(slot, id)
+    local rec = engine_subPrivate(slot)
+    return rec ~= nil and rec.name == "MORALE_TEST" and rec.ctx.reqId == id
+end
 -- ============================================================
 -- FUNZIONE: main_getMoraleQueuePanelXml(slot)
 -- Pannello dei test di morale in attesa: una riga per ogni test
@@ -770,7 +750,7 @@ function main_getMoraleQueuePanelXml(slot)
                     '<Button id="morale_queue_row_btn_%d_%d" text="" icon="centro" tooltip="Controlla il Morale" tooltipPosition="Below" iconWidth="25" dontUseRectLayout="true" color="rgba(0,0,0,0.00)" onClick="main_moraleRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
-            slot, i, main_decodeExtendedUnitLabel(item.key), item.motivo or item.situazione or "", slot, i
+               slot, i, main_decodeExtendedUnitLabel(item.key), (item.motivo or item.situazione or "") .. (main_moraleIsActive(slot, item.id) and " - in corso" or ""), slot, i
         )
     end
 

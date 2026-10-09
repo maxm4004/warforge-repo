@@ -108,6 +108,9 @@ else
             end
         end
     end)
+
+    -- Livello sottofasi: pannelli e blocco dei bottoni di fase
+    engine_subRedraw()
 end
 -- ============================================================
 -- FUNZIONE: aggiornaLinee()
@@ -240,7 +243,10 @@ function main_restart()
     IEF_MORALE_END_QUEUE = {}
     IEF_MELEE_MARKED = {}
     IEF_MARKED_LOSSES = {}
-    IEF_MORALE_ACTIVE_ROW = {}
+    IEF_MORALE_ROLL_PENDING = { [1] = {}, [2] = {} }
+    IEF_MORALE_NEXT_ID = 0
+    IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
+    engine_subInitState()
     
     UI.setAttribute("iconWinnerArmy1", "active", "false")
     UI.setAttribute("iconWinnerArmy2", "active", "false")

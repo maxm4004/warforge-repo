@@ -51,7 +51,9 @@ function main_onSave()
     ief_melee_marked    = IEF_MELEE_MARKED,
     ief_recovery_done   = IEF_RECOVERY_DONE,
     ief_marked_losses = IEF_MARKED_LOSSES,
-    ief_morale_active_row = IEF_MORALE_ACTIVE_ROW,
+    ief_sub             = ENGINE and ENGINE.sub or nil,
+    ief_morale_pending  = main_moraleSerializableQueue(),
+    ief_morale_next_id  = IEF_MORALE_NEXT_ID,
 }    
     return JSON.encode(saveData)
 end
@@ -148,8 +150,20 @@ function main_restoreState(save_state)
     if data.ief_marked_losses then
         IEF_MARKED_LOSSES = data.ief_marked_losses
     end
-    if data.ief_morale_active_row then
-        IEF_MORALE_ACTIVE_ROW = data.ief_morale_active_row
+
+    if data.ief_morale_pending then
+        IEF_MORALE_ROLL_PENDING = {
+            [1] = data.ief_morale_pending[1] or data.ief_morale_pending["1"] or {},
+            [2] = data.ief_morale_pending[2] or data.ief_morale_pending["2"] or {},
+        }
+    end
+    if data.ief_morale_next_id then
+        IEF_MORALE_NEXT_ID = data.ief_morale_next_id
+    end
+    if data.ief_sub then
+        ENGINE.sub = data.ief_sub
+    else
+        engine_subInitState()
     end
     
     Wait.time(function()
