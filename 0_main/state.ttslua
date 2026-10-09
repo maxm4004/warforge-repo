@@ -113,7 +113,7 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
 }
 
 ARMIES_LABELS = {
-["ANG"] = "Anglosassone",					
+["ANG"] = "AngloSassone",					
 ["VIK"] = "Vichinga",				
 ["NOR"] = "Normanna",				
 ["FRA"] = "Franca",			

@@ -1016,12 +1016,12 @@ function charge_getAttackListPanelXml(slot)
         local labelBtn = (ENGINE.phase == PHASE.CHARGE_AUTO) and "Procedi" or "Controlla"
 
         rows = rows .. string.format(
-            '<Row preferredHeight="25">' ..
+            '<Row preferredHeight="30">' ..
                 '<Cell>' ..
-                    '<Button id="charge_attack_row_%d_%s" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" onClick="charge_attackRowClick"/>' ..
+                    '<Button id="charge_attack_row_%d_%s" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
                 '</Cell>' ..
                 '<Cell>' ..
-                    '<Button id="charge_attack_row_btn_%d_%s" text="" font="warforge_font" fontSize="11" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_attackRowClick"/>' ..
+                    '<Button id="charge_attack_row_btn_%d_%s" text="" icon="binocolo" tooltip="vai nel punto" tooltipPosition="Below" iconWidth="25" dontUseRectLayout="true" color="rgba(0,0,0,0.00)" onClick="charge_attackRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
 
@@ -1033,13 +1033,13 @@ function charge_getAttackListPanelXml(slot)
         )
     end
 
-    local titolo = (ENGINE.phase == PHASE.CHARGE_AUTO) and "MOVIMENTI DI CHIUSURA CARICA " or "CARICHE"
+    local titolo = (ENGINE.phase == PHASE.CHARGE_AUTO) and "ELENCO MOVIMENTI DI CHIUSURA CARICA " or "ELENCO CARICHE"
 
     return string.format(
     
         '<Panel id="charge_attack_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -330" visibility="%s" active="%s">' ..
         '<Text id="charge_attack_list_title_army%d" text="%s %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
-        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="335 65" position="0 -5 0">' ..
+        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="370 30" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
@@ -1072,12 +1072,12 @@ function charge_getDefenseListPanelXml(slot)
         local risposta = "è caricata" 
 
         rows = rows .. string.format(
-            '<Row preferredHeight="25">' ..
+            '<Row preferredHeight="30">' ..
                 '<Cell>' ..
-                    '<Button id="charge_defense_row_%d_%s" text="La %s %s dalla %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" width="475" onClick="charge_defenseRowClick"/>' ..
+                    '<Button id="charge_defense_row_%d_%s" text="La %s %s dalla %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
                 '</Cell>' ..
                 '<Cell>' ..
-                    '<Button id="charge_defense_row_btn_%d_%s" text="Ordina" font="warforge_font" fontSize="11" color="rgba(0.7,0.15,0.15,1)" textColor="White" onClick="charge_defenseRowClick"/>' ..
+                    '<Button id="charge_defense_row_btn_%d_%s" text="" icon="centro" tooltip="Scegli una reazione alla Carica" tooltipPosition="Below" iconWidth="25" dontUseRectLayout="true" color="rgba(0,0,0,0.00)" onClick="charge_defenseRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
             slot, otherKey,
@@ -1092,7 +1092,7 @@ function charge_getDefenseListPanelXml(slot)
     return string.format(
         '<Panel id="charge_defense_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -330" visibility="%s" active="%s">' ..
         '<Text id="charge_defense_list_title_army%d" text="ELENCO REAZIONI %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
-        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="335 65" position="0 -5 0">' ..
+        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="370 30" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
@@ -1217,8 +1217,7 @@ function charge_defenseRowClick(player, value, id)
 
         UI.setAttribute("btnResponseCharge", "active", "false")
         UI.setAttribute("btnResponseEvadeMove", "active", "false")
-        UI.setAttribute("btnResponseMorale", "active", "false")
-
+     
         for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
             local presente = false
             for _, d in ipairs(disponibili) do
@@ -1637,11 +1636,12 @@ function charge_stopfireRedraw()
 
     local slot, label
     if cur.subStep == "TIRO" then
-        slot, label = defenderSlot, "Tira i dadi per colpire"
+        slot, label = defenderSlot, "Tiro di Arresto"
     elseif cur.subStep == "MORALE" then
-        slot, label = attackerSlot, "Tira i dadi morale"
+        slot, label = attackerSlot, "Usa Panel Morale"
     else
-        slot, label = attackerSlot, "Fine Tiro di Arresto"
+        slot = attackerSlot
+        label = cur.conMorale and "Fine Controllo Morale" or "Fine Tiro di Arresto"
     end
 
     Wait.time(function()
@@ -1737,6 +1737,14 @@ function charge_stopfireDoRoll(player, slot)
 
         local attackerSlot = (slot == 1) and 2 or 1
 
+        -- Carica annullata dal Tiro d'Arresto: il caricante resta a 2"
+        -- e la carica è chiusa (niente riga in CHARGE_AUTO, niente mischia).
+        local function annullaCarica()
+            elemento.outcome = CHARGE_OUTCOME.ANN
+            if attackerSlot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+            elemento.step = CHARGE_STEP.CLO
+        end
+
         -- Perdite MARCATE (rimosse a fine fase di carica, after_charge_auto)
         local perse = 0
         if successi and successi > 0 then
@@ -1748,7 +1756,7 @@ function charge_stopfireDoRoll(player, slot)
         if perse == 0 or not main_isAliveAfterMarks(attackerKey) then
             if perse > 0 then
                 printToAll("[TIRO D'ARRESTO] " .. main_decodeExtendedUnitLabel(attackerKey) .. " distrutta: la carica non parte", {r=1,g=0.3,b=0.3})
-                elemento.outcome = CHARGE_OUTCOME.ANN
+                annullaCarica()
             else
                 elemento.outcome = CHARGE_OUTCOME.OK
             end
@@ -1758,17 +1766,32 @@ function charge_stopfireDoRoll(player, slot)
             return
         end
 
-        -- Basi perse: test "per caricare" del caricante, nel pannello
-        -- morale (Roll del giocatore). Superato -> carica; fallito ->
-        -- non carica e, avendo subito perdite da tiro, -1 coesione.
+        -- Basi perse: il test previsto dalla tabella per le perdite
+        -- (BASE_PERSA) vale come test "per caricare" del caricante,
+        -- nel pannello morale. Superato -> carica; fallito -> non
+        -- carica e, avendo subito perdite da tiro, -1 coesione.
+        -- Se la tabella non prevede il test, la carica parte.
+        local test = main_lossTests(attackerKey, attackerSlot)[1]
+        if not test then
+            elemento.outcome = CHARGE_OUTCOME.OK
+            elemento.stopfireResolved = true
+            live.subStep = "ESCI"
+            charge_stopfireRedraw()
+            return
+        end
+
         live.subStep = "MORALE"
         charge_stopfireRedraw()
 
-        main_requestMoraleRoll(attackerKey, attackerSlot, "per_caricare", nil, "TIRO_D_ARRESTO", function(esito)
+        main_requestMoraleRoll(attackerKey, attackerSlot, "per_caricare", nil, test.motivo, function(esito)
+
             if esito == MORALE_RESULT.OK then
+                live.subStep = "MORALE"
+                live.conMorale = true
+                charge_stopfireRedraw()
                 elemento.outcome = CHARGE_OUTCOME.OK
             else
-                elemento.outcome = CHARGE_OUTCOME.ANN
+                annullaCarica()
                 main_lowerAndCheckRout(attackerKey, attackerSlot, function(item, quando)
                     if quando == "FINE_FASE" then
                         table.insert(IEF_MORALE_END_QUEUE, item)
@@ -2032,14 +2055,11 @@ function charge_chargeTestFor(attackerKey, targetKey)
 end
 
 -- ============================================================
--- FUNZIONE: charge_autoDeclareMandatory(slot)
--- Scorre tutte le unità di ARMY{slot}: se rientra in un obbligo
--- di carica (charge_isMandatoryCharge) e ha un bersaglio legale
--- raggiungibile (charge_findLineTarget), la dichiara in automatico
--- (pivotInches=0). Se il regolamento richiede anche un test per
--- caricare (es. FP/FM con IMPETO armate con armi da tiro), la
--- carica va in IEF_CHARGE_PENDING_TESTS e viene registrata solo
--- se il test è superato (charge_runPendingChargeTests).
+-- FUNZIONE: charge_runPendingChargeTests()
+-- Manda nel pannello morale, tutti insieme, i test per caricare
+-- delle cariche obbligatorie in attesa (ognuno nel pannello del
+-- suo esercito). Superato -> carica registrata; fallito -> non
+-- carica (IEF_CHARGE_TEST_FAILED).
 -- ============================================================
 function charge_runPendingChargeTests()
     local tests = IEF_CHARGE_PENDING_TESTS
@@ -2061,13 +2081,6 @@ function charge_runPendingChargeTests()
 end
 -- ============================================================
 -- FUNZIONE: charge_autoDeclareMandatory(slot)
--- Scorre tutte le unità di ARMY{slot}: se rientra in un obbligo
--- di carica (charge_isMandatoryCharge) e ha un bersaglio legale
--- raggiungibile (charge_findLineTarget), la dichiara in automatico
--- (pivotInches=0). Se il regolamento richiede anche un test per
--- caricare (es. FP/FM con IMPETO armate con armi da tiro), la
--- carica va in IEF_CHARGE_PENDING_TESTS e viene registrata solo
--- se il test è superato (charge_runPendingChargeTests).
 -- ============================================================
 function charge_autoDeclareMandatory(slot)
     local unita = main_listUnits()
@@ -2140,32 +2153,6 @@ function charge_registerMandatory(dati)
         main_decodeExtendedUnitLabel(unitKey), main_decodeExtendedUnitLabel(targetKey)), {r=1,g=0.7,b=0.2})
 end
 
--- ============================================================
--- FUNZIONE: charge_runPendingChargeTests()
--- Esegue in sequenza i test per caricare delle cariche
--- obbligatorie in attesa (tiro automatico dal sacchetto del
--- proprietario). Superato -> carica registrata; fallito -> non
--- carica in questo turno (IEF_CHARGE_TEST_FAILED).
--- ============================================================
-function charge_runPendingChargeTests()
-
-    local dati = (#IEF_CHARGE_PENDING_TESTS > 0) and table.remove(IEF_CHARGE_PENDING_TESTS, 1) or nil
-    if not dati then
-        callHandler("buildUI")
-        callHandler("updateCenterPanel")
-        return
-    end
-
-        main_requestMoraleRoll(dati.unitKey, dati.slot, dati.test.def.effetto or "per_caricare", nil, dati.test.nome, function(esito)   
-        if esito == MORALE_RESULT.OK then
-            charge_registerMandatory(dati)
-        else
-            IEF_CHARGE_TEST_FAILED[dati.unitKey] = true
-            printToAll(string.format("[CARICA] %s non supera il test: non carica", main_decodeExtendedUnitLabel(dati.unitKey)), {r=1,g=0.6,b=0.4})
-        end
-        Wait.time(charge_runPendingChargeTests, 1)
-    end)
-end
 -- ============================================================
 -- FUNZIONE: charge_closestBasePair(basesA, basesB)
 -- Trova la coppia di basi (una da basesA, una da basesB) con la

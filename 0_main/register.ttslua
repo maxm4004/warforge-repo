@@ -55,7 +55,6 @@ registerHandler("engine_measure",               function(p)      return engine_m
 
 -- Data layer
 registerHandler("ief_data_ready",               function()             return main_boot()                             end)
-registerHandler("main_infoUnita",               function(p,v,i,b)      return main_infoUnita(p,v,i,b)                 end)
 registerHandler("shoot_range_and_target",       function(p,v)          return shoot_range_and_target(p,v)             end)
 
 

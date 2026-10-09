@@ -6,160 +6,6 @@
 
 function getRulesetUiXml()
 
-   -- Genera 2 popup identici con id diversi
-    local popups = ""
-    local offsets = { "0 -150", "0 -150" }  -- stessa posizione, visibilità gestita da visibility
-
-    for slot = 1, 2 do
-        local p  = "unit_popup_" .. slot
-        local ox = offsets[slot]
-        popups = popups .. string.format([[
-
- <Panel id="%s"
-           rectAlignment="MiddleCenter"
-           width="430" height="550"
-           color="#FFFFFF"
-           outline="#000000" outlineSize="1"
-           offsetXY="%s"
-           active="false">
-
-        <Button text="X"
-                fontSize="11" 
-                color="#8B1A1AFF" textColor="White"
-                width="26" height="26"
-                position="185 215 0"
-                onClick="onUnitPopupClose"/>
-
-        <Image id="%s_icon"
-               width="120" height="130"
-               position="-145 155 0"
-               preserveAspect="true"
-               outline="#000000" outlineSize="2"/>
-
-        <Text id="%s_title"
-              text="" fontSize="16" 
-              color="#333333" alignment="UpperLeft"
-              position="50 205 0" width="220" height="30"
-            outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_subtitle"
-              text="" fontSize="14"
-              color="#333333" alignment="UpperLeft"
-              position="25 180 0" width="220" height="20"
-              outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_basi"
-              text="" fontSize="14"
-              color="#333333" alignment="UpperLeft"
-              position="25 155 0" width="220" height="20"
-              outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_figure"
-              text="" fontSize="14"
-              color="#333333" alignment="UpperLeft"
-              position="25 130 0" width="220" height="20"
-              outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_salute"
-              text="" fontSize="14" 
-              color="#333333" alignment="UpperLeft"
-              position="175 130 0" width="220" height="20"
-              outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_weapon"
-              text="" fontSize="14" 
-              color="#333333" alignment="UpperLeft"
-              position="25 105 0" width="220" height="20"
-              outline="#000000" outlineSize="0"/>
-
-        <Panel width="380" height="1" position="0 80 0" color="#00000066" outline="#000000" outlineSize="1"/>
-        <Text text="MOVEMENT" fontSize="14" 
-              color="#333333" alignment="MiddleCenter"
-              position="0 70 0" width="380" height="18"
-              outline="#000000" outlineSize="0"/>
-
-        <Panel width="380" height="1" position="0 60 0" color="#00000066" outline="#000000" outlineSize="1"/>
-
-        <Text text="Open"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-140 45 0" width="70" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="Wood"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-70 45 0"  width="70" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="Rough" fontSize="11" color="#333333" alignment="MiddleCenter" position="0 45 0"   width="70" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="Ford"  fontSize="11" color="#333333" alignment="MiddleCenter" position="70 45 0"  width="70" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="Pivot" fontSize="11" color="#333333" alignment="MiddleCenter" position="140 45 0" width="70" height="16" outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_mov_open"  text="" fontSize="11"  color="#333333" alignment="MiddleCenter" position="-140 27 0" width="70" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mov_wood"  text="" fontSize="11"  color="#333333" alignment="MiddleCenter" position="-70 27 0"  width="70" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mov_rough" text="" fontSize="11"  color="#333333" alignment="MiddleCenter" position="0 27 0"   width="70" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mov_ford"  text="" fontSize="11"  color="#333333" alignment="MiddleCenter" position="70 27 0"  width="70" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mov_pivot" text="" fontSize="11"  color="#333333" alignment="MiddleCenter" position="140 27 0" width="70" height="18" outline="#000000" outlineSize="0"/>
-
-        <Panel width="380" height="1" position="0 10 0" color="#00000066" outline="#000000" outlineSize="1"/>
-        <Text text="MELEE" fontSize="14"
-              color="#333333" alignment="MiddleCenter"
-              position="0 0 0" width="380" height="18"
-              outline="#000000" outlineSize="0"/>
-        <Panel width="380" height="1" position="0 -10 0" color="#00000066" outline="#000000" outlineSize="1"/>
-
-        <Text text="AI"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-150 -23 0" width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="UI"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-95 -23 0"  width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="SK"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-40 -23 0"  width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="AC"  fontSize="11" color="#333333" alignment="MiddleCenter" position="20 -23 0"   width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="UC"  fontSize="11" color="#333333" alignment="MiddleCenter" position="75 -23 0"   width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="SKC" fontSize="11" color="#333333" alignment="MiddleCenter" position="133 -23 0"  width="55" height="16" outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_mel_ai"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="-150 -42 0" width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mel_ui"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="-95 -42 0"  width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mel_sk"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="-40 -42 0"  width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mel_ac"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="20 -42 0"   width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mel_uc"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="75 -42 0"   width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_mel_skc" text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="133 -42 0"  width="55" height="18" outline="#000000" outlineSize="0"/>
-
-        <Panel width="380" height="1" position="0 -60 0" color="#00000066" outline="#000000" outlineSize="1"/>
-        <Text id="%s_shoot_label"
-              text="SHOOTING" fontSize="14"
-              color="#333333" alignment="MiddleCenter"
-              position="0 -70 0" width="380" height="18"
-              outline="#000000" outlineSize="0"/>
-        <Panel width="380" height="1" position="0 -80 0" color="#00000066" outline="#000000" outlineSize="1"/>
-
-        <Text text="AI"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-150 -93 0" width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="UI"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-95 -93 0"  width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="SK"  fontSize="11" color="#333333" alignment="MiddleCenter" position="-40 -93 0"  width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="AC"  fontSize="11" color="#333333" alignment="MiddleCenter" position="20 -93 0"   width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="UC"  fontSize="11" color="#333333" alignment="MiddleCenter" position="75 -93 0"   width="55" height="16" outline="#000000" outlineSize="0"/>
-        <Text text="SKC" fontSize="11" color="#333333" alignment="MiddleCenter" position="133 -93 0"  width="55" height="16" outline="#000000" outlineSize="0"/>
-
-        <Text id="%s_sho_ai"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="-150 -112 0" width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_sho_ui"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="-95 -112 0"  width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_sho_sk"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="-40 -112 0"  width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_sho_ac"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="20 -112 0"   width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_sho_uc"  text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="75 -112 0"   width="55" height="18" outline="#000000" outlineSize="0"/>
-        <Text id="%s_sho_skc" text="" fontSize="11" fontStyle="Bold" color="#333333" alignment="MiddleCenter" position="133 -112 0"  width="55" height="18" outline="#000000" outlineSize="0"/>
-
-        <Panel width="380" height="1" position="0 -130 0" color="#00000066" outline="#000000" outlineSize="1"/>
-        <Text text="SPECIAL RULES" fontSize="14"
-              color="#333333" alignment="MiddleCenter"
-              position="0 -140 0" width="380" height="18"
-              outline="#000000" outlineSize="0"/>
-        <Panel width="380" height="1" position="0 -150 0" color="#00000066" outline="#000000" outlineSize="1"/>
-
-        <Text id="%s_special"
-              text="" fontSize="11"
-              color="#333333" alignment="UpperCenter"
-              position="-100 -185 0" width="370" height="60"
-              outline="#000000" outlineSize="0"/>
-
-    </Panel>
-
-        ]], p, ox,
-            p, p, p, p, p, p, p,         -- icon, title, subtitle, basi, figure, salute
-            p, p, p, p, p,               -- mov_open..pivot
-            p, p, p, p, p, p,            -- mel_ai..skc
-            p,                           -- shoot_label
-            p, p, p, p, p, p,            -- sho_ai..skc
-            p                            -- special
-        )
-    end
-
     -- Genera 2 copie del pannello di caricamento, una per slot
     local movePanels = ""
     for slot = 1, 2 do
@@ -295,7 +141,7 @@ function getRulesetUiXml()
             <Image id="diceField" image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/1d6.png" preserveAspect="1"/>
         </HorizontalLayout>
     </Panel>
-    ]] .. popups .. movePanels ..  [[
+    ]] .. movePanels ..  [[
     
         <!-- CONFIRM SHOOT PANEL -->
         <Panel id="confirm_panel_shoot"
@@ -416,7 +262,7 @@ function getRulesetUiXml()
 
 <Panel id="charge_response_panel"
    rectAlignment="LowerCenter"
-   width="260" height="50"
+   width="400" height="50"
    color="rgba(0,0,0,0.0)"
    offsetXY="0 10"
    active="false">
@@ -456,7 +302,7 @@ function getRulesetUiXml()
             onClick="charge_responseStopfire"/>
 
     <Button id="btnResponseHold"
-            text="Ferma"
+            text="Nessuna Reazione"
             font="warforge_font"
             fontSize="11"
             image="Sprites/Layout/Button"
@@ -465,17 +311,6 @@ function getRulesetUiXml()
             width="80"
             active="false"
             onClick="charge_responseHold"/>            
-
-    <Button id="btnResponseMorale"
-            text="Morale"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            active="false"
-            onClick="charge_responseMorale"/>
 
     <Button id="btnResponseCharge" 
             text="Carica" 
@@ -500,7 +335,7 @@ function getRulesetUiXml()
             onClick="charge_responseEvadeMove"/>     
      
     <Button id="btnResponseCancel" 
-            text="Annulla"
+            text="Chiudi"
             font="warforge_font"
             fontSize="11"
             image="Sprites/Layout/Button"

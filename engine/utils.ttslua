@@ -96,7 +96,7 @@ function warningListToColor(warnings, player, textColor, second)
             end
 
             local nextI = i + 1
-            if nextI > 3 then nextI = 1; a = false end
+            if nextI > #warnings then nextI = 1; a = false end
 
             Wait.time(function()
                 step(nextI)
