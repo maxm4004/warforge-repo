@@ -20,7 +20,7 @@ function melee_phase()
         },
         MELEE_RESOLVE = {
             title = "FASE 5: MISCHIA IN CORSO",
-            desc  = "TIRO CONTEMPORANEO, PERDITE RECIPROCHE E TEST DEL MORALE",
+            desc  = "PERDITE RECIPROCHE E TEST DEL MORALE",
             before = "before_melee_resolve",
             after  = "after_melee_resolve",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },

@@ -2,7 +2,7 @@
 function initiative_phase()
     return {
         INITIATIVE_ROLL = {
-            title = "INIZIATIVA",
+            title = "FASE 2: INIZIATIVA",
             desc  = "TIRA IL DADO PER STABILIRE CHI MUOVE PER PRIMO",
             before = "before_initiative_roll",
             after  = "after_initiative_roll",
@@ -11,15 +11,15 @@ function initiative_phase()
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira dado", textColor="White", color="Red",   callback="roll_btn_all" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tira dado", textColor="White", color="Green", callback="roll_btn_all" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira dado Iniziativa", textColor="White", color="Red",   callback="roll_btn_all" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tira dado Iniziativa", textColor="White", color="Green", callback="roll_btn_all" },
             },
             transitions = {
                 { to="INITIATIVE_CHOICE", conditions={ COND.WINNER } }
             }
         },
         INITIATIVE_CHOICE = {
-            title = "INIZIATIVA",
+            title = "FASE 2: INIZIATIVA",
             desc  = "IL VINCITORE DELL'INIZIATIVA SCEGLI SE TENERLA O CEDERLA",
             before = "before_initiative_choice",
             after  = "after_initiative_choice",

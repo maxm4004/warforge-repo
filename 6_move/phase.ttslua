@@ -11,8 +11,8 @@ function move_phase()
             enforceOwnership = true,
             inputMode = "INITIATIVE",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Fase Successiva", textColor="White", color="Red",   callback="move_btn_army1" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Fase Successiva", textColor="White", color="Green", callback="move_btn_army2" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Movimenti Effetuati", textColor="White", color="Red",   callback="move_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Movimenti Effetuati", textColor="White", color="Green", callback="move_btn_army2" },
             },
             transitions = {
                 { to="SHOOT", conditions={ COND.BOTH_PLAYERS_SELECTED } }

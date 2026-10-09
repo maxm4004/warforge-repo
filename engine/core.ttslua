@@ -90,7 +90,7 @@ function engine_handleAction(action)
     -- Sottofasi aperte: la fase è congelata. L'azione resta
     -- registrata; la transizione si riprova alla chiusura
     -- dell'ultima sottofase (engine_subClose).
-    if engine_subAnyOpen() then
+    if engine_subFreezesPhase() then
         callHandler("updateCenterPanel")
         return
     end
@@ -113,7 +113,7 @@ function engine_tryTransition(action)
         Wait.time(function()
             ENGINE.transitionPending = false
             if ENGINE.phase ~= fromPhase then return end   -- fase già cambiata (goToPhase/restart)
-            if engine_subAnyOpen() then return end         -- sottofase aperta nel frattempo
+            if engine_subFreezesPhase() then return end     
             engine_transition(action)
             callHandler("updateCenterPanel")
         end, ENGINE_TRANSITION_DELAY)

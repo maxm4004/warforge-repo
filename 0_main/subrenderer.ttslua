@@ -1,37 +1,22 @@
 -- ============================================================
 -- WARFORGE IEF — 0_main/subrenderer.ttslua
 -- Renderer delle sottofasi trasversali (pannello sottofase).
--- view = { title, info, button | wait }
+-- Solo caratteri ASCII.
 -- ============================================================
 
--- ============================================================
--- RENDERER: moraleRoll — test in attesa del Roll
--- ============================================================
 registerSubRenderer("moraleRoll", function(rec, def, step, slot, isActor)
-    local req = main_moraleFindRequest(slot, rec.ctx.reqId)
-    if not req then
-        return { title = def.title, wait = "Test non più in coda" }
-    end
-
-    local righe = main_moraleTestInfo(req)
-    -- righe: 1 unità - coesione, 2 Test: motivo, 3 Modificatori, 4 soglia
     return {
-        title  = string.format("%s · %s (%s)", def.title, righe[1], req.motivo or req.situazione or ""),
-        info   = (righe[3] or "") .. "\n" .. (righe[4] or "") .. " — premi Roll",
+        title  = def.title,
         button = isActor and step.label or nil,
-        wait   = (not isActor) and "In attesa…" or nil,
+        wait   = (not isActor) and "In attesa" or nil,
     }
 end)
 
--- ============================================================
--- RENDERER: moraleEsito — risultato del test
--- ============================================================
 registerSubRenderer("moraleEsito", function(rec, def, step, slot, isActor)
     local c = rec.ctx or {}
-    local superato = (c.esito == MORALE_RESULT.OK)
     return {
         title = def.title,
         info  = string.format("Risultato %s contro %s", tostring(c.somma or "?"), tostring(c.soglia or "?")),
-        wait  = superato and "SUPERATO" or "FALLITO",
+        wait  = (c.esito == MORALE_RESULT.OK) and "SUPERATO" or "FALLITO",
     }
 end)

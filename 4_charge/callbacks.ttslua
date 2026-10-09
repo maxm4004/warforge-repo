@@ -37,7 +37,7 @@ function charge_react_btn_army1(player, value, id, buttonConfig)
     if main_moraleBlocksPhase(player, 1) then return false end
 
     if charge_reactQueueHasPending() then
-        printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
+        warningToColor("Ci sono ancora reazioni da scegliere", player, "Yellow", 5)
         return false
     end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY1)
@@ -52,7 +52,7 @@ function charge_react_btn_army2(player, value, id, buttonConfig)
     if main_moraleBlocksPhase(player, 2) then return false end
 
     if charge_reactQueueHasPending() then
-        printToColor("[CARICA] Ci sono ancora reazioni da scegliere", player.color, {r=1,g=0.6,b=0})
+        warningToColor("Ci sono ancora reazioni da scegliere", player, "Yellow", 5)
         return false
     end
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
@@ -81,10 +81,9 @@ function charge_stopfire_btn_noop(player, value, id, buttonConfig)
                 if cur.subStep == "ESCI" then 
                     charge_stopfireExitClick(player)
                 else
-                    charge_stopfireRollMorale(player)
-                end 
+                    warningToColor("Il test di morale si tira dal pannello morale", player, "Yellow", 3)
+                end
             end
-
     return false
 end
 

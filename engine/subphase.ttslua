@@ -100,9 +100,26 @@ function engine_subTop(slot)
     return engine_subPrivate(slot) or engine_subShared()
 end
 
+-- Una sottofase blocca la fase se è shared o se lo dichiara (blocksPhase = true)
+local function bloccaFase(rec)
+    local def = rec and SUBPHASES[rec.name]
+    return def ~= nil and (def.scope == "shared" or def.blocksPhase == true)
+end
+
 -- true se i bottoni di fase dello slot devono essere bloccati
 function engine_subBlocksPhase(slot)
-    return engine_subShared() ~= nil or engine_subPrivate(slot) ~= nil
+    return bloccaFase(engine_subShared()) or bloccaFase(engine_subPrivate(slot))
+end
+
+-- true se la fase è congelata (niente transizioni)
+function engine_subFreezesPhase()
+    if bloccaFase(engine_subShared()) then return true end
+    for slot = 1, 2 do
+        for _, rec in ipairs(stackOf(slot)) do
+            if bloccaFase(rec) then return true end
+        end
+    end
+    return false
 end
 
 function engine_subAnyOpen()
@@ -193,7 +210,7 @@ function engine_subOpen(nome, slot, ctx, onDone)
     local _, step = stepDef(rec)
     if step and step.onEnter then callHandler(step.onEnter, rec.ctx, rec.slot, rec) end
 
-    callHandler("updateCenterPanel")
+    engine_subRedraw()
     return rec
 end
 
@@ -228,7 +245,7 @@ function engine_subStep(nome, slot, nuovoStep)
     local step = def.steps[nuovoStep]
     if step.onEnter then callHandler(step.onEnter, rec.ctx, rec.slot, rec) end
 
-    callHandler("updateCenterPanel")
+    engine_subRedraw()
     return true
 end
 
@@ -255,9 +272,10 @@ function engine_subClose(nome, slot, result)
 
     callHandler("updateCenterPanel")
 
-    if not engine_subAnyOpen() then
+    if not engine_subFreezesPhase() then
         engine_tryTransition(nil)
     end
+
     return true
 end
 
@@ -374,7 +392,7 @@ function engine_subRedraw()
             UI.setAttribute("BTN_ARMY" .. slot, "interactable", "false")
         end
     end
-    if engine_subAnyOpen() then
+    if engine_subFreezesPhase() then
         UI.setAttribute("BTN_SINGLE", "interactable", "false")
     end
 end
@@ -392,7 +410,7 @@ registerSubRenderer("subAction", function(rec, def, step, slot, isActor)
         title  = def.title,
         info   = step.info,
         button = isActor and (step.label or "Avanti") or nil,
-        wait   = (not isActor) and ("In attesa di " .. nomeAltro(slot) .. "…") or nil,
+        wait   = (not isActor) and ("In attesa di " .. nomeAltro(slot)) or nil,
     }
 end)
 
@@ -400,6 +418,6 @@ registerSubRenderer("subWait", function(rec, def, step, slot, isActor)
     return {
         title = def.title,
         info  = step.info,
-        wait  = step.label or "In attesa…",
+        wait  = step.label or "In attesa",
     }
 end)

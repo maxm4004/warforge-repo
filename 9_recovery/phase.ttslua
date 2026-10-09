@@ -3,7 +3,7 @@ function recovery_phase()
     return {
         RECOVERY = {
             title = "FASE 6: RECUPERO",
-            desc  = "I Generali tentano di recuperare i livelli di coesione persi",
+            desc  = "I GENERALI TENTANO DI RECUPERARE I LIVELLI DI COESIONE PERSI",
             before = "before_recovery",
             after  = "after_recovery",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
@@ -11,8 +11,8 @@ function recovery_phase()
             enforceOwnership = true,
             inputMode = "INITIATIVE",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Nuovo Turno", textColor="White", color="Red",   callback="recovery_btn_army1" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Nuovo Turno", textColor="White", color="Green", callback="recovery_btn_army2" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Recupero Effetuato", textColor="White", color="Red",   callback="recovery_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Recupero Effetuato", textColor="White", color="Green", callback="recovery_btn_army2" },
             },
             transitions = {
                 { to="CHARGE_DECLARE", conditions={ COND.BOTH_PLAYERS_SELECTED } }

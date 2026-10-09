@@ -520,19 +520,24 @@ function engine_diceRoll_start(player)
 
         engine_diceThrowFromBag(slot, nil, function(risultati, successi)
             DICE_CONTEST[key] = risultati[1]
+            TURN.completed["Army" .. slot] = true
             engine_diceCameraReturn(player, slot, faseOrigine)
             local bothRolled = DICE_CONTEST.rolledNumberArmy1 ~= nil and DICE_CONTEST.rolledNumberArmy2 ~= nil
-            callHandler("dice_check")           
+            callHandler("dice_check")
             if bothRolled and DICE_CONTEST.winner == nil then
+                TURN.completed.Army1 = false
+                TURN.completed.Army2 = false
                 main_manage_no_winner_for_roll(player, ENGINE.phase)
                 engine_diceClearLastRoll(1)
                 engine_diceClearLastRoll(2)
+                callHandler("updateCenterPanel")
                 return
             end
 
             local action = slot == 1 and ACTION.ARMY1_CLICK or ACTION.ARMY2_CLICK
             engine_handleAction({ type = action })
         end)
+
         return
     end
 

@@ -2,8 +2,8 @@
 function shoot_phase()
     return {
         SHOOT = {
-            title = "FASE: TIRO",
-            desc  = "Tutte le unità con armi da tiro possono bersagliare il nemico",
+            title = "FASE 4: TIRO",
+            desc  = "TUTTE LE UNITÀ CON ARMI DA TIRO POSSONO BERSAGLIARE IL NEMICO",
             before = "before_shoot",
             after  = "after_shoot",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
@@ -11,8 +11,8 @@ function shoot_phase()
             enforceOwnership = true,
             inputMode = "INITIATIVE",
             buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Fase successiva", textColor="White", color="Red",   callback="shoot_btn_army1" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Fase Successiva", textColor="White", color="Green", callback="shoot_btn_army2" },
+                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tiri Effetuati", textColor="White", color="Red",   callback="shoot_btn_army1" },
+                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tiri Effetuati", textColor="White", color="Green", callback="shoot_btn_army2" },
             },
             transitions = {
                 { to="MELEE", conditions={ COND.BOTH_PLAYERS_SELECTED } }

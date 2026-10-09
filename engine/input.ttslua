@@ -9,7 +9,7 @@ function engine_handleButton(slot, player, value, id)
 
     -- Sottofase aperta che blocca questo bottone di fase
     local btnSlot = (slot == "BTN_ARMY1" and 1) or (slot == "BTN_ARMY2" and 2) or nil
-    if (btnSlot and engine_subBlocksPhase(btnSlot)) or (not btnSlot and engine_subAnyOpen()) then
+    if (btnSlot and engine_subBlocksPhase(btnSlot)) or (not btnSlot and engine_subFreezesPhase()) then
         local rec = engine_subTop(btnSlot or main_SlotByColor(player.color))
         local def = rec and SUBPHASES[rec.name]
         warningToColor("Completa prima: " .. ((def and def.title) or "azione in corso"), player, "Yellow", 3)

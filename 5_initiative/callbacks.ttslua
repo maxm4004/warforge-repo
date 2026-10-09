@@ -3,14 +3,14 @@
 -- ============================================================
 function roll_btn_all(player, value, id, buttonConfig)
 
-    if id == BUTTONS.BTN_ARMY1 then
-        engine_diceCameraZoom(player, 1)
+    local slot = (id == BUTTONS.BTN_ARMY1 and 1) or (id == BUTTONS.BTN_ARMY2 and 2) or nil
+    if not slot then return false end
+
+    if TURN and TURN.completed and TURN.completed["Army" .. slot] then
+        return false
     end
 
-    if id == BUTTONS.BTN_ARMY2 then
-        engine_diceCameraZoom(player, 2)
-    end
-
+    engine_diceCameraZoom(player, slot)
     return false
 end
 -- ============================================================

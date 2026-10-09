@@ -16,6 +16,9 @@
 -- a un ricaricamento, si ritira)
 IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
 
+-- Secondi in cui l'esito del test resta visibile prima della chiusura
+MORALE_ESITO_SECONDS = 3
+
 -- ============================================================
 -- FUNZIONE: main_subphases()
 -- ============================================================
@@ -52,9 +55,18 @@ function main_moraleTestEnter(ctx, slot, rec)
     IEF_MORALE_TEST_ROLLING[slot] = false
     main_clearWarning()
     engine_diceClearLastRoll(slot)
-    main_moraleRefreshUI()     
-end
 
+    local req, idx = main_moraleFindRequest(slot, ctx.reqId)
+    if req then
+        local id = string.format("morale_queue_row_%d_%d", slot, idx)
+        UI.setAttribute(id, "text",
+            string.format("%s: test di morale (%s - in corso)",
+                main_decodeExtendedUnitLabel(req.key), req.motivo or req.situazione or ""))
+        Wait.frames(function()
+            UI.setAttribute(id, "textColor", "White")
+        end, 1)
+    end
+end
 -- ============================================================
 -- FUNZIONE: main_moraleTestFocus(ctx, slot, player, rec)
 -- Bottone del pannello sottofase: riporta la camera sui dadi.
@@ -78,11 +90,7 @@ function main_moraleTestRoll(ctx, slot, player, rec)
 
     local mod = req.mod
     if mod == nil then
-        local dettaglio
-        mod, dettaglio = main_moraleCurrentModifier(req.key)
-        printToAll(string.format("[MORALE] %s testa (%s), modificatori: %s",
-            main_decodeExtendedUnitLabel(req.key), req.motivo or req.situazione or "",
-            main_moraleModifierText(dettaglio)), {r=1,g=0.8,b=0.3})
+        mod = main_moraleCurrentModifier(req.key)
     end
 
     IEF_MORALE_TEST_ROLLING[slot] = true
@@ -96,7 +104,7 @@ function main_moraleTestRoll(ctx, slot, player, rec)
 
         Wait.time(function()
             engine_subClose("MORALE_TEST", slot, { esito = esito, somma = somma, soglia = soglia, effetto = effetto })
-        end, 1.5)
+        end, MORALE_ESITO_SECONDS)
     end)
 end
 
