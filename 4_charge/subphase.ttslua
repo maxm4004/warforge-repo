@@ -1,0 +1,273 @@
+-- ============================================================
+-- WARFORGE IEF — 4_charge/subphase.ttslua
+-- Sottofasi della carica.
+--
+-- STOPFIRE (scope shared): Tiro d'Arresto. Si apre da
+-- CHARGE_REACT (charge_responseStopfire) quando il difensore
+-- sceglie TIR. La fase resta CHARGE_REACT.
+--   TIRO   : il difensore tira col Roll fisico.
+--   MORALE : il caricante tira il test dal pannello morale.
+--   ESCI   : esito per MORALE_ESITO_SECONDS, poi chiusura.
+-- ctx = { queueId, defenderSlot, attackerSlot, conMorale, motivo }
+-- ============================================================
+
+-- ============================================================
+-- FUNZIONE: charge_subphases()
+-- ============================================================
+function charge_subphases()
+    return {
+        STOPFIRE = {
+            scope     = "shared",
+            blocksPhase = false,
+            title     = "",
+            first     = "TIRO",
+            onEnter   = "charge_stopfireEnter",
+            subphases = { "MORALE_TEST" },
+            steps = {
+                TIRO   = { render = "subAction",      actor = "defenderSlot", icon = "tiro", label = "Tiro di Arresto", onClick = "charge_stopfireFocus", onRoll = "charge_stopfireRoll" },
+                MORALE = { render = "stopfireMorale", actor = "attackerSlot", icon = "morale", onEnter = "charge_stopfireMoraleEnter" },
+                ESCI   = { render = "stopfireEsci",   actor = "attackerSlot", onEnter = "charge_stopfireEsciEnter", onRestore = "charge_stopfireEsciEnter" },
+            },
+        },
+    }
+end
+
+-- ============================================================
+-- FUNZIONE: charge_elementoById(id)
+-- ============================================================
+function charge_elementoById(id)
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if e.id == id then return e end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireIsOpen(queueId)
+-- Vero se STOPFIRE è aperta su questa carica.
+-- ============================================================
+function charge_stopfireIsOpen(queueId)
+    local sh = engine_subShared()
+    return sh ~= nil and sh.name == "STOPFIRE" and sh.ctx and sh.ctx.queueId == queueId
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireExit(ctx, motivo)
+-- Chiusura senza tiro: motivo nel pannello, step ESCI.
+-- ============================================================
+function charge_stopfireExit(ctx, motivo)
+    local elemento = charge_elementoById(ctx.queueId)
+    if elemento then
+        elemento.outcome = CHARGE_OUTCOME.OK
+        elemento.stopfireResolved = true
+    end
+    ctx.motivo = motivo
+    engine_subStep("STOPFIRE", nil, "ESCI")
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireEnter(ctx, slot, rec)
+-- Apertura: il caricante si ferma a 2" dal bersaglio.
+-- ============================================================
+function charge_stopfireEnter(ctx, slot, rec)
+    local elemento = charge_elementoById(ctx.queueId)
+    if elemento then
+        charge_stopfireMoveToRange(elemento, ctx.defenderSlot)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireFocus(ctx, slot, player, rec)
+-- Bottone dello step TIRO: camera sui dadi.
+-- ============================================================
+function charge_stopfireFocus(ctx, slot, player, rec)
+    if player then
+        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireRoll(ctx, slot, player, rec)
+-- Roll fisico del difensore nello step TIRO.
+-- ============================================================
+function charge_stopfireRoll(ctx, slot, player, rec)
+    local elemento = charge_elementoById(ctx.queueId)
+    if not elemento then
+        engine_subClose("STOPFIRE", nil, nil)
+        return
+    end
+
+    local defenderKey = charge_elementoUnitKey(elemento, ctx.defenderSlot)
+    local attackerKey = charge_elementoOtherKey(elemento, ctx.defenderSlot)
+    local defenderBases = charge_getUnitBases(defenderKey)
+    local attackerBases = charge_getUnitBases(attackerKey)
+    if #defenderBases == 0 or #attackerBases == 0 then
+        charge_stopfireExit(ctx, "Nessuna base in campo")
+        return
+    end
+
+    local defenderMeta = charge_getUnitMeta(defenderBases[1])
+    local armi = defenderMeta and defenderMeta.armi or {}
+    local capabilities = defenderMeta and defenderMeta.capabilities or {}
+
+    local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
+    local weapon = nil
+    for _, arma in ipairs(armi) do
+        local w = weaponsDict and weaponsDict[arma]
+        if w and w.range_inches and w.range_inches > 0 then weapon = w; break end
+    end
+    if not weapon then
+        charge_stopfireExit(ctx, "Nessuna arma da tiro")
+        return
+    end
+
+    local rangeUnits = weapon.range_inches * INCH_TO_TTS
+    local basiPronte = shoot_basiPronte(defenderBases, attackerBases, rangeUnits)
+    local numDadi = shoot_numDice(defenderKey, basiPronte, charge_hasCapability(capabilities, "RAFFICA"))
+    if numDadi <= 0 then
+        charge_stopfireExit(ctx, "Nessuna base in gittata con LOS")
+        return
+    end
+
+    local soglia = shoot_hitThreshold(weapon, attackerKey)
+
+    IEF_DICE_ROLL_TRY[slot] = { dadi = numDadi, soglia = soglia }
+    IEF_FIRED[defenderKey] = true
+
+    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", defenderKey, numDadi, soglia), player, "Yellow", 7)
+
+    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        Wait.time(function()
+            engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+        end, 2)
+
+        if not charge_stopfireIsOpen(ctx.queueId) then return end
+
+        local attackerSlot = ctx.attackerSlot
+
+        -- Perdite MARCATE (rimosse a fine fase di carica, after_charge_auto)
+        local perse = 0
+        if successi and successi > 0 then
+            perse = main_markLosses(attackerKey, successi)
+        else
+            printToAll("[TIRO D'ARRESTO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
+        end
+
+        if perse == 0 or not main_isAliveAfterMarks(attackerKey) then
+            if perse > 0 then
+                printToAll("[TIRO D'ARRESTO] " .. main_decodeExtendedUnitLabel(attackerKey) .. " distrutta: la carica non parte", {r=1,g=0.3,b=0.3})
+                charge_stopfireAnnulla(elemento, attackerSlot)
+            else
+                elemento.outcome = CHARGE_OUTCOME.OK
+            end
+            elemento.stopfireResolved = true
+            engine_subStep("STOPFIRE", nil, "ESCI")
+            return
+        end
+
+        -- Basi perse: il test previsto dalla tabella per le perdite
+        -- (BASE_PERSA) vale come test "per caricare" del caricante,
+        -- nel pannello morale. Superato -> carica; fallito -> non
+        -- carica e, avendo subito perdite da tiro, -1 coesione.
+        -- Se la tabella non prevede il test, la carica parte.
+        local test = main_lossTests(attackerKey, attackerSlot)[1]
+        if not test then
+            elemento.outcome = CHARGE_OUTCOME.OK
+            elemento.stopfireResolved = true
+            engine_subStep("STOPFIRE", nil, "ESCI")
+            return
+        end
+
+        engine_subStep("STOPFIRE", nil, "MORALE")
+        main_requestMoraleRoll(attackerKey, attackerSlot, "per_caricare", nil, test.motivo,
+            "charge_stopfireMoraleDone", { queueId = ctx.queueId, attackerSlot = attackerSlot })
+    end)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireAnnulla(elemento, attackerSlot)
+-- Carica annullata dal Tiro d'Arresto: il caricante resta a 2"
+-- e la carica è chiusa (niente riga in CHARGE_AUTO, niente mischia).
+-- ============================================================
+function charge_stopfireAnnulla(elemento, attackerSlot)
+    elemento.outcome = CHARGE_OUTCOME.ANN
+    if attackerSlot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+    elemento.step = CHARGE_STEP.CLO
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireMoraleEnter(ctx, slot, rec)
+-- Ingresso nello step MORALE: c'è un controllo morale.
+-- ============================================================
+function charge_stopfireMoraleEnter(ctx, slot, rec)
+    ctx.conMorale = true
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireMoraleDone(dati, esito)
+-- onDone della richiesta di morale del caricante.
+-- ============================================================
+function charge_stopfireMoraleDone(dati, esito)
+    local elemento = charge_elementoById(dati.queueId)
+    if not elemento then return end
+
+    local attackerSlot = dati.attackerSlot
+    local attackerKey = charge_elementoUnitKey(elemento, attackerSlot)
+
+    if esito == MORALE_RESULT.OK then
+        elemento.outcome = CHARGE_OUTCOME.OK
+    else
+        charge_stopfireAnnulla(elemento, attackerSlot)
+        main_lowerAndCheckRout(attackerKey, attackerSlot, function(item, quando)
+            if quando == "FINE_FASE" then
+                table.insert(IEF_MORALE_END_QUEUE, item)
+            else
+                main_runMoraleQueue({ item })
+            end
+        end)
+    end
+    elemento.stopfireResolved = true
+
+    if charge_stopfireIsOpen(dati.queueId) then
+        engine_subStep("STOPFIRE", nil, "ESCI")
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireEsciEnter(ctx, slot, rec)
+-- Step ESCI: esito (o motivo) nel pannello per
+-- MORALE_ESITO_SECONDS, poi chiusura automatica.
+-- ============================================================
+function charge_stopfireEsciEnter(ctx, slot, rec)
+    local queueId = ctx.queueId
+    Wait.time(function()
+        if charge_stopfireIsOpen(queueId) then
+            engine_subClose("STOPFIRE", nil, { queueId = queueId })
+        end
+    end, MORALE_ESITO_SECONDS)
+end
+
+-- ============================================================
+-- FUNZIONE: charge_stopfireDone(ctx, result, slot)
+-- onDone di STOPFIRE: aggiorna le righe Attacco/Difesa.
+-- Si resta in CHARGE_REACT.
+-- ============================================================
+function charge_stopfireDone(ctx, result, slot)
+    local elemento = charge_elementoById(ctx.queueId)
+    if elemento then
+        charge_refreshDefenseRowText(ctx.defenderSlot, elemento)
+        charge_refreshAttackRowText(ctx.attackerSlot, elemento)
+    end
+end
+
+-- ============================================================
+-- Registrazione
+-- ============================================================
+registerSubphases(charge_subphases())
+registerHandler("charge_stopfireEnter",       function(c,s,r)              return charge_stopfireEnter(c,s,r)              end)
+registerHandler("charge_stopfireFocus",       function(c,s,p,r)            return charge_stopfireFocus(c,s,p,r)            end)
+registerHandler("charge_stopfireRoll",        function(c,s,p,r)            return charge_stopfireRoll(c,s,p,r)             end)
+registerHandler("charge_stopfireMoraleEnter", function(c,s,r)              return charge_stopfireMoraleEnter(c,s,r)        end)
+registerHandler("charge_stopfireMoraleDone",  function(d,esito)            return charge_stopfireMoraleDone(d,esito)       end)
+registerHandler("charge_stopfireEsciEnter",   function(c,s,r)              return charge_stopfireEsciEnter(c,s,r)          end)
+registerHandler("charge_stopfireDone",        function(c,res,s)            return charge_stopfireDone(c,res,s)             end)

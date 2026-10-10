@@ -162,6 +162,9 @@ function main_restoreState(save_state)
     end
     if data.ief_sub then
         ENGINE.sub = data.ief_sub
+        Wait.time(function()
+            engine_subRestore()
+        end, 2)
     else
         engine_subInitState()
     end

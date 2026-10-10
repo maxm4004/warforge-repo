@@ -58,34 +58,6 @@ function charge_react_btn_army2(player, value, id, buttonConfig)
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end
-
--- ============================================================
--- FUNZIONE: charge_stopfire_btn_noop(player, value, id, buttonConfig)
--- ============================================================
-function charge_stopfire_btn_noop(player, value, id, buttonConfig)
-
-    local slot = main_SlotByColor(player.color)
-    local cur = IEF_STOPFIRE_CURRENT
-    if not cur then return false end
-    local defenderSlot = cur.slot
-    local attackerSlot = (cur.slot == 1) and 2 or 1
-
-    -- Bottone "In attesa avversario": nessun effetto
-    local rollerSlot = (cur.subStep == "TIRO") and defenderSlot or attackerSlot
-    if slot ~= rollerSlot then return false end
-
-    if slot == defenderSlot then
-        charge_stopfireBeginFromClick(player)
-    else
-        if cur.subStep == "ESCI" then
-            charge_stopfireExitClick(player)
-        else
-            warningToColor("Il test di morale si tira dal pannello morale", player, "Yellow", 3)
-        end
-    end
-    return false
-end
-
 -- ============================================================
 -- FUNZIONE: charge_auto_btn_army1(player, value, id, buttonConfig)
 -- ============================================================

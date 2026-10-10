@@ -31,8 +31,8 @@ function main_subphases()
             first    = "ROLL",
             onEnter  = "main_moraleTestEnter",
             steps = {
-                ROLL  = { render = "moraleRoll",  actor = "owner", label = "Vai ai dadi", onClick = "main_moraleTestFocus", onRoll = "main_moraleTestRoll" },
-                ESITO = { render = "moraleEsito", actor = "owner" },
+                ROLL  = { render = "moraleRoll",  actor = "owner", icon = "morale", label = "Controlla il Morale", onClick = "main_moraleTestFocus", onRoll = "main_moraleTestRoll" },
+                ESITO = { render = "moraleEsito", actor = "owner", onRestore = "main_moraleTestEsitoRestore" },
             },
         },
     }
@@ -99,13 +99,25 @@ function main_moraleTestRoll(ctx, slot, player, rec)
         IEF_MORALE_TEST_ROLLING[slot] = false
         if esito == nil then return end         -- lettura dadi fallita: si ritira
 
-        ctx.esito, ctx.somma, ctx.soglia = esito, somma, soglia
+        ctx.esito, ctx.somma, ctx.soglia, ctx.effetto = esito, somma, soglia, effetto
         engine_subStep("MORALE_TEST", slot, "ESITO")
 
         Wait.time(function()
             engine_subClose("MORALE_TEST", slot, { esito = esito, somma = somma, soglia = soglia, effetto = effetto })
         end, MORALE_ESITO_SECONDS)
     end)
+end
+-- ============================================================
+-- FUNZIONE: main_moraleTestEsitoRestore(ctx, slot, rec)
+-- onRestore dello step ESITO: dopo un caricamento riavvia il
+-- timer di chiusura (l'esito è già in ctx).
+-- ============================================================
+function main_moraleTestEsitoRestore(ctx, slot, rec)
+    Wait.time(function()
+        local top = engine_subPrivate(slot)
+        if top ~= rec or rec.step ~= "ESITO" then return end
+        engine_subClose("MORALE_TEST", slot, { esito = ctx.esito, somma = ctx.somma, soglia = ctx.soglia, effetto = ctx.effetto })
+    end, MORALE_ESITO_SECONDS)
 end
 
 -- ============================================================

@@ -67,3 +67,4 @@ registerHandler("main_moraleTestEnter",         function(c,s,r)        return ma
 registerHandler("main_moraleTestFocus",         function(c,s,p,r)      return main_moraleTestFocus(c,s,p,r)            end)
 registerHandler("main_moraleTestRoll",          function(c,s,p,r)      return main_moraleTestRoll(c,s,p,r)             end)
 registerHandler("main_moraleTestDone",          function(c,res,s)      return main_moraleTestDone(c,res,s)             end)
+registerHandler("main_moraleTestEsitoRestore",  function(c,s,r)        return main_moraleTestEsitoRestore(c,s,r)       end)

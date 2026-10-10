@@ -9,4 +9,5 @@ require("rulesets.imperifeudi.4_charge.hooks")
 require("rulesets.imperifeudi.4_charge.lib")
 require("rulesets.imperifeudi.4_charge.state")
 require("rulesets.imperifeudi.4_charge.phase")
-
+require("rulesets.imperifeudi.4_charge.subphase")
+require("rulesets.imperifeudi.4_charge.subrenderer")

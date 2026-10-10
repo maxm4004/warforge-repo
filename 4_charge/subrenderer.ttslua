@@ -1,0 +1,34 @@
+-- ============================================================
+-- WARFORGE IEF — 4_charge/subrenderer.ttslua
+-- Renderer delle sottofasi della carica. Solo caratteri ASCII.
+-- Un renderer che ritorna false nasconde il pannello.
+-- ============================================================
+
+local function nomeEsercito(slot)
+    return (ARMY and ARMY[slot] and ARMY[slot].name) or ("Army" .. tostring(slot))
+end
+
+-- Step MORALE: il caricante non vede il pannello finche' non
+-- apre il test dalla riga del pannello morale (poi vede
+-- MORALE_TEST); il difensore vede "In attesa di ...".
+registerSubRenderer("stopfireMorale", function(rec, def, step, slot, isActor)
+    if isActor then return false end
+    local c = rec.ctx or {}
+    return {
+        title = def.title,
+        wait  = "In attesa di " .. nomeEsercito(c.attackerSlot),
+    }
+end)
+
+-- Step ESCI: motivo (chiusura senza tiro) ed esito della carica,
+-- uguale per entrambi; si chiude da solo.
+registerSubRenderer("stopfireEsci", function(rec, def, step, slot, isActor)
+    local c = rec.ctx or {}
+    local elemento = charge_elementoById(c.queueId)
+    local esito = elemento and elemento.outcome
+    return {
+        title = def.title,
+        info  = c.motivo,
+        wait  = esito and ("CARICA " .. string.upper(esito)) or "",
+    }
+end)

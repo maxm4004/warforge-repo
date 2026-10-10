@@ -9,7 +9,6 @@ function before_charge_declare(phaseName, phase)
     IEF_CHARGE_QUEUE = {}
     IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
-    IEF_STOPFIRE_CURRENT = nil
     IEF_CHARGE_TEST_FAILED = {}
     IEF_CHARGE_PENDING_TESTS = {}
     IEF_CHARGE_TEST_PASSED = {}
@@ -61,35 +60,6 @@ end
 -- ============================================================
 function after_charge_react(phaseName, phase)
 end
-
--- ============================================================
--- FUNZIONE: before_charge_stopfire(phaseName, phase)
--- ============================================================
-function before_charge_stopfire(phaseName, phase)
-    TURN.phase = phaseName
-    TURN.completed = { Army1 = false, Army2 = false }
-
-    for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if not e.stopfireResolved then
-            if e.responseArmy1 == REACTION_TYPE.TIR then
-                charge_stopfireBegin(1, e)
-                return
-            elseif e.responseArmy2 == REACTION_TYPE.TIR then
-                charge_stopfireBegin(2, e)
-                return
-            end
-        end
-    end
-    main_goToPhase("CHARGE_REACT")
-end
-
--- ============================================================
--- FUNZIONE: after_charge_stopfire(phaseName, phase)
--- ============================================================
-function after_charge_stopfire(phaseName, phase)
-
-end
-
 -- ============================================================
 -- FUNZIONE: before_charge_auto(phaseName, phase)
 -- ============================================================

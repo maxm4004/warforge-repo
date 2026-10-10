@@ -595,9 +595,7 @@ function main_moraleRefreshUI()
         callHandler("buildUI")
         callHandler("updateCenterPanel")
         Wait.time(function()
-            if ENGINE.phase == "CHARGE_STOPFIRE" and IEF_STOPFIRE_CURRENT then
-                charge_stopfireRedraw()
-            elseif ENGINE.phase == "MELEE_RESOLVE" and IEF_MELEE_CURRENT then
+            if ENGINE.phase == "MELEE_RESOLVE" and IEF_MELEE_CURRENT then
                 melee_resolveRedraw()
             end
         end, 0.3)

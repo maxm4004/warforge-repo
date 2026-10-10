@@ -15,6 +15,25 @@ function main_sistemaFormazione(obj, player_color, alt_click)
     if unitKey then main_sistemaFormazioneCore(unitKey, basiObjs) end
 end 
 -- ============================================================
+-- FUNZIONE: main_setCenterTextColors(t1, t2)
+-- textColor dei bottoni centrali un frame dopo (il cambio di
+-- text lo resetta); se la UI sta caricando (buildUI/setXml)
+-- aspetta la fine del caricamento.
+-- ============================================================
+function main_setCenterTextColors(t1, t2)
+    local function apply()
+        UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", t1)
+        UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", t2)
+    end
+    Wait.frames(function()
+        if UI.loading then
+            Wait.condition(function() Wait.frames(apply, 1) end, function() return not UI.loading end, 10)
+        else
+            apply()
+        end
+    end, 1)
+end
+-- ============================================================
 -- FUNZIONE: updateCenterPanel()
 -- ============================================================
 function main_updateCenterPanel()
@@ -81,26 +100,9 @@ function main_updateCenterPanel()
             UI.setAttribute(BUTTONS.BTN_ARMY1, "color", attivo1 and (colorArmy1 or COLOR.NOARMY) or COLOR.NOARMY)
             UI.setAttribute(BUTTONS.BTN_ARMY2, "color", attivo2 and (colorArmy2 or COLOR.NOARMY) or COLOR.NOARMY)
 
-            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
-            Wait.frames(function()
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", attivo1 and "White" or "Black")
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", attivo2 and "White" or "Black")
-            end, 1)
+            main_setCenterTextColors(attivo1 and "White" or "Black", attivo2 and "White" or "Black")
 
-            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
-            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
-            Wait.frames(function()
-                local c1, c2 = "White", "White"
-                if TURN and TURN.activeArmy == "Army1" then
-                    c2 = "Black"
-                elseif TURN and TURN.activeArmy == "Army2" then
-                    c1 = "Black"
-                end
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", c1)
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", c2)
-            end, 1)
-
-else
+        else
             -- OWNER: grigio chiaro = completato; bianco solo su quello cliccabile
             local completed = (TURN and TURN.completed) or {}
             local fatto1 = completed.Army1 == true
@@ -111,11 +113,7 @@ else
             if fatto1 then UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY) end
             if fatto2 then UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY) end
 
-            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
-            Wait.frames(function()
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", fatto1 and "Black" or "White")
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", fatto2 and "Black" or "White")
-            end, 1)
+            main_setCenterTextColors(fatto1 and "Black" or "White", fatto2 and "Black" or "White")
         end
     end)
 
@@ -242,7 +240,6 @@ function main_restart()
     IEF_CHARGE_QUEUE = {}
     IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
-    IEF_STOPFIRE_CURRENT = nil
     IEF_MELEE_LIST = {}
     IEF_MELEE_NEXT_ID = 0
     IEF_MELEE_CURRENT = nil
@@ -2021,8 +2018,7 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.DEPLOY_POSITION]  = {tidy, form, move},
         [PHASE.CHARGE_DECLARE]   = {tidy, info, charge},
         [PHASE.CHARGE_REACT]     = {tidy, info},
-        [PHASE.CHARGE_STOPFIRE]  = {tidy, info},
-        [PHASE.CHARGE_AUTO]      = {tidy, info},
+         [PHASE.CHARGE_AUTO]      = {tidy, info},
         [PHASE.MOVE]             = {tidy, info, form, move},
         [PHASE.SHOOT]            = {tidy, info, shoot},
         [PHASE.MELEE]            = {tidy, info},
@@ -2033,7 +2029,6 @@ function main_createBaseButtons(obj, phase, unit)
     local azioniGenerali = {
         [PHASE.CHARGE_DECLARE]   = {range, info},
         [PHASE.CHARGE_REACT]     = {range, info},
-        [PHASE.CHARGE_STOPFIRE]  = {range, info},
         [PHASE.CHARGE_AUTO]      = {range, info},
         [PHASE.MOVE]             = {moveGeneral, info, range},
         [PHASE.SHOOT]            = {range, info},
@@ -2248,7 +2243,7 @@ function main_infoByCurrentPhase(obj, player_color, alt_click)
     local phase = ENGINE.phase
     local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
 
-    if phase == PHASE.CHARGE or  phase == PHASE.CHARGE_DECLARE or phase == PHASE.CHARGE_REACT or phase == PHASE.CHARGE_STOPFIRE or phase == PHASE.CHARGE_AUTO then
+    if phase == PHASE.CHARGE or  phase == PHASE.CHARGE_DECLARE or phase == PHASE.CHARGE_REACT or phase == PHASE.CHARGE_AUTO then
         melee_buttonBaseClick(obj, slot, player_color, alt_click)
     end
 

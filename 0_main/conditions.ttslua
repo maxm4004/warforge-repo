@@ -54,13 +54,4 @@ function registerDefaultConditions()
     registerCondition(COND.CHARGE_QUEUE_NOT_EMPTY, function(action)
         return charge_queueHasPending()
     end)
-
-    -- Coda cariche (4_charge, CHARGE_REACT): almeno una carica ha
-    -- response=TIR non ancora chiusa — governa la biforcazione
-    -- CHARGE_REACT -> CHARGE_STOPFIRE (nella pratica il salto reale
-    -- avviene via main_goToPhase diretto da charge_responseStopfire,
-    -- questa condizione resta come rete di sicurezza/validazione).
-    registerCondition(COND.CHARGE_HAS_STOPFIRE_PENDING, function(action)
-        return charge_hasStopfirePending()
-    end)
 end

@@ -38,10 +38,13 @@ SUBRENDERERS = SUBRENDERERS or {}
 
 -- Grafica dei pannelli sottofase (sotto il pannello centrale)
 SUBPANEL = SUBPANEL or {
-    offsetXY = "0 -280",
-    width    = 450,
-    height   = 92,
-    bg       = "rgba(0,0,0,0.55)",
+    offsetXY  = "0 -280",
+    width     = 450,
+    height    = 55,
+    bg        = "rgba(0,0,0,0.25)",
+    btnColor  = "#B8902E",
+    btnWidth  = 200,
+    btnHeight = 40,
 }
 
 -- ============================================================
@@ -100,10 +103,14 @@ function engine_subTop(slot)
     return engine_subPrivate(slot) or engine_subShared()
 end
 
--- Una sottofase blocca la fase se è shared o se lo dichiara (blocksPhase = true)
+-- Una sottofase blocca la fase se è shared o se lo dichiara
+-- (blocksPhase = true); blocksPhase = false la lascia libera
+-- anche se è shared.
 local function bloccaFase(rec)
     local def = rec and SUBPHASES[rec.name]
-    return def ~= nil and (def.scope == "shared" or def.blocksPhase == true)
+    if def == nil then return false end
+    if def.blocksPhase ~= nil then return def.blocksPhase == true end
+    return def.scope == "shared"
 end
 
 -- true se i bottoni di fase dello slot devono essere bloccati
@@ -278,7 +285,25 @@ function engine_subClose(nome, slot, result)
 
     return true
 end
-
+-- ============================================================
+-- FUNZIONE: engine_subRestore()
+-- Dopo il caricamento di un salvataggio: per ogni sottofase
+-- aperta chiama l'onRestore dello step corrente (se c'è), per
+-- riavviare ciò che non si salva (es. timer di chiusura).
+-- ============================================================
+function engine_subRestore()
+    local s = subState()
+    local aperte = {}
+    if s.shared then table.insert(aperte, s.shared) end
+    for _, r in ipairs(s.army1) do table.insert(aperte, r) end
+    for _, r in ipairs(s.army2) do table.insert(aperte, r) end
+    for _, rec in ipairs(aperte) do
+        local _, step = stepDef(rec)
+        if step and step.onRestore then
+            callHandler(step.onRestore, rec.ctx, rec.slot, rec)
+        end
+    end
+end
 -- ============================================================
 -- FUNZIONE: engine_subRoll(player, slot)
 -- Dispatch del Roll fisico. true = gestito (anche se ignorato
@@ -318,15 +343,19 @@ end
 -- Grafica
 -- ============================================================
 
--- Vista corrente del pannello sottofase dello slot (nil = nascosto)
+-- Vista corrente del pannello sottofase dello slot (nil = nascosto).
+-- Un renderer che ritorna false nasconde il pannello per lo slot.
 function engine_subView(slot)
     local rec = engine_subTop(slot)
     if not rec then return nil end
     local def, step = stepDef(rec)
     local isActor = engine_subActors(rec)[slot] == true
     local renderer = SUBRENDERERS[(step and step.render) or "subAction"] or SUBRENDERERS.subAction
-    local view = renderer(rec, def or {}, step or {}, slot, isActor) or {}
+    local view = renderer(rec, def or {}, step or {}, slot, isActor)
+    if view == false then return nil end
+    view = view or {}
     view.title = view.title or (def and def.title) or rec.name
+    view.icon = view.icon or (step and step.icon)
     return view
 end
 
@@ -341,20 +370,18 @@ end
 function engine_subPanelsXml()
     local xml = ""
     for slot = 1, 2 do
-        local colore = slot == 1 and COLOR.ARMY1 or COLOR.ARMY2
         local v = engine_subView(slot)
+
+        print(v.icon)
+
         xml = xml .. string.format(
-            '<Panel id="sub_panel_army%d" rectAlignment="UpperCenter" width="%d" height="%d" offsetXY="%s" color="%s" outline="%s" outlineSize="2" visibility="%s" active="%s">' ..
-                '<Text id="sub_title_army%d" text="%s" font="warforge_font" fontSize="12" fontStyle="Bold" color="White" rectAlignment="UpperCenter" offsetXY="0 -4" width="%d" height="20" alignment="MiddleCenter"/>' ..
-                '<Text id="sub_info_army%d" text="%s" font="warforge_font" fontSize="11" color="#DDDDDD" rectAlignment="UpperCenter" offsetXY="0 -24" width="%d" height="30" alignment="MiddleCenter"/>' ..
-                '<Text id="sub_wait_army%d" text="%s" font="warforge_font" fontSize="12" fontStyle="Italic" color="#AAAAAA" rectAlignment="LowerCenter" offsetXY="0 6" width="%d" height="28" alignment="MiddleCenter" active="%s"/>' ..
-                '<Button id="sub_btn_army%d" text="%s" font="warforge_font" fontSize="13" fontStyle="Bold" color="rgba(0,0,0,0.6)" textColor="White" outline="%s" outlineSize="1" rectAlignment="LowerCenter" offsetXY="0 6" width="240" height="30" onClick="engine_subButtonClick" active="%s"/>' ..
+            '<Panel id="sub_panel_army%d" rectAlignment="UpperCenter" width="%d" height="%d" offsetXY="%s" color="%s" visibility="%s" active="%s">' ..
+                '<Button id="sub_btn_army%d" text="%s" icon="%s" iconAlignment="Right" iconWidth="30" padding="6 15 4 4" fontSize="13" fontStyle="Bold" color="%s" textAlignment="MiddleRight" textColor="White" outline="#000000" outlineSize="1" rectAlignment="MiddleCenter" offsetXY="0 0" width="%d" height="%d" onClick="engine_subButtonClick" active="%s"/>' ..
             '</Panel>',
-            slot, SUBPANEL.width, SUBPANEL.height, SUBPANEL.offsetXY, SUBPANEL.bg, colore, colore, v and "true" or "false",
-            slot, xmlEsc(v and v.title), SUBPANEL.width - 20,
-            slot, xmlEsc(v and v.info),  SUBPANEL.width - 20,
-            slot, xmlEsc(v and v.wait),  SUBPANEL.width - 20, (v and not v.button and v.wait) and "true" or "false",
-            slot, xmlEsc(v and v.button), colore, (v and v.button) and "true" or "false"
+            slot, SUBPANEL.width, SUBPANEL.height, SUBPANEL.offsetXY, SUBPANEL.bg,
+            slot == 1 and COLOR.ARMY1 or COLOR.ARMY2, v and "true" or "false",
+            slot, xmlEsc(v and v.button), xmlEsc(v and v.icon), SUBPANEL.btnColor,
+            SUBPANEL.btnWidth, SUBPANEL.btnHeight, (v and v.button) and "true" or "false"
         )
     end
     return xml

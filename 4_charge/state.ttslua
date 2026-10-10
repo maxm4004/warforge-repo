@@ -122,12 +122,6 @@ IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
 -- pannello 3D) per ciascun player: [slot] = unitKey
 IEF_CHARGE_ACTIVE_CONFIRM = IEF_CHARGE_ACTIVE_CONFIRM or {}
 
--- Carica attualmente in risoluzione nella fase CHARGE_STOPFIRE:
--- nil = nessuna in corso, altrimenti { elemento, slot, subStep }
--- slot = esercito del DIFENSORE/tiratore.
--- subStep: "TIRO" | "MORALE" | "ESCI"
-IEF_STOPFIRE_CURRENT = IEF_STOPFIRE_CURRENT or nil
-
 MORALE_RESULT = {
     OK = "SUPERATO",
     KO = "FALLITO",

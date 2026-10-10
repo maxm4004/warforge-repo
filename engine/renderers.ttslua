@@ -155,15 +155,6 @@ RENDERERS["2BtnClickChargeDefenseList"] = function(phase)
     UI.setAttribute("charge_defense_list_army2", "active", "true")
 end
 -- ============================================================
--- RENDERER: chargeStopfire
--- ============================================================
-RENDERERS["chargeStopfire"] = function(phase)
-    UI.setAttribute("panelBtnUp",   "active", "true")
-    UI.setAttribute("panelBtnDown", "active", "false")
-    UI.setAttribute("panelDices",   "active", "false")
-    UI.setAttribute("panelBtnUp", "offsetXY", "0 -223")
-end
--- ============================================================
 -- RENDERER: 2BtnClickRecoveryList
 -- Come 2BtnClick + liste RECUPERO dei due eserciti.
 -- ============================================================
