@@ -162,7 +162,7 @@ function getRulesetUiXml()
                     onClick="shoot_Confirm"/>
 
             <Button id="btnShootCancel"
-                    text="Annulla"
+                    text="Chiudi"
                     font="warforge_font"
                     fontSize="11"
                     image="Sprites/Layout/Button"
@@ -182,7 +182,7 @@ function getRulesetUiXml()
        active="false">
     <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -100 0">
         <Button id="btnActionMelee"
-                text="Attacca"
+                text="Combatti"
                 font="warforge_font"
                 fontSize="11"
                 image="Sprites/Layout/Button"
@@ -191,7 +191,7 @@ function getRulesetUiXml()
                 width="80"
                 onClick="melee_attackConfirm"/>
         <Button id="btnCancelMelee"
-                text="Annulla"
+                text="Chiudi"
                 font="warforge_font"
                 fontSize="11"
                 image="Sprites/Layout/Button"
@@ -220,7 +220,7 @@ function getRulesetUiXml()
             onClick="charge_declareConfirm"/>
 
     <Button id="btnCancelCharge"
-            text="Annulla"
+            text="Chiudi"
             font="warforge_font"
             fontSize="11"
             image="Sprites/Layout/Button"
@@ -249,7 +249,7 @@ function getRulesetUiXml()
             onClick="charge_moraleConfirm"/>
 
     <Button id="btnCancelMorale"
-            text="Annulla"
+            text="Chiudi"
             font="warforge_font"
             fontSize="11"
             image="Sprites/Layout/Button"

@@ -1,0 +1,202 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/subphase.ttslua
+-- Sottofasi della mischia.
+--
+-- MELEE_RESOLVE (scope shared): risoluzione di un gruppo di
+-- mischia. Si apre da MELEE (melee_attackConfirm). La fase
+-- resta MELEE.
+--   TIRO   : entrambi tirano col Roll fisico (in parallelo).
+--   MORALE : test di morale dal pannello morale.
+--   ESCI   : esito per MORALE_ESITO_SECONDS, poi chiusura.
+-- ctx = { groupId, attackerSlot,
+--         dadi1, dadi2, soglia1, soglia2,
+--         rolled1, rolled2, successi1, successi2,
+--         unita = { [unitKey] = { slot, dadi, verso = { [enemyKey] = n } } },
+--         testInCorso }
+-- Solo chiavi stringa: ctx viene salvato (ENGINE.sub).
+-- ============================================================
+
+-- ============================================================
+-- FUNZIONE: melee_subphases()
+-- ============================================================
+function melee_subphases()
+    return {
+        MELEE_RESOLVE = {
+            scope       = "shared",
+            blocksPhase = false,
+            title       = "",
+            first       = "TIRO",
+            onEnter     = "melee_resolveEnter",
+            subphases   = { "MORALE_TEST" },
+            steps = {
+                TIRO   = { render = "meleeTiro",   actor = "both", label = "Tira i dadi", onClick = "melee_resolveFocus", onRoll = "melee_resolveRoll" },
+                MORALE = { render = "meleeMorale", actor = "both" },
+                ESCI   = { render = "meleeEsci",   actor = "both", onEnter = "melee_resolveEsciEnter", onRestore = "melee_resolveEsciEnter" },
+            },
+        },
+    }
+end
+
+-- ============================================================
+-- FUNZIONE: melee_resolveCtx(groupId)
+-- ctx di MELEE_RESOLVE se è aperta su questo gruppo, altrimenti nil.
+-- ============================================================
+function melee_resolveCtx(groupId)
+    local sh = engine_subShared()
+    if sh and sh.name == "MELEE_RESOLVE" and sh.ctx and sh.ctx.groupId == groupId then
+        return sh.ctx, sh
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: melee_resolveEnter(ctx, slot, rec)
+-- Apertura: calcola i dadi del gruppo.
+-- ============================================================
+function melee_resolveEnter(ctx, slot, rec)
+    engine_diceClearLastRoll(1)
+    engine_diceClearLastRoll(2)
+
+    local gruppo = melee_getGroupById(ctx.groupId)
+    local calc = gruppo and melee_computeGroup(gruppo)
+
+    ctx.unita = {}
+    for s = 1, 2 do
+        ctx["dadi" .. s]     = calc and calc[s].dadi or 0
+        ctx["soglia" .. s]   = calc and calc[s].soglia or 5
+        ctx["rolled" .. s]   = ctx["dadi" .. s] <= 0
+        ctx["successi" .. s] = 0
+        printToAll(string.format("[MISCHIA] %s: %d D6, colpisce con %d+",
+            ARMY[s].name, ctx["dadi" .. s], ctx["soglia" .. s]), {r=1,g=0.8,b=0.3})
+    end
+    if calc then
+        for key, info in pairs(calc.unita) do
+            ctx.unita[key] = { slot = info.slot, dadi = info.dadi, verso = info.verso }
+        end
+    end
+    ctx.testInCorso = 0
+
+    -- Nessuno ha dadi: esito subito (fuori da engine_subOpen)
+    if ctx.rolled1 and ctx.rolled2 then
+        local groupId = ctx.groupId
+        Wait.frames(function()
+            local c = melee_resolveCtx(groupId)
+            if c then melee_resolveOutcome(c) end
+        end, 1)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: melee_resolveFocus(ctx, slot, player, rec)
+-- Bottone dello step TIRO: camera sui dadi.
+-- ============================================================
+function melee_resolveFocus(ctx, slot, player, rec)
+    if player then
+        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: melee_resolveRoll(ctx, slot, player, rec)
+-- Roll fisico nello step TIRO. Salva i successi, NON toglie
+-- basi: le perdite sono reciproche (melee_resolveOutcome).
+-- ============================================================
+function melee_resolveRoll(ctx, slot, player, rec)
+    if ctx["rolled" .. slot] then return end
+
+    local groupId = ctx.groupId
+    local dadi, soglia = ctx["dadi" .. slot], ctx["soglia" .. slot]
+    IEF_DICE_ROLL_TRY[slot] = { dadi = dadi, soglia = soglia }
+    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", ARMY[slot].name, dadi, soglia), player, "Yellow", 7)
+
+    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        Wait.time(function()
+            engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+        end, 2)
+
+        local c = melee_resolveCtx(groupId)
+        if not c or c["rolled" .. slot] then return end
+
+        c["rolled" .. slot]   = true
+        c["successi" .. slot] = successi or 0
+        printToAll(string.format("[MISCHIA] %s: %d colpi a segno", ARMY[slot].name, c["successi" .. slot]), {r=1,g=0.8,b=0.3})
+
+        if c.rolled1 and c.rolled2 then
+            melee_resolveOutcome(c)
+        else
+            engine_subRedraw()
+        end
+    end)
+end
+
+-- ============================================================
+-- FUNZIONE: melee_moraleTestDone(dati, esito)
+-- onDone dei test di morale IMMEDIATI nati dalla mischia.
+-- dati = { groupId, key, slot }
+-- ============================================================
+function melee_moraleTestDone(dati, esito)
+    local ctx, rec = melee_resolveCtx(dati.groupId)
+
+    if esito == MORALE_RESULT.KO then
+        melee_lowerAndCheckRout(ctx, dati.key, dati.slot)
+    end
+
+    if ctx then
+        ctx.testInCorso = (ctx.testInCorso or 1) - 1
+        if ctx.testInCorso <= 0 and rec.step == "MORALE" then
+            engine_subStep("MELEE_RESOLVE", nil, "ESCI")
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: melee_resolveEsciEnter(ctx, slot, rec)
+-- Step ESCI: esito per MORALE_ESITO_SECONDS, poi chiusura.
+-- ============================================================
+function melee_resolveEsciEnter(ctx, slot, rec)
+    local groupId = ctx.groupId
+    Wait.time(function()
+        if melee_resolveCtx(groupId) then
+            engine_subClose("MELEE_RESOLVE", nil, { groupId = groupId })
+        end
+    end, MORALE_ESITO_SECONDS)
+end
+
+-- ============================================================
+-- FUNZIONE: melee_resolveDone(ctx, result, slot)
+-- onDone di MELEE_RESOLVE: gruppo risolto in questo turno,
+-- coppie con unità in ROTTA tolte, coppie non più a contatto
+-- tolte (melee_pruneList, come al vecchio rientro in MELEE),
+-- lista ridisegnata.
+-- Si resta in MELEE.
+-- ============================================================
+function melee_resolveDone(ctx, result, slot)
+    local gruppo = melee_getGroupById(ctx.groupId)
+    if gruppo then
+        local turno = melee_currentTurn()
+        for _, e in ipairs(gruppo.elementi) do e.resolvedTurn = turno end
+    end
+
+    for i = #IEF_MELEE_LIST, 1, -1 do
+        local e = IEF_MELEE_LIST[i]
+        if main_getCohesion(e.unitArmy1Key) == COHESION.ROT or main_getCohesion(e.unitArmy2Key) == COHESION.ROT then
+            table.remove(IEF_MELEE_LIST, i)
+        end
+    end
+
+    melee_pruneList()
+
+    callHandler("buildUI")
+    melee_hideChargeLists()
+end
+
+-- ============================================================
+-- Registrazione
+-- ============================================================
+registerSubphases(melee_subphases())
+registerHandler("melee_resolveEnter",     function(c,s,r)     return melee_resolveEnter(c,s,r)     end)
+registerHandler("melee_resolveFocus",     function(c,s,p,r)   return melee_resolveFocus(c,s,p,r)   end)
+registerHandler("melee_resolveRoll",      function(c,s,p,r)   return melee_resolveRoll(c,s,p,r)    end)
+registerHandler("melee_moraleTestDone",   function(d,esito)   return melee_moraleTestDone(d,esito) end)
+registerHandler("melee_resolveEsciEnter", function(c,s,r)     return melee_resolveEsciEnter(c,s,r) end)
+registerHandler("melee_resolveDone",      function(c,res,s)   return melee_resolveDone(c,res,s)    end)

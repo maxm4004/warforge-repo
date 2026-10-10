@@ -8,6 +8,7 @@ function melee_phase()
             after  = "after_melee",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
             render = "2BtnClickMeleeList",
+            subphases = { "MELEE_RESOLVE" },
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
@@ -16,23 +17,6 @@ function melee_phase()
             },
             transitions = {
                 { to="RECOVERY", conditions={ COND.BOTH_PLAYERS_SELECTED } }
-            }
-        },
-        MELEE_RESOLVE = {
-            title = "FASE 5: MISCHIA IN CORSO",
-            desc  = "PERDITE RECIPROCHE E TEST DEL MORALE",
-            before = "before_melee_resolve",
-            after  = "after_melee_resolve",
-            allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
-            render = "meleeResolve",
-            enforceOwnership = true,
-            inputMode = "OWNER",
-            buttons = {
-                BTN_ARMY1 = { action="ARMY1_CLICK", label="Tira i dadi", textColor="White", color="Red",   callback="melee_resolve_btn_army1" },
-                BTN_ARMY2 = { action="ARMY2_CLICK", label="Tira i dadi", textColor="White", color="Green", callback="melee_resolve_btn_army2" },
-            },
-            transitions = {
-                { to="MELEE", conditions={ COND.BOTH_PLAYERS_SELECTED } }
             }
         }
     }

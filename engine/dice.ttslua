@@ -555,13 +555,6 @@ function engine_diceRoll_start(player)
         shoot_doRoll(player, slot)
         return
     end
-
-    if ENGINE.phase == "MELEE_RESOLVE" and IEF_MELEE_CURRENT then
-        if IEF_MELEE_CURRENT.subStep == "TIRO" then
-            melee_doRoll(player, slot)
-        end    
-        return
-    end
     
     engine_diceClearLastRoll(slot)
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
@@ -585,8 +578,7 @@ function engine_diceCameraZoom(player, slot)
             ENGINE.phase == "FIELD_ROLL" or 
                     ENGINE.phase == "FIELD_BLOCK" or 
                             ENGINE.phase == "INITIATIVE_ROLL" or                                    
-                                                ENGINE.phase == "SHOOT" or
-                                                        ENGINE.phase == "MELEE_RESOLVE" or
+                                                ENGINE.phase == "SHOOT" or                                    
                                                                 ENGINE.phase == "RECOVERY" then
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)              
    end
@@ -637,13 +629,7 @@ function engine_diceCameraReturn(player, slot, faseOrigine)
                 end, 2)
     end   
 
-    if faseOrigine == "MELEE_RESOLVE" then
-                Wait.time(function()
-                    engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
-                end, 2)
-    end
-
-        if faseOrigine == "RECOVERY" then
+    if faseOrigine == "RECOVERY" then
                 Wait.time(function()
                     engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
                 end, 2)

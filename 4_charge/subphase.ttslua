@@ -25,7 +25,7 @@ function charge_subphases()
             subphases = { "MORALE_TEST" },
             steps = {
                 TIRO   = { render = "subAction",      actor = "defenderSlot", icon = "tiro", label = "Tiro di Arresto", onClick = "charge_stopfireFocus", onRoll = "charge_stopfireRoll" },
-                MORALE = { render = "stopfireMorale", actor = "attackerSlot", icon = "morale", onEnter = "charge_stopfireMoraleEnter" },
+                MORALE = { render = "stopfireMorale", actor = "attackerSlot", icon = "morale_tiro", onEnter = "charge_stopfireMoraleEnter" },
                 ESCI   = { render = "stopfireEsci",   actor = "attackerSlot", onEnter = "charge_stopfireEsciEnter", onRestore = "charge_stopfireEsciEnter" },
             },
         },

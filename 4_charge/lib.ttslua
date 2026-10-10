@@ -1015,10 +1015,7 @@ function charge_getAttackListPanelXml(slot)
         rows = rows .. string.format(
             '<Row preferredHeight="30">' ..
                 '<Cell>' ..
-                    '<Button id="charge_attack_row_%d_%s" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
-                '</Cell>' ..
-                '<Cell>' ..
-                    '<Button id="charge_attack_row_btn_%d_%s" text="" icon="binocolo" tooltip="vai nel punto" tooltipPosition="Below" iconWidth="25" dontUseRectLayout="true" color="rgba(0,0,0,0.00)" onClick="charge_attackRowClick"/>' ..
+                    '<Button id="charge_attack_row_%d_%s" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="charge_attackRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
 
@@ -1036,7 +1033,7 @@ function charge_getAttackListPanelXml(slot)
     
         '<Panel id="charge_attack_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -330" visibility="%s" active="%s">' ..
         '<Text id="charge_attack_list_title_army%d" text="%s %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
-        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="370 30" position="0 -5 0">' ..
+        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="400" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
@@ -1071,10 +1068,7 @@ function charge_getDefenseListPanelXml(slot)
         rows = rows .. string.format(
             '<Row preferredHeight="30">' ..
                 '<Cell>' ..
-                    '<Button id="charge_defense_row_%d_%s" text="La %s %s dalla %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft"/>' ..
-                '</Cell>' ..
-                '<Cell>' ..
-                    '<Button id="charge_defense_row_btn_%d_%s" text="" icon="centro" tooltip="Scegli una reazione alla Carica" tooltipPosition="Below" iconWidth="25" dontUseRectLayout="true" color="rgba(0,0,0,0.00)" onClick="charge_defenseRowClick"/>' ..
+                    '<Button id="charge_defense_row_%d_%s" text="La %s %s dalla %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="charge_defenseRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
             slot, otherKey,
@@ -1089,7 +1083,7 @@ function charge_getDefenseListPanelXml(slot)
     return string.format(
         '<Panel id="charge_defense_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -330" visibility="%s" active="%s">' ..
         '<Text id="charge_defense_list_title_army%d" text="ELENCO REAZIONI %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
-        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="370 30" position="0 -5 0">' ..
+        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="400" position="0 -5 0">' ..
         '%s' ..
         '</TableLayout>' ..
         '</Panel>',
@@ -1102,8 +1096,7 @@ end
 -- ============================================================
 function charge_attackRowClick(player, value, id)
 
-    local slotStr, otherKey = id:match("^charge_attack_row_btn_(%d)_(.+)$")
-
+    local slotStr, otherKey = id:match("^charge_attack_row_(%d)_(.+)$")
     if not slotStr then return end
     local slot = tonumber(slotStr)
     local otherSlot = charge_elementoOtherSlot(slot)
@@ -1151,7 +1144,7 @@ end
 -- FUNZIONE: charge_defenseRowClick(player, value, id)
 -- ============================================================
 function charge_defenseRowClick(player, value, id)
-    local slotStr, otherKey = id:match("^charge_defense_row_btn_(%d)_(.+)$")
+    local slotStr, otherKey = id:match("^charge_defense_row_(%d)_(.+)$")
     if not slotStr then return end
     local slot = tonumber(slotStr)
     local otherSlot = charge_elementoOtherSlot(slot)
@@ -1426,8 +1419,8 @@ function charge_responseStopfire(player, value, id)
     charge_elementoSetResponse(elemento, slot, REACTION_TYPE.TIR)
     IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 
-    UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. otherKey, "interactable", "false")
-    UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. otherKey, "color", "Grey")
+    --UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. otherKey, "interactable", "false")
+    --UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. otherKey, "color", "Grey")
     UI.setAttribute("charge_response_panel", "active", "false")
 
     charge_refreshDefenseRowText(slot, elemento)

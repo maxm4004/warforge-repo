@@ -1,32 +1,3 @@
--- ============================================================
--- rulesets/imperifeudi/8_melee/state.ttslua
--- Stato FASE MISCHIA — MELEE (lista) e MELEE_RESOLVE
--- (risoluzione di un gruppo, schema Tiro d'Arresto).
--- ============================================================
-
--- ============================================================
--- Lista mischie UNICA, persistente fra i turni (una mischia
--- continua finché un'unità non va in rotta o viene distrutta).
--- Un elemento per COPPIA di unità a contatto, condiviso fra i
--- due eserciti (stesso principio di IEF_CHARGE_QUEUE). Le
--- mischie multiple sono GRUPPI di coppie collegate, calcolati
--- al volo da melee_getGroups(): la risoluzione è per gruppo.
---
--- Ogni elemento:
--- {
---   id            = 1,       -- contatore progressivo univoco
---   unitArmy1Key  = "...",
---   unitArmy2Key  = "...",
---   turnStart     = 1,       -- ENGINE.turn di nascita: primo turno
---                            -- di mischia = (ENGINE.turn == turnStart)
---   chargedArmy1  = false,   -- Army1 "in carica" (request o COC)
---   chargedArmy2  = false,
---   flankedArmy1  = false,   -- Army1 caricata sul fianco
---   flankedArmy2  = false,
---   resolvedTurn  = nil,     -- ENGINE.turn in cui il gruppo è stato
---                            -- risolto (pendente se ~= ENGINE.turn)
--- }
--- ============================================================
 IEF_MELEE_LIST = IEF_MELEE_LIST or {}
 
 -- Contatore id univoci in IEF_MELEE_LIST
@@ -35,15 +6,6 @@ IEF_MELEE_NEXT_ID = IEF_MELEE_NEXT_ID or 0
 -- Gruppo scelto dalla lista in attesa di Attacca/Annulla nel
 -- popup confirm_panel_melee: [slot] = groupId
 IEF_MELEE_PENDING = IEF_MELEE_PENDING or {}
-
--- Gruppo in risoluzione nella fase MELEE_RESOLVE:
--- nil = nessuno, altrimenti
--- { groupId, slot, subStep = "TIRO"|"MORALE"|"ESCI",
---   calc (melee_computeGroup), rolled = {[1],[2]},
---   successi = {[1],[2]}, confermato = {[1],[2]},
---   morale = { {key, slot, perse, motivo}, ... } }
--- Non salvato: dopo un reload il gruppo resta pendente.
-IEF_MELEE_CURRENT = IEF_MELEE_CURRENT or nil
 
 -- Perdite di mischia MARCATE nella fase corrente, rimosse a
 -- fine fase MELEE: [unitKey] = { guid, ... }

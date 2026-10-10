@@ -35,21 +35,3 @@ function melee_btn_army2(player, value, id, buttonConfig)
     callHandler("advanceTurnAfterClick", BUTTONS.BTN_ARMY2)
     return true
 end
-
--- ============================================================
--- FUNZIONE: melee_resolve_btn_army1(player, value, id, buttonConfig)
--- Bottone dinamico in MELEE_RESOLVE (stesso principio di
--- charge_stopfire_btn_noop): mai avanzamento automatico.
--- ============================================================
-function melee_resolve_btn_army1(player, value, id, buttonConfig)
-    melee_resolveButton(player, 1)
-    return false
-end
-
--- ============================================================
--- FUNZIONE: melee_resolve_btn_army2(player, value, id, buttonConfig)
--- ============================================================
-function melee_resolve_btn_army2(player, value, id, buttonConfig)
-    melee_resolveButton(player, 2)
-    return false
-end

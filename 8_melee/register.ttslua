@@ -18,19 +18,3 @@ registerRenderer("2BtnClickMeleeList", function(phase)
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
 end)
-
--- ============================================================
--- RENDERER: meleeResolve
--- ============================================================
-registerRenderer("meleeResolve", function(phase)
-    UI.setAttribute("panelBtnUp",   "active", "true")
-    UI.setAttribute("panelBtnDown", "active", "false")
-    UI.setAttribute("panelDices",   "active", "false")
-    UI.setAttribute("panelBtnUp",   "offsetXY", "0 -223")
-    UI.setAttribute("melee_list_army1", "active", "false")
-    UI.setAttribute("melee_list_army2", "active", "false")
-    UI.setAttribute("charge_attack_list_army1",  "active", "false")
-    UI.setAttribute("charge_attack_list_army2",  "active", "false")
-    UI.setAttribute("charge_defense_list_army1", "active", "false")
-    UI.setAttribute("charge_defense_list_army2", "active", "false")
-end)

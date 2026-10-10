@@ -6,7 +6,6 @@ function before_melee(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
 
-    IEF_MELEE_CURRENT = nil
     IEF_MELEE_PENDING = {}
 
     melee_importFromCharges()
@@ -25,9 +24,7 @@ end
 -- rimuovono le perdite marcate.
 -- ============================================================
 function after_melee(phaseName, phase)
-    if not IEF_MELEE_CURRENT then
-        melee_removeMarkedLosses()
-    end
+    melee_removeMarkedLosses()
     IEF_MELEE_PENDING = {}
     melee_infoCloseAll()
     UI.setAttribute("confirm_panel_melee", "active", "false")
@@ -35,28 +32,6 @@ function after_melee(phaseName, phase)
     UI.setAttribute("melee_list_army2", "active", "false")
     callHandler("updateCenterPanel")
 end
-
--- ============================================================
--- FUNZIONE: before_melee_resolve(phaseName, phase)
--- ============================================================
-function before_melee_resolve(phaseName, phase)
-    TURN.phase = phaseName
-    TURN.completed = { Army1 = false, Army2 = false }
-
-    callHandler("engine_diceClearLastRoll", 1)
-    callHandler("engine_diceClearLastRoll", 2)
-
-    melee_resolveBegin()
-    callHandler("updateCenterPanel")
-    melee_hideChargeLists()
-end
-
--- ============================================================
--- FUNZIONE: after_melee_resolve(phaseName, phase)
--- ============================================================
-function after_melee_resolve(phaseName, phase)
-end
-
 -- ============================================================
 -- FUNZIONE: melee_hideChargeLists()
 -- Nasconde le liste della carica dopo il rebuild dell'UI:

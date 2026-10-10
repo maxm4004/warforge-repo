@@ -242,7 +242,6 @@ function main_restart()
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_MELEE_LIST = {}
     IEF_MELEE_NEXT_ID = 0
-    IEF_MELEE_CURRENT = nil
     IEF_MELEE_PENDING = {}
     IEF_MELEE_INFO_HOST = {}
     IEF_MELEE_MARKED = {}
@@ -2022,7 +2021,6 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.MOVE]             = {tidy, info, form, move},
         [PHASE.SHOOT]            = {tidy, info, shoot},
         [PHASE.MELEE]            = {tidy, info},
-        [PHASE.MELEE_RESOLVE]    = {tidy, info},
         [PHASE.RECOVERY]         = {tidy, info, recovery}
     }
 
@@ -2033,7 +2031,6 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.MOVE]             = {moveGeneral, info, range},
         [PHASE.SHOOT]            = {range, info},
         [PHASE.MELEE]            = {range, info},
-        [PHASE.MELEE_RESOLVE]    = {range, info},
         [PHASE.RECOVERY]         = {range, info}
     }
 

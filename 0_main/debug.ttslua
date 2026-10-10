@@ -508,3 +508,49 @@ function debug_chargeReactions()
     end
     if n == 0 then print("[DEBUG] Nessuna reazione in coda") end
 end
+-- ============================================================
+-- FUNZIONE DI TEST: debug_reset()
+-- /execute debug_reset()
+-- Resta nella fase corrente. Azzera:
+--  - coesione: tutte le unità tornano SALDE (tinta bianca)
+--  - coda cariche (e le reazioni in attesa di scelta)
+-- ============================================================
+function debug_reset(fase)
+
+    if fase then debug_moveToPhase(fase) end
+
+    local chiavi = {}
+    for key, _ in pairs(IEF_UNIT_COHESION or {}) do table.insert(chiavi, key) end
+    for _, key in ipairs(chiavi) do
+        main_setCohesion(key, COHESION.SAL)
+    end
+
+    IEF_CHARGE_QUEUE = {}
+    IEF_CHARGE_RESPONSE_PENDING = {}
+    IEF_MORALE_ROLL_PENDING = { [1] = {}, [2] = {} }
+    UI.setAttribute("charge_response_panel", "active", "false")
+    engine_subInitState()
+    IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
+
+        -- Perdite marcate (tiro/carica e mischia): le basi tornano normali
+    local marcate = {}
+    for _, tabella in ipairs({ IEF_MARKED_LOSSES or {}, IEF_MELEE_MARKED or {} }) do
+        for unitKey, guids in pairs(tabella) do
+            marcate[unitKey] = true
+            for _, guid in ipairs(guids) do
+                local obj = getObjectFromGUID(guid)
+                if obj then obj.highlightOff() end
+            end
+        end
+    end
+    IEF_MARKED_LOSSES = {}
+    IEF_MELEE_MARKED = {}
+    for unitKey, _ in pairs(marcate) do
+        main_applyCohesionTint(unitKey)
+    end
+
+    print(string.format("[DEBUG] Reset: %d unita' tornate salde, coda cariche vuota (fase %s)", #chiavi, tostring(ENGINE.phase)))
+
+    callHandler("buildUI")
+    callHandler("updateCenterPanel")
+end

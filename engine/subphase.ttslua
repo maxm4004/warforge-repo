@@ -45,6 +45,8 @@ SUBPANEL = SUBPANEL or {
     btnColor  = "#B8902E",
     btnWidth  = 200,
     btnHeight = 40,
+    btnMax     = 4,      -- bottoni disponibili per pannello
+    btnSpacing = 8,      -- spazio fra i bottoni    
 }
 
 -- ============================================================
@@ -321,21 +323,36 @@ function engine_subRoll(player, slot)
     end
     return true
 end
-
+-- ============================================================
+-- FUNZIONE: engine_subButtons(v)
+-- Lista dei bottoni della vista: v.buttons = { { label, icon,
+-- value, onClick }, ... } oppure il singolo v.button (+ v.icon).
+-- ============================================================
+function engine_subButtons(v)
+    if not v then return {} end
+    if v.buttons then return v.buttons end
+    if v.button then return { { label = v.button, icon = v.icon } } end
+    return {}
+end
 -- ============================================================
 -- FUNZIONE: engine_subButtonClick(player, value, id)
 -- Bottone del pannello sottofase (sub_btn_army1/2).
 -- ============================================================
 function engine_subButtonClick(player, value, id)
-    local slot = tonumber(id:match("^sub_btn_army(%d)$"))
+    local slotStr, nStr = id:match("^sub_btn_army(%d)_(%d+)$")
+    local slot, n = tonumber(slotStr), tonumber(nStr)
     if not slot or main_SlotByColor(player.color) ~= slot then return end
 
     local rec = engine_subTop(slot)
     if not rec or not engine_subActors(rec)[slot] then return end
 
+    local opzione = engine_subButtons(engine_subView(slot))[n]
+    if not opzione then return end
+
     local _, step = stepDef(rec)
-    if step and step.onClick then
-        callHandler(step.onClick, rec.ctx, slot, player, rec)
+    local handler = opzione.onClick or (step and step.onClick)
+    if handler then
+        callHandler(handler, rec.ctx, slot, player, rec, opzione.value)
     end
 end
 
@@ -355,7 +372,7 @@ function engine_subView(slot)
     if view == false then return nil end
     view = view or {}
     view.title = view.title or (def and def.title) or rec.name
-    view.icon = view.icon or (step and step.icon)
+    view.icon = view.icon or (step and step.icon) or "default"
     return view
 end
 
@@ -371,22 +388,30 @@ function engine_subPanelsXml()
     local xml = ""
     for slot = 1, 2 do
         local v = engine_subView(slot)
+        local bottoni = engine_subButtons(v)
 
-        print(v.icon)
+        local righe = ""
+        for n = 1, SUBPANEL.btnMax do
+            local b = bottoni[n]
+            righe = righe .. string.format(
+                '<Button id="sub_btn_army%d_%d" text="%s" icon="%s" iconAlignment="Right" iconWidth="30" padding="6 15 4 4" fontSize="13" fontStyle="Bold" color="%s" textAlignment="MiddleRight" textColor="White" outline="#000000" outlineSize="1" preferredWidth="%d" preferredHeight="%d" onClick="engine_subButtonClick" active="%s"/>',
+                slot, n, xmlEsc(b and b.label), xmlEsc((b and b.icon) or "default"), SUBPANEL.btnColor,
+                SUBPANEL.btnWidth, SUBPANEL.btnHeight, b and "true" or "false")
+        end
 
         xml = xml .. string.format(
             '<Panel id="sub_panel_army%d" rectAlignment="UpperCenter" width="%d" height="%d" offsetXY="%s" color="%s" visibility="%s" active="%s">' ..
-                '<Button id="sub_btn_army%d" text="%s" icon="%s" iconAlignment="Right" iconWidth="30" padding="6 15 4 4" fontSize="13" fontStyle="Bold" color="%s" textAlignment="MiddleRight" textColor="White" outline="#000000" outlineSize="1" rectAlignment="MiddleCenter" offsetXY="0 0" width="%d" height="%d" onClick="engine_subButtonClick" active="%s"/>' ..
+                '<HorizontalLayout id="sub_btns_army%d" spacing="%d" childAlignment="MiddleCenter" childForceExpandWidth="false" childForceExpandHeight="false">' ..
+                    '%s' ..
+                '</HorizontalLayout>' ..
             '</Panel>',
             slot, SUBPANEL.width, SUBPANEL.height, SUBPANEL.offsetXY, SUBPANEL.bg,
             slot == 1 and COLOR.ARMY1 or COLOR.ARMY2, v and "true" or "false",
-            slot, xmlEsc(v and v.button), xmlEsc(v and v.icon), SUBPANEL.btnColor,
-            SUBPANEL.btnWidth, SUBPANEL.btnHeight, (v and v.button) and "true" or "false"
+            slot, SUBPANEL.btnSpacing, righe
         )
     end
     return xml
 end
-
 -- ============================================================
 -- FUNZIONE: engine_subRedraw()
 -- Applica lo stato delle sottofasi ai pannelli e blocca i
@@ -394,24 +419,19 @@ end
 -- ============================================================
 function engine_subRedraw()
     for slot = 1, 2 do
-        local p = "sub_panel_army" .. slot
         local v = engine_subView(slot)
+        UI.setAttribute("sub_panel_army" .. slot, "active", v and "true" or "false")
 
-        if not v then
-            UI.setAttribute(p, "active", "false")
-        else
-            UI.setAttribute(p, "active", "true")
-            UI.setAttribute("sub_title_army" .. slot, "text", v.title or "")
-            UI.setAttribute("sub_info_army"  .. slot, "text", v.info or "")
-
-            if v.button then
-                UI.setAttribute("sub_btn_army"  .. slot, "text", v.button)
-                UI.setAttribute("sub_btn_army"  .. slot, "active", "true")
-                UI.setAttribute("sub_wait_army" .. slot, "active", "false")
+        local bottoni = engine_subButtons(v)
+        for n = 1, SUBPANEL.btnMax do
+            local id = "sub_btn_army" .. slot .. "_" .. n
+            local b = bottoni[n]
+            if b then
+                UI.setAttribute(id, "text", b.label or "")
+                UI.setAttribute(id, "icon", b.icon or "default")
+                UI.setAttribute(id, "active", "true")
             else
-                UI.setAttribute("sub_btn_army"  .. slot, "active", "false")
-                UI.setAttribute("sub_wait_army" .. slot, "text", v.wait or "")
-                UI.setAttribute("sub_wait_army" .. slot, "active", v.wait and "true" or "false")
+                UI.setAttribute(id, "active", "false")
             end
         end
 
@@ -423,7 +443,6 @@ function engine_subRedraw()
         UI.setAttribute("BTN_SINGLE", "interactable", "false")
     end
 end
-
 -- ============================================================
 -- Renderer di base
 -- ============================================================

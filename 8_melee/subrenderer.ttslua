@@ -1,0 +1,32 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/subrenderer.ttslua
+-- Renderer delle sottofasi della mischia. Solo caratteri ASCII.
+-- Un renderer che ritorna false nasconde il pannello.
+-- ============================================================
+
+local function nomeAltro(slot)
+    local altro = (slot == 1) and 2 or 1
+    return (ARMY and ARMY[altro] and ARMY[altro].name) or ("Army" .. altro)
+end
+
+-- Step TIRO: bottone a chi non ha ancora tirato
+registerSubRenderer("meleeTiro", function(rec, def, step, slot, isActor)
+    local c = rec.ctx or {}
+    if c["rolled" .. slot] then
+        return { title = def.title, wait = "In attesa di " .. nomeAltro(slot) }
+    end
+    return { title = def.title, button = step.label }
+end)
+
+-- Step MORALE: chi ha test in coda non vede il pannello finche'
+-- non apre il test dalla riga del pannello morale (poi vede
+-- MORALE_TEST); l'altro vede "In attesa di ...".
+registerSubRenderer("meleeMorale", function(rec, def, step, slot, isActor)
+    if main_moraleQueueCount(slot) > 0 then return false end
+    return { title = def.title, wait = "In attesa di " .. nomeAltro(slot) }
+end)
+
+-- Step ESCI: esito, si chiude da solo
+registerSubRenderer("meleeEsci", function(rec, def, step, slot, isActor)
+    return { title = def.title, wait = "MISCHIA RISOLTA" }
+end)
