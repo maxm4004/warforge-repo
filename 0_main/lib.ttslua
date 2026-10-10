@@ -70,42 +70,52 @@ function main_updateCenterPanel()
             end
         elseif phase.inputMode == "INITIATIVE" then
 
+            -- Attivo solo chi ha l'iniziativa e non ha completato:
+            -- 1) red/grey  2) grey/green  3) grey/grey (transizione)
+            local completed = (TURN and TURN.completed) or {}
+            local attivo1 = TURN and TURN.activeArmy == "Army1" and not completed.Army1
+            local attivo2 = TURN and TURN.activeArmy == "Army2" and not completed.Army2
+
             UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
             UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
-            UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
-            UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
-            UI.setAttribute(BUTTONS.BTN_ARMY1, "color", colorArmy1 or COLOR.NOARMY)
-            UI.setAttribute(BUTTONS.BTN_ARMY2, "color", colorArmy2 or COLOR.NOARMY)
+            UI.setAttribute(BUTTONS.BTN_ARMY1, "color", attivo1 and (colorArmy1 or COLOR.NOARMY) or COLOR.NOARMY)
+            UI.setAttribute(BUTTONS.BTN_ARMY2, "color", attivo2 and (colorArmy2 or COLOR.NOARMY) or COLOR.NOARMY)
 
-            if TURN and TURN.activeArmy == "Army1" then                
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "false")
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY)
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "Black")
-            elseif TURN and TURN.activeArmy == "Army2" then
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
-                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "false")
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY)
-                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "Black")
-            end
+            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
+            Wait.frames(function()
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", attivo1 and "White" or "Black")
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", attivo2 and "White" or "Black")
+            end, 1)
+
+            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
+            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
+            Wait.frames(function()
+                local c1, c2 = "White", "White"
+                if TURN and TURN.activeArmy == "Army1" then
+                    c2 = "Black"
+                elseif TURN and TURN.activeArmy == "Army2" then
+                    c1 = "Black"
+                end
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", c1)
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", c2)
+            end, 1)
 
 else
-            -- reset interactable per OWNER mode
+            -- OWNER: grigio chiaro = completato; bianco solo su quello cliccabile
+            local completed = (TURN and TURN.completed) or {}
+            local fatto1 = completed.Army1 == true
+            local fatto2 = completed.Army2 == true
+
             UI.setAttribute(BUTTONS.BTN_ARMY1, "interactable", "true")
             UI.setAttribute(BUTTONS.BTN_ARMY2, "interactable", "true")
-            UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", "White")
-            UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", "White")
+            if fatto1 then UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY) end
+            if fatto2 then UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY) end
 
-            if TURN and TURN.completed then
-                if TURN.completed.Army1 then
-                    UI.setAttribute(BUTTONS.BTN_ARMY1, "color", COLOR.NOARMY)
-                end
-                if TURN.completed.Army2 then
-                    UI.setAttribute(BUTTONS.BTN_ARMY2, "color", COLOR.NOARMY)
-                end
-            end
+            -- Il cambio di text resetta textColor: reimpostarlo dopo un frame
+            Wait.frames(function()
+                UI.setAttribute(BUTTONS.BTN_ARMY1, "textColor", fatto1 and "Black" or "White")
+                UI.setAttribute(BUTTONS.BTN_ARMY2, "textColor", fatto2 and "Black" or "White")
+            end, 1)
         end
     end)
 
@@ -511,6 +521,11 @@ function main_canUseButton(slot, player, value, id, button, phase)
 
         -- se esiste un turno attivo, solo lui può cliccare
         if activeColor then
+            -- bottone di chi non ha l'iniziativa: nessun effetto
+            local activeBtn = (TURN.activeArmy == "Army1") and BUTTONS.BTN_ARMY1 or BUTTONS.BTN_ARMY2
+            if slot ~= activeBtn then
+                return false
+            end
             if not player or player.color ~= activeColor then
                 warningToColor("Non è possibile usare questo pulsante", player, "Yellow")
                 return false
@@ -2674,14 +2689,13 @@ end
 function main_setRollButtons(rollerSlot, label)
     for slot = 1, 2 do
         local id = "BTN_ARMY" .. slot
+        UI.setAttribute(id, "interactable", "true")
         if slot == rollerSlot then
             UI.setAttribute(id, "text", label)
             UI.setAttribute(id, "color", slot == 1 and COLOR.ARMY1 or COLOR.ARMY2)
-            UI.setAttribute(id, "interactable", "true")
         else
             UI.setAttribute(id, "text", "In attesa avversario")
-            UI.setAttribute(id, "color", "Grey")
-            UI.setAttribute(id, "interactable", "false")
+            UI.setAttribute(id, "color", COLOR.NOARMY)
         end
     end
     Wait.frames(function()

@@ -63,27 +63,26 @@ end
 -- FUNZIONE: charge_stopfire_btn_noop(player, value, id, buttonConfig)
 -- ============================================================
 function charge_stopfire_btn_noop(player, value, id, buttonConfig)
-    print("charge_stopfire_btn_noop")
-    print(player," ", value," ", id)
 
     local slot = main_SlotByColor(player.color)
     local cur = IEF_STOPFIRE_CURRENT
-    if not cur then return end
+    if not cur then return false end
     local defenderSlot = cur.slot
     local attackerSlot = (cur.slot == 1) and 2 or 1
 
-    print("defenderSlot: ", defenderSlot)
-    print("attackerSlot: ", attackerSlot)
+    -- Bottone "In attesa avversario": nessun effetto
+    local rollerSlot = (cur.subStep == "TIRO") and defenderSlot or attackerSlot
+    if slot ~= rollerSlot then return false end
 
-            if slot == defenderSlot then
-                charge_stopfireBeginFromClick(player)
-            else
-                if cur.subStep == "ESCI" then 
-                    charge_stopfireExitClick(player)
-                else
-                    warningToColor("Il test di morale si tira dal pannello morale", player, "Yellow", 3)
-                end
-            end
+    if slot == defenderSlot then
+        charge_stopfireBeginFromClick(player)
+    else
+        if cur.subStep == "ESCI" then
+            charge_stopfireExitClick(player)
+        else
+            warningToColor("Il test di morale si tira dal pannello morale", player, "Yellow", 3)
+        end
+    end
     return false
 end
 
