@@ -1,0 +1,102 @@
+-- ============================================================
+-- WARFORGE IEF — 7_shoot/subphase.ttslua
+-- Sottofasi del tiro.
+--
+-- SHOOT_ROLL (scope player): il tiro confermato di un'unità.
+-- Si apre da shoot_Confirm per l'esercito che tira. La fase
+-- resta SHOOT.
+--   TIRO : nessun pannello (camera gia' sui dadi dalla conferma),
+--          il tiratore tira col Roll fisico.
+--   ESCI : esito per MORALE_ESITO_SECONDS, poi chiusura.
+-- Dadi e soglia si calcolano alla conferma (servono le basi
+-- in fronte e quelle nemiche, che non si salvano).
+-- ctx = { shooterKey, targetKey, targetSlot, shooterLabel,
+--         targetLabel, dadi, soglia, colpi, motivo }
+-- ============================================================
+
+-- ============================================================
+-- FUNZIONE: shoot_subphases()
+-- ============================================================
+function shoot_subphases()
+    return {
+        SHOOT_ROLL = {
+            scope = "player",
+            title = "",
+            first = "TIRO",
+            steps = {
+                TIRO = { render = "shootTiro", actor = "owner", label = "Tira i dadi per colpire", onClick = "shoot_rollFocus", onRoll = "shoot_rollDo" },
+                ESCI = { render = "shootEsci", actor = "owner", onEnter = "shoot_rollEsciEnter", onRestore = "shoot_rollEsciEnter" },
+            },
+        },
+    }
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_rollRec(slot)
+-- SHOOT_ROLL aperta per lo slot (in cima alla sua pila) o nil.
+-- ============================================================
+function shoot_rollRec(slot)
+    local rec = engine_subPrivate(slot)
+    if rec and rec.name == "SHOOT_ROLL" then return rec end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_rollFocus(ctx, slot, player, rec)
+-- Bottone dello step TIRO: camera sui dadi.
+-- ============================================================
+function shoot_rollFocus(ctx, slot, player, rec)
+    if player then
+        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_rollDo(ctx, slot, player, rec)
+-- Roll fisico nello step TIRO.
+-- ============================================================
+function shoot_rollDo(ctx, slot, player, rec)
+    printToAll(string.format("[TIRO] %s tira %dD6 vs %s (soglia %d+)",
+        ctx.shooterLabel or "?", ctx.dadi, ctx.targetLabel or "?", ctx.soglia), {r=1,g=0.85,b=0.2})
+
+    IEF_DICE_ROLL_TRY[slot] = { dadi = ctx.dadi, soglia = ctx.soglia }
+
+    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        Wait.time(function()
+            engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
+        end, 2)
+
+        if shoot_rollRec(slot) ~= rec or rec.step ~= "TIRO" then return end
+
+        local hits = successi or 0
+        ctx.colpi = hits
+        if hits > 0 then
+            local targetObj = main_getUnitBases(ctx.targetKey)[1]
+            shoot_resolveHits(targetObj, ctx.targetSlot, hits)
+        else
+            printToAll("[TIRO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
+        end
+        engine_subStep("SHOOT_ROLL", slot, "ESCI")
+    end)
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_rollEsciEnter(ctx, slot, rec)
+-- Step ESCI: esito per MORALE_ESITO_SECONDS, poi chiusura.
+-- ============================================================
+function shoot_rollEsciEnter(ctx, slot, rec)
+    Wait.time(function()
+        local live = shoot_rollRec(slot)
+        if live == rec and live.step == "ESCI" then
+            engine_subClose("SHOOT_ROLL", slot, nil)
+        end
+    end, MORALE_ESITO_SECONDS)
+end
+
+-- ============================================================
+-- Registrazione
+-- ============================================================
+registerSubphases(shoot_subphases())
+registerHandler("shoot_rollFocus",     function(c,s,p,r) return shoot_rollFocus(c,s,p,r)  end)
+registerHandler("shoot_rollDo",        function(c,s,p,r) return shoot_rollDo(c,s,p,r)     end)
+registerHandler("shoot_rollEsciEnter", function(c,s,r)   return shoot_rollEsciEnter(c,s,r) end)

@@ -70,9 +70,10 @@ end
 -- Bottone del pannello sottofase: riporta la camera sui dadi.
 -- ============================================================
 function main_moraleTestFocus(ctx, slot, player, rec)
+    ctx.aiDadi = true
     main_moraleCamera(player)
+    engine_subRedraw()
 end
-
 -- ============================================================
 -- FUNZIONE: main_moraleTestRoll(ctx, slot, player, rec)
 -- Roll fisico durante lo step ROLL.

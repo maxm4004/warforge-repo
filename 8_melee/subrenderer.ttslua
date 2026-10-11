@@ -9,10 +9,13 @@ local function nomeAltro(slot)
     return (ARMY and ARMY[altro] and ARMY[altro].name) or ("Army" .. altro)
 end
 
--- Step TIRO: bottone a chi non ha ancora tirato
+-- Step TIRO: niente pannello finche' il giocatore non ha cliccato
+-- la riga della mischia; poi bottone a chi non ha ancora tirato
+-- e non e' gia' sui dadi.
 registerSubRenderer("meleeTiro", function(rec, def, step, slot, isActor)
     local c = rec.ctx or {}
-    if c["rolled" .. slot] then
+    if not c["entrato" .. slot] then return false end
+    if c["rolled" .. slot] or c["aiDadi" .. slot] then
         return { title = def.title, wait = "In attesa di " .. nomeAltro(slot) }
     end
     return { title = def.title, button = step.label }

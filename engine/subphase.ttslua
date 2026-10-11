@@ -406,7 +406,7 @@ function engine_subPanelsXml()
                 '</HorizontalLayout>' ..
             '</Panel>',
             slot, SUBPANEL.width, SUBPANEL.height, SUBPANEL.offsetXY, SUBPANEL.bg,
-            slot == 1 and COLOR.ARMY1 or COLOR.ARMY2, v and "true" or "false",
+            slot == 1 and COLOR.ARMY1 or COLOR.ARMY2, (#bottoni > 0) and "true" or "false",
             slot, SUBPANEL.btnSpacing, righe
         )
     end
@@ -419,10 +419,11 @@ end
 -- ============================================================
 function engine_subRedraw()
     for slot = 1, 2 do
-        local v = engine_subView(slot)
-        UI.setAttribute("sub_panel_army" .. slot, "active", v and "true" or "false")
 
+        local v = engine_subView(slot)
         local bottoni = engine_subButtons(v)
+        UI.setAttribute("sub_panel_army" .. slot, "active", (#bottoni > 0) and "true" or "false")
+        
         for n = 1, SUBPANEL.btnMax do
             local id = "sub_btn_army" .. slot .. "_" .. n
             local b = bottoni[n]

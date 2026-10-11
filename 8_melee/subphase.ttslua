@@ -11,8 +11,8 @@ function melee_subphases()
             onEnter     = "melee_resolveEnter",
             subphases   = { "MORALE_TEST" },
             steps = {
-                TIRO   = { render = "meleeTiro",   actor = "both", icon = "combatti", label = "Combatti in Mischia", onClick = "melee_resolveFocus", onRoll = "melee_resolveRoll" },
-                MORALE = { render = "meleeMorale", actor = "both", icon = "morale_mischia"},
+                TIRO   = { render = "meleeTiro",   actor = "both", icon = "mischia", label = "Combatti in Mischia", onClick = "melee_resolveFocus", onRoll = "melee_resolveRoll" },
+                MORALE = { render = "meleeMorale", actor = "both", icon = "morale"},
                 ESCI   = { render = "meleeEsci",   actor = "both", onEnter = "melee_resolveEsciEnter", onRestore = "melee_resolveEsciEnter" },
             },
         },
@@ -73,9 +73,11 @@ end
 -- Bottone dello step TIRO: camera sui dadi.
 -- ============================================================
 function melee_resolveFocus(ctx, slot, player, rec)
+    ctx["aiDadi" .. slot] = true
     if player then
         engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
     end
+    engine_subRedraw()
 end
 
 -- ============================================================

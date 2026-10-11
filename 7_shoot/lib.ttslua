@@ -6,7 +6,7 @@ function shoot_buttonBaseClick(obj, player_color, alt_click)
     local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
     if not slot then return end
 
-    if IEF_SHOOT_STATE and IEF_SHOOT_STATE.confermato then
+    if shoot_rollPending(slot) then
         warningToColor("C'è un tiro confermato: tira prima i dadi", Player[player_color], "Yellow", 5)
         return
     end
@@ -610,58 +610,43 @@ function shoot_Confirm(player)
         return
     end
 
-    local unitKey = main_getUnitKey(state.shooter)
-    IEF_FIRED[unitKey] = true
-    state.confermato = true
-
-    engine_diceCameraZoom(player, state.shooterSlot)
-    shoot_ResetLines(player)
-    main_setRollButtons(state.shooterSlot, "Tira i dadi per colpire")
-end
--- ============================================================
--- FUNZIONE: shoot_doRoll(player, slot)
--- Lancio fisico dal bottone 3D Roll — legge lo stato preparato
--- da shoot_Confirm, calcola numDadi/soglia e tira dal sacchetto.
--- ============================================================
-function shoot_doRoll(player, slot)    
-    local state = IEF_SHOOT_STATE
-    if not state.shooter or not state.target or not state.confermato or state.shooterSlot ~= slot then return end
-    local shooterUnit = state.shooterUnit
-    local targetUnit  = state.targetUnit
-    local weapon = shoot_getWeapon(main_getUnitKey(state.shooter))
-
-    local soglia = weapon and shoot_hitThreshold(weapon, main_getUnitKey(state.target)) or DEFAULT_HIT_THRESHOLD
-    local basiPronte = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits)
-    local numDadi = shoot_numDice(main_getUnitKey(state.shooter), basiPronte, false)
-
-    if numDadi <= 0 then
-        printToColor("[TIRO] Nessuna base in gittata con LOS", player.color, {r=1,g=0.6,b=0})
-        engine_diceCameraReturn(player, slot, "SHOOT")
-        shoot_Reset()
-        callHandler("updateCenterPanel")
+    local slot = state.shooterSlot
+    if shoot_rollRec(slot) then
+        warningToColor("Completa prima il tiro in corso", player, "Yellow", 3)
         return
     end
 
-    printToAll(string.format("[TIRO] %s tira %dD6 vs %s (soglia %d+)",
-        shooterUnit.tipo .. "_" .. shooterUnit.unita_num,
-        numDadi, targetUnit.tipo .. "_" .. targetUnit.unita_num, soglia), {r=1,g=0.85,b=0.2})
+    local shooterKey = main_getUnitKey(state.shooter)
+    local targetKey  = main_getUnitKey(state.target)
+    local weapon = shoot_getWeapon(shooterKey)
+    local soglia = weapon and shoot_hitThreshold(weapon, targetKey) or DEFAULT_HIT_THRESHOLD
+    local basiPronte = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits)
+    local numDadi = shoot_numDice(shooterKey, basiPronte, false)
 
-    local targetSlotRef = state.targetSlot
-    local targetObjRef  = state.target
+    local ctx = {
+        shooterKey   = shooterKey,
+        targetKey    = targetKey,
+        targetSlot   = state.targetSlot,
+        shooterLabel = state.shooterUnit.tipo .. "_" .. state.shooterUnit.unita_num,
+        targetLabel  = state.targetUnit.tipo .. "_" .. state.targetUnit.unita_num,
+        dadi         = numDadi,
+        soglia       = soglia,
+    }
 
-    IEF_DICE_ROLL_TRY[slot] = { dadi = numDadi, soglia = soglia }
+    IEF_FIRED[shooterKey] = true
 
-    engine_diceThrowFromBag(slot, nil, function(risultati, successi)
-        engine_diceCameraReturn(player, slot, "SHOOT")
-        local hits = successi or 0
-        if hits > 0 then
-            shoot_resolveHits(targetObjRef, targetSlotRef, hits)
-        else
-            printToAll("[TIRO] Nessun colpo a segno", {r=0.7,g=0.7,b=0.7})
-        end
-        shoot_Reset()
-        callHandler("updateCenterPanel")
-    end)
+    shoot_ResetLines(player)
+    shoot_Reset()
+
+    if not engine_subOpen("SHOOT_ROLL", slot, ctx, nil) then return end
+
+    if numDadi <= 0 then
+        ctx.motivo = "Nessuna base in gittata con LOS"
+        engine_subStep("SHOOT_ROLL", slot, "ESCI")
+        return
+    end
+
+    engine_diceCameraZoom(player, slot)
 end
 -- ============================================================
 -- FUNZIONE: shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
@@ -782,8 +767,8 @@ end
 -- true se ARMY{slot} ha un tiro confermato da lanciare.
 -- ============================================================
 function shoot_rollPending(slot)
-    local state = IEF_SHOOT_STATE
-    return state and state.confermato and state.shooterSlot == slot or false
+    local rec = shoot_rollRec(slot)
+    return rec ~= nil and rec.step == "TIRO"
 end
 -- ============================================================
 -- FUNZIONE: shoot_numDice(shooterKey, basiPronte, raffica)

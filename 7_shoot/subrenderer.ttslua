@@ -1,0 +1,21 @@
+-- ============================================================
+-- WARFORGE IEF — 7_shoot/subrenderer.ttslua
+-- Renderer delle sottofasi del tiro. Solo caratteri ASCII.
+-- ============================================================
+
+-- Step TIRO: il bersaglio e' gia' confermato e la camera e' sui
+-- dadi, quindi nessun pannello: si tira col Roll fisico.
+registerSubRenderer("shootTiro", function(rec, def, step, slot, isActor)
+    return false
+end)
+
+-- Step ESCI: motivo (chiusura senza tiro) o colpi a segno;
+-- si chiude da solo.
+registerSubRenderer("shootEsci", function(rec, def, step, slot, isActor)
+    local c = rec.ctx or {}
+    return {
+        title = def.title,
+        info  = c.motivo,
+        wait  = c.colpi and (tostring(c.colpi) .. " COLPI A SEGNO") or "",
+    }
+end)

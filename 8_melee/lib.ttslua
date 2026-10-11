@@ -353,7 +353,41 @@ function melee_groupCenter(gruppo)
     if n == 0 then return nil end
     return Vector(sx / n, sy / n, sz / n)
 end
+-- ============================================================
+-- FUNZIONE: melee_rowInCorso(groupId)
+-- Vero se MELEE_RESOLVE è aperta su questo gruppo.
+-- ============================================================
+function melee_rowInCorso(groupId)
+    local sh = engine_subShared()
+    return sh ~= nil and sh.name == "MELEE_RESOLVE" and sh.ctx and sh.ctx.groupId == groupId
+end
 
+-- ============================================================
+-- FUNZIONE: melee_rowText(gruppo, slot)
+-- Testo e colore della riga della lista mischie: gialla con
+-- " - in corso" mentre la mischia è aperta.
+-- ============================================================
+function melee_rowText(gruppo, slot)
+    if melee_rowInCorso(gruppo.id) then
+        return melee_groupLabel(gruppo, slot) .. " - in corso", "#FFD833"
+    end
+    return melee_groupLabel(gruppo, slot), "White"
+end
+
+-- ============================================================
+-- FUNZIONE: melee_rowRefresh(gruppo)
+-- Aggiorna le righe del gruppo nelle liste dei due eserciti.
+-- ============================================================
+function melee_rowRefresh(gruppo)
+    for slot = 1, 2 do
+        local id = string.format("melee_row_%d_%s", slot, gruppo.id)
+        local testo, colore = melee_rowText(gruppo, slot)
+        UI.setAttribute(id, "text", testo)
+        Wait.frames(function()
+            UI.setAttribute(id, "textColor", colore)
+        end, 1)
+    end
+end
 -- ============================================================
 -- FUNZIONE: melee_getListPanelXml(slot)
 -- Lista di TUTTE le mischie dal punto di vista di slot. Solo
@@ -368,14 +402,14 @@ function melee_getListPanelXml(slot)
 
     local rows = ""
     for _, g in ipairs(gruppi) do
-        local stato = melee_groupIsPending(g) and "" or ""
+        local testo, coloreTesto = melee_rowText(g, slot)
         rows = rows .. string.format(
             '<Row preferredHeight="30">' ..
                 '<Cell>' ..
-                    '<Button id="melee_row_%d_%s" text="%s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="melee_rowClick"/>' ..
+                    '<Button id="melee_row_%d_%s" text="%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="%s" alignment="MiddleLeft" onClick="melee_rowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
-            slot, g.id, melee_groupLabel(g, slot), stato, g.id, slot, g.id
+            slot, g.id, testo, coloreTesto
         )
     end
 
@@ -389,8 +423,6 @@ function melee_getListPanelXml(slot)
         slot, colore, attivo, slot, ARMY[slot].name, rows
     )
 end
-
-
 -- ============================================================
 -- FUNZIONE: melee_cameraToGroup(player, slot, gruppo)
 -- ============================================================
@@ -413,15 +445,25 @@ function melee_rowClick(player, value, id)
     end
     if not slotStr then return end
     local slot = tonumber(slotStr)
+    local groupId = tonumber(groupStr)
 
     local aperta = engine_subShared()
     if aperta then
+        -- Mischia già aperta dall'avversario su questo gruppo:
+        -- questo giocatore entra (riga -> sottofase -> dadi)
+        if aperta.name == "MELEE_RESOLVE" and aperta.ctx.groupId == groupId then
+            local gruppo = melee_getGroupById(groupId)
+            if gruppo then melee_cameraToGroup(player, slot, gruppo) end
+            aperta.ctx["entrato" .. slot] = true
+            engine_subRedraw()
+            return
+        end
         local def = SUBPHASES[aperta.name]
         warningToColor("Completa prima: " .. ((def and def.title ~= "" and def.title) or "azione in corso"), player, "Yellow", 3)
         return
     end
 
-    local gruppo = melee_getGroupById(tonumber(groupStr))
+    local gruppo = melee_getGroupById(groupId)
     if not gruppo then return end
 
     melee_cameraToGroup(player, slot, gruppo)
@@ -433,7 +475,11 @@ function melee_rowClick(player, value, id)
         return
     end
 
-    engine_subOpen("MELEE_RESOLVE", nil, { groupId = gruppo.id, attackerSlot = slot }, "melee_resolveDone")
+    local ctx = { groupId = gruppo.id, attackerSlot = slot }
+    ctx["entrato" .. slot] = true
+    if engine_subOpen("MELEE_RESOLVE", nil, ctx, "melee_resolveDone") then
+        melee_rowRefresh(gruppo)
+    end
 end
 -- ============================================================
 -- FUNZIONE: melee_unitDims(unitKey)

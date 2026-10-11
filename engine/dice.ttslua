@@ -550,11 +550,6 @@ function engine_diceRoll_start(player)
         field_doRollBlock(player, slot)
         return
     end    
-
-    if ENGINE.phase == "SHOOT" then
-        shoot_doRoll(player, slot)
-        return
-    end
     
     engine_diceClearLastRoll(slot)
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)

@@ -8,6 +8,7 @@ function shoot_phase()
             after  = "after_shoot",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK, ACTION.CONFIRM },
             render = "2BtnClick",
+            subphases = { "SHOOT_ROLL" },
             enforceOwnership = true,
             inputMode = "INITIATIVE",
             buttons = {

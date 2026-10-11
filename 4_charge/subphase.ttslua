@@ -11,8 +11,8 @@ function charge_subphases()
             onEnter   = "charge_stopfireEnter",
             subphases = { "MORALE_TEST" },
             steps = {
-                TIRO   = { render = "subAction",      actor = "defenderSlot", icon = "tiro", label = "Tiro di Arresto", onClick = "charge_stopfireFocus", onRoll = "charge_stopfireRoll" },
-                MORALE = { render = "stopfireMorale", actor = "attackerSlot", icon = "morale_tiro", onEnter = "charge_stopfireMoraleEnter" },
+                TIRO   = { render = "stopfireTiro",   actor = "defenderSlot", icon = "tiroArresto", label = "Tiro di Arresto", onClick = "charge_stopfireFocus", onRoll = "charge_stopfireRoll" },                
+                MORALE = { render = "stopfireMorale", actor = "attackerSlot", icon = "morale", onEnter = "charge_stopfireMoraleEnter" },
                 ESCI   = { render = "stopfireEsci",   actor = "attackerSlot", onEnter = "charge_stopfireEsciEnter", onRestore = "charge_stopfireEsciEnter" },
             },
         },
@@ -341,6 +341,7 @@ function charge_reactionChoose(ctx, slot, player, rec, value)
         engine_subOpen("STOPFIRE", nil,
             { queueId = elemento.id, defenderSlot = slot, attackerSlot = (slot == 1) and 2 or 1 },
             "charge_stopfireDone")
+        engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
     end
 end
 

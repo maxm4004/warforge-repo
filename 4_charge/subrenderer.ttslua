@@ -8,6 +8,18 @@ local function nomeEsercito(slot)
     return (ARMY and ARMY[slot] and ARMY[slot].name) or ("Army" .. tostring(slot))
 end
 
+-- Step TIRO: il difensore ha gia' scelto il Tiro d'Arresto nella
+-- reazione, quindi nessun pannello: tira col Roll fisico.
+-- L'attaccante vede "In attesa di ...".
+registerSubRenderer("stopfireTiro", function(rec, def, step, slot, isActor)
+    if isActor then return false end
+    local c = rec.ctx or {}
+    return {
+        title = def.title,
+        wait  = "In attesa di " .. nomeEsercito(c.defenderSlot),
+    }
+end)
+
 -- Step MORALE: il caricante non vede il pannello finche' non
 -- apre il test dalla riga del pannello morale (poi vede
 -- MORALE_TEST); il difensore vede "In attesa di ...".
@@ -38,19 +50,19 @@ registerSubRenderer("reactionChoice", function(rec, def, step, slot, isActor)
     local c = rec.ctx or {}
     local bottoni = {}
     for _, r in ipairs(c.opzioni or {}) do
-        table.insert(bottoni, { label = CHARGE_REACTION_LABEL[r] or r, icon = "default", value = r })
+        table.insert(bottoni, { label = CHARGE_REACTION_LABEL[r] or r, icon = r or "default", value = r })
     end
-    table.insert(bottoni, { label = "Annulla", icon = "default", value = "ANNULLA" })
+    table.insert(bottoni, { label = "Chiudi", icon = "chiudi", value = "ANNULLA" })
     return { title = def.title, buttons = bottoni }
 end)
 
 -- CHARGE_MOVE: Carica (o Evadi) + Annulla
 registerSubRenderer("chargeMoveChoice", function(rec, def, step, slot, isActor)
     local c = rec.ctx or {}
-    local azione = c.evasione and { label = "Evadi", icon = "default", value = "EVADI" }
-                               or { label = "Carica", icon = "default", value = "CARICA" }
+    local azione = c.evasione and { label = "Esegui Evasione", icon = "evasione", value = "EVADI" }
+                               or { label = "Esegui Carica", icon = "carica", value = "CARICA" }
     return { title = def.title, buttons = {
         azione,
-        { label = "Annulla", icon = "default", value = "ANNULLA" },
+        { label = "Chiudi", icon = "chiudi", value = "ANNULLA" },
     } }
 end)

@@ -5,6 +5,8 @@
 -- ============================================================
 
 registerSubRenderer("moraleRoll", function(rec, def, step, slot, isActor)
+    local c = rec.ctx or {}
+    if c.aiDadi then return false end
     return {
         title  = def.title,
         button = isActor and step.label or nil,
