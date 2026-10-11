@@ -26,7 +26,7 @@ function charge_phase()
             after  = "after_charge_react",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
             render = "2BtnClickChargeDefenseList",
-            subphases = { "STOPFIRE" },
+            subphases = { "STOPFIRE", "REACTION" },            
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {
@@ -44,6 +44,7 @@ function charge_phase()
             after  = "after_charge_auto",
             allowedActions = { ACTION.ARMY1_CLICK, ACTION.ARMY2_CLICK },
             render = "2BtnClickChargeAttackList",
+            subphases = { "CHARGE_MOVE" },            
             enforceOwnership = true,
             inputMode = "OWNER",
             buttons = {

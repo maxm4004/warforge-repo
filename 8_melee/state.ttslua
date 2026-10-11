@@ -3,10 +3,6 @@ IEF_MELEE_LIST = IEF_MELEE_LIST or {}
 -- Contatore id univoci in IEF_MELEE_LIST
 IEF_MELEE_NEXT_ID = IEF_MELEE_NEXT_ID or 0
 
--- Gruppo scelto dalla lista in attesa di Attacca/Annulla nel
--- popup confirm_panel_melee: [slot] = groupId
-IEF_MELEE_PENDING = IEF_MELEE_PENDING or {}
-
 -- Perdite di mischia MARCATE nella fase corrente, rimosse a
 -- fine fase MELEE: [unitKey] = { guid, ... }
 IEF_MELEE_MARKED = IEF_MELEE_MARKED or {}

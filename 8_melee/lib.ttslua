@@ -407,45 +407,12 @@ end
 -- gruppo è da risolvere, apre il popup Attacca/Annulla.
 -- ============================================================
 function melee_rowClick(player, value, id)
-    local slotStr, groupStr = id:match("^melee_row_(%d)_(%d+)$")
+    local slotStr, groupStr = id:match("^melee_row_btn_(%d)_(%d+)$")
+    if not slotStr then
+        slotStr, groupStr = id:match("^melee_row_(%d)_(%d+)$")
+    end
     if not slotStr then return end
     local slot = tonumber(slotStr)
-    local gruppo = melee_getGroupById(tonumber(groupStr))
-    if not gruppo then return end
-
-    melee_cameraToGroup(player, slot, gruppo)
-
-    if ENGINE.phase ~= PHASE.MELEE then return end
-
-    local iniz = melee_initiativeSlot()
-    if iniz and iniz ~= slot then
-        --warningToColor("L'ordine delle mischie lo sceglie " .. ARMY[iniz].name, player, "Yellow", 5)
-        --return
-    end
-
-    if not melee_groupIsPending(gruppo) then
-        warningToColor("Questa mischia è già stata risolta in questo turno", player, "Yellow", 5)
-        return
-    end
-
-    IEF_MELEE_PENDING[slot] = gruppo.id
-    UI.setAttribute("confirm_panel_melee", "visibility", player.color)
-    UI.setAttribute("confirm_panel_melee", "active", "true")
-end
--- ============================================================
--- FUNZIONE: melee_attackConfirm(player, value, id)
--- "Attacca": apre la sottofase MELEE_RESOLVE sul gruppo; la
--- fase resta MELEE. Bloccato se un'altra sottofase condivisa
--- è aperta.
--- ============================================================
-function melee_attackConfirm(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local groupId = slot and IEF_MELEE_PENDING[slot]
-    UI.setAttribute("confirm_panel_melee", "active", "false")
-    if not groupId then return end
-    IEF_MELEE_PENDING[slot] = nil
-
-    if not melee_getGroupById(groupId) then return end
 
     local aperta = engine_subShared()
     if aperta then
@@ -454,27 +421,20 @@ function melee_attackConfirm(player, value, id)
         return
     end
 
-    engine_subOpen("MELEE_RESOLVE", nil, { groupId = groupId, attackerSlot = slot }, "melee_resolveDone")
+    local gruppo = melee_getGroupById(tonumber(groupStr))
+    if not gruppo then return end
+
+    melee_cameraToGroup(player, slot, gruppo)
+
+    if ENGINE.phase ~= PHASE.MELEE then return end
+
+    if not melee_groupIsPending(gruppo) then
+        warningToColor("Questa mischia è già stata risolta in questo turno", player, "Yellow", 5)
+        return
+    end
+
+    engine_subOpen("MELEE_RESOLVE", nil, { groupId = gruppo.id, attackerSlot = slot }, "melee_resolveDone")
 end
-
--- ============================================================
--- FUNZIONE: melee_attackCancel(player, value, id)
--- ============================================================
-function melee_attackCancel(player, value, id)
-
-    local slot = main_getArmyByColor(player)
-    if slot then IEF_MELEE_PENDING[slot] = nil end
-    UI.setAttribute("confirm_panel_melee", "active", "false")
-
-end
-
--- ============================================================
--- GEOMETRIA (recuperata dalle funzioni provate ad agosto):
--- dimensioni dichiarate (base_width_cm/base_depth_cm) al posto
--- di getBounds(), che è allineato al mondo e sbaglia con
--- l'unità ruotata.
--- ============================================================
-
 -- ============================================================
 -- FUNZIONE: melee_unitDims(unitKey)
 -- Ritorna larghezza e profondità base in unità TTS.

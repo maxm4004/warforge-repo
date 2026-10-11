@@ -173,35 +173,6 @@ function getRulesetUiXml()
         </HorizontalLayout>
         </Panel>
 
-<!-- CONFIRM MELEE PANEL -->
-<Panel id="confirm_panel_melee"
-       rectAlignment="LowerCenter"
-       width="260" height="50"
-       color="rgba(0,0,0,0.00)"
-       offsetXY="0 100"
-       active="false">
-    <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -100 0">
-        <Button id="btnActionMelee"
-                text="Combatti"
-                font="warforge_font"
-                fontSize="11"
-                image="Sprites/Layout/Button"
-                color="rgba(0.7,0.15,0.15,1)"
-                textColor="White"
-                width="80"
-                onClick="melee_attackConfirm"/>
-        <Button id="btnCancelMelee"
-                text="Chiudi"
-                font="warforge_font"
-                fontSize="11"
-                image="Sprites/Layout/Button"
-                color="rgba(0.4,0.4,0.4,1)"
-                textColor="White"
-                width="80"
-                onClick="melee_attackCancel"/>
-    </HorizontalLayout>
-</Panel>        
-
 <Panel id="confirm_panel_charge"
    rectAlignment="LowerCenter"
    width="260" height="50"
@@ -257,93 +228,6 @@ function getRulesetUiXml()
             textColor="White"
             width="80"
             onClick="charge_moraleCancel"/>
-</HorizontalLayout>
-</Panel>
-
-<Panel id="charge_response_panel"
-   rectAlignment="LowerCenter"
-   width="400" height="50"
-   color="rgba(0,0,0,0.0)"
-   offsetXY="0 10"
-   active="false">
-<HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -14 0">
-
-    <Button id="btnResponseCounter"
-            text="Contro Carica"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            active="false"
-            onClick="charge_responseCounter"/>
-
-    <Button id="btnResponseEvade"
-            text="Evasione"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            active="false"
-            onClick="charge_responseEvade"/>
-
-    <Button id="btnResponseStopfire"
-            text="Tiro di Arresto"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            active="false"
-            onClick="charge_responseStopfire"/>
-
-    <Button id="btnResponseHold"
-            text="Nessuna Reazione"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            active="false"
-            onClick="charge_responseHold"/>            
-
-    <Button id="btnResponseCharge" 
-            text="Carica" 
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            active="false"
-            onClick="charge_responseChargeMove"/>       
-            
-    <Button id="btnResponseEvadeMove" 
-            text="Evadi" 
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            active="false"
-            onClick="charge_responseEvadeMove"/>     
-     
-    <Button id="btnResponseCancel" 
-            text="Chiudi"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.4,0.4,0.4,1)"
-            textColor="White"
-            width="80"
-            onClick="charge_responseCancel"/>   
-            
 </HorizontalLayout>
 </Panel>
     ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2 .. moraleQueue1 .. moraleQueue2

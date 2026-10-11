@@ -32,6 +32,7 @@ IEF_MORALE_SITUATIONS = {
         testa = "VITTIMA",
         effetto = "altre_situazioni",
         quando = "IMMEDIATO",
+        label = "ha perso basi",
     },
     CARICA_IN_TERRENO_APERTO = {
         evento = "CHARGED",
@@ -41,6 +42,7 @@ IEF_MORALE_SITUATIONS = {
         terreno = "APERTO",
         effetto = "altre_situazioni",
         quando = "IMMEDIATO",
+        label = "caricata in terreno aperto",
     },
     CARICA_SUL_FRONTE = {
         evento = "CHARGE_DECLARE",
@@ -50,6 +52,7 @@ IEF_MORALE_SITUATIONS = {
         lato = "FRONTE",
         effetto = "per_caricare",
         quando = "IMMEDIATO",
+        label = "vuole caricare sul fronte",   
     },
     CARICA_CON_ARMI_DA_TIRO = {
         evento = "CHARGE_DECLARE",
@@ -60,6 +63,7 @@ IEF_MORALE_SITUATIONS = {
         tipiAvversarioEsclusi = { "FL", "ART" },
         effetto = "per_caricare",
         quando = "IMMEDIATO",
+        label = "vuole caricare truppe con armi da tiro",
     },
     AMICA_IN_ROTTA = {
         evento = "FRIEND_ROUT",
@@ -69,6 +73,7 @@ IEF_MORALE_SITUATIONS = {
         escludiGiaInFuga = true,
         effetto = "altre_situazioni",
         quando = "FINE_FASE",
+        label = "un'unita' amica vicina e' in rotta",
     },
     GENERALE_UCCISO = {
         evento = "GENERAL_KILLED",
@@ -76,8 +81,40 @@ IEF_MORALE_SITUATIONS = {
         raggio = 6,
         effetto = "altre_situazioni",
         quando = "FINE_FASE",
+        label = "il Generale e' stato ucciso",
+
     },
 }
+
+-- ============================================================
+-- Etichette leggibili dei motivi che non sono situazioni della
+-- tabella (le situazioni hanno il loro campo label).
+-- ============================================================
+IEF_MORALE_MOTIVO_LABEL = {
+    RECUPERO = "tenta di riordinarsi",
+}
+
+-- ============================================================
+-- FUNZIONE: main_moraleMotivoText(motivo)
+-- Testo leggibile del motivo di un test; se manca l'etichetta
+-- ritorna il nome tecnico.
+-- ============================================================
+function main_moraleMotivoText(motivo)
+    if not motivo then return "" end
+    local s = IEF_MORALE_SITUATIONS[motivo]
+    return (s and s.label) or IEF_MORALE_MOTIVO_LABEL[motivo] or motivo
+end
+
+-- ============================================================
+-- FUNZIONE: main_moraleRowText(req, inCorso)
+-- Testo della riga del pannello morale.
+-- ============================================================
+function main_moraleRowText(req, inCorso)
+    return string.format("La %s: test di morale, %s%s",
+        main_decodeExtendedUnitLabel(req.key),
+        main_moraleMotivoText(req.motivo or req.situazione),
+        inCorso and " - in corso" or "")
+end
 
 -- ============================================================
 -- MODIFICATORI del test di morale. chiave = morale_modifiers di
@@ -726,21 +763,17 @@ function main_getMoraleQueuePanelXml(slot)
     local coda = IEF_MORALE_ROLL_PENDING[slot] or {}
 
     local colore = ARMY[slot] and ARMY[slot].color or "White"
-    --local attivo = (#coda > 0) and "true" or "false"
-    local attivo = "true"
-
+    local attivo = (#coda > 0) and "true" or "false"
+    
     local rows = ""
     for i, item in ipairs(coda) do
         rows = rows .. string.format(
             '<Row preferredHeight="25">' ..
                 '<Cell>' ..
-                    '<Button id="morale_queue_row_%d_%d" text="%s: test di morale (%s)" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="main_moraleRowClick"/>' ..
+                    '<Button id="morale_queue_row_%d_%d" text="%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="main_moraleRowClick"/>' ..
                 '</Cell>' ..
-                --'<Cell>' ..
-                --    '<Button id="morale_queue_row_btn_%d_%d" text="" icon="centro" tooltip="Controlla il Morale" tooltipPosition="Below" iconWidth="25" dontUseRectLayout="true" color="rgba(0,0,0,0.00)" onClick="main_moraleRowClick"/>' ..
-                --'</Cell>' ..
             '</Row>',
-               slot, i, main_decodeExtendedUnitLabel(item.key), (item.motivo or item.situazione or "") .. (main_moraleIsActive(slot, item.id) and " - in corso" or ""), slot, i
+            slot, i, main_moraleRowText(item, main_moraleIsActive(slot, item.id))
         )
     end
 

@@ -32,3 +32,25 @@ registerSubRenderer("stopfireEsci", function(rec, def, step, slot, isActor)
         wait  = esito and ("CARICA " .. string.upper(esito)) or "",
     }
 end)
+
+-- REACTION: un bottone per ogni reazione permessa + Annulla
+registerSubRenderer("reactionChoice", function(rec, def, step, slot, isActor)
+    local c = rec.ctx or {}
+    local bottoni = {}
+    for _, r in ipairs(c.opzioni or {}) do
+        table.insert(bottoni, { label = CHARGE_REACTION_LABEL[r] or r, icon = "default", value = r })
+    end
+    table.insert(bottoni, { label = "Annulla", icon = "default", value = "ANNULLA" })
+    return { title = def.title, buttons = bottoni }
+end)
+
+-- CHARGE_MOVE: Carica (o Evadi) + Annulla
+registerSubRenderer("chargeMoveChoice", function(rec, def, step, slot, isActor)
+    local c = rec.ctx or {}
+    local azione = c.evasione and { label = "Evadi", icon = "default", value = "EVADI" }
+                               or { label = "Carica", icon = "default", value = "CARICA" }
+    return { title = def.title, buttons = {
+        azione,
+        { label = "Annulla", icon = "default", value = "ANNULLA" },
+    } }
+end)

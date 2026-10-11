@@ -36,7 +36,6 @@ function after_recovery(phaseName, phase)
     TURN.completed.Army2 = false
  
     IEF_CHARGE_QUEUE = {}
-    IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
 
     printToAll("Turno " .. tostring(ENGINE.turn) .. " inizia", {r=0.4,g=0.9,b=0.4})

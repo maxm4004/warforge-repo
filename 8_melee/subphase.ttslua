@@ -1,22 +1,4 @@
 -- ============================================================
--- WARFORGE IEF — 8_melee/subphase.ttslua
--- Sottofasi della mischia.
---
--- MELEE_RESOLVE (scope shared): risoluzione di un gruppo di
--- mischia. Si apre da MELEE (melee_attackConfirm). La fase
--- resta MELEE.
---   TIRO   : entrambi tirano col Roll fisico (in parallelo).
---   MORALE : test di morale dal pannello morale.
---   ESCI   : esito per MORALE_ESITO_SECONDS, poi chiusura.
--- ctx = { groupId, attackerSlot,
---         dadi1, dadi2, soglia1, soglia2,
---         rolled1, rolled2, successi1, successi2,
---         unita = { [unitKey] = { slot, dadi, verso = { [enemyKey] = n } } },
---         testInCorso }
--- Solo chiavi stringa: ctx viene salvato (ENGINE.sub).
--- ============================================================
-
--- ============================================================
 -- FUNZIONE: melee_subphases()
 -- ============================================================
 function melee_subphases()
@@ -29,8 +11,8 @@ function melee_subphases()
             onEnter     = "melee_resolveEnter",
             subphases   = { "MORALE_TEST" },
             steps = {
-                TIRO   = { render = "meleeTiro",   actor = "both", label = "Tira i dadi", onClick = "melee_resolveFocus", onRoll = "melee_resolveRoll" },
-                MORALE = { render = "meleeMorale", actor = "both" },
+                TIRO   = { render = "meleeTiro",   actor = "both", icon = "combatti", label = "Combatti in Mischia", onClick = "melee_resolveFocus", onRoll = "melee_resolveRoll" },
+                MORALE = { render = "meleeMorale", actor = "both", icon = "morale_mischia"},
                 ESCI   = { render = "meleeEsci",   actor = "both", onEnter = "melee_resolveEsciEnter", onRestore = "melee_resolveEsciEnter" },
             },
         },

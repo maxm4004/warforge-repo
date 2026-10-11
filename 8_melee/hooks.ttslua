@@ -6,8 +6,6 @@ function before_melee(phaseName, phase)
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
 
-    IEF_MELEE_PENDING = {}
-
     melee_importFromCharges()
     melee_pruneList()
 
@@ -25,9 +23,7 @@ end
 -- ============================================================
 function after_melee(phaseName, phase)
     melee_removeMarkedLosses()
-    IEF_MELEE_PENDING = {}
     melee_infoCloseAll()
-    UI.setAttribute("confirm_panel_melee", "active", "false")
     UI.setAttribute("melee_list_army1", "active", "false")
     UI.setAttribute("melee_list_army2", "active", "false")
     callHandler("updateCenterPanel")

@@ -1,17 +1,4 @@
 -- ============================================================
--- WARFORGE IEF — 4_charge/subphase.ttslua
--- Sottofasi della carica.
---
--- STOPFIRE (scope shared): Tiro d'Arresto. Si apre da
--- CHARGE_REACT (charge_responseStopfire) quando il difensore
--- sceglie TIR. La fase resta CHARGE_REACT.
---   TIRO   : il difensore tira col Roll fisico.
---   MORALE : il caricante tira il test dal pannello morale.
---   ESCI   : esito per MORALE_ESITO_SECONDS, poi chiusura.
--- ctx = { queueId, defenderSlot, attackerSlot, conMorale, motivo }
--- ============================================================
-
--- ============================================================
 -- FUNZIONE: charge_subphases()
 -- ============================================================
 function charge_subphases()
@@ -27,6 +14,22 @@ function charge_subphases()
                 TIRO   = { render = "subAction",      actor = "defenderSlot", icon = "tiro", label = "Tiro di Arresto", onClick = "charge_stopfireFocus", onRoll = "charge_stopfireRoll" },
                 MORALE = { render = "stopfireMorale", actor = "attackerSlot", icon = "morale_tiro", onEnter = "charge_stopfireMoraleEnter" },
                 ESCI   = { render = "stopfireEsci",   actor = "attackerSlot", onEnter = "charge_stopfireEsciEnter", onRestore = "charge_stopfireEsciEnter" },
+            },
+        },
+        REACTION = {
+            scope = "player",
+            title = "",
+            first = "SCELTA",
+            steps = {
+                SCELTA = { render = "reactionChoice", actor = "owner", onClick = "charge_reactionChoose" },
+            },
+        },
+        CHARGE_MOVE = {
+            scope = "player",
+            title = "",
+            first = "AZIONE",
+            steps = {
+                AZIONE = { render = "chargeMoveChoice", actor = "owner", onClick = "charge_moveChoose" },
             },
         },
     }
@@ -259,7 +262,110 @@ function charge_stopfireDone(ctx, result, slot)
         charge_refreshAttackRowText(ctx.attackerSlot, elemento)
     end
 end
+-- ============================================================
+-- REACTION (scope player): scelta della reazione a una carica
+-- subita. Si apre dal click sulla riga Difesa in CHARGE_REACT
+-- (charge_defenseRowClick). Un bottone per ogni reazione
+-- permessa (charge_determineResponses) + Annulla.
+-- ctx = { queueId, opzioni = { REACTION_TYPE... } }
+-- ============================================================
 
+-- Etichette dei bottoni di reazione
+CHARGE_REACTION_LABEL = {
+    [REACTION_TYPE.COC] = "Contro Carica",
+    [REACTION_TYPE.EVA] = "Evasione",
+    [REACTION_TYPE.TIR] = "Tiro di Arresto",
+    [REACTION_TYPE.FER] = "Nessuna Reazione",
+}
+
+-- ============================================================
+-- FUNZIONE: charge_reactionChoose(ctx, slot, player, rec, value)
+-- ============================================================
+function charge_reactionChoose(ctx, slot, player, rec, value)
+    local elemento = charge_elementoById(ctx.queueId)
+    if not elemento or value == "ANNULLA" then
+        engine_subClose("REACTION", slot, nil)
+        return
+    end
+
+    local myKey    = charge_elementoUnitKey(elemento, slot)
+    local otherKey = charge_elementoOtherKey(elemento, slot)
+
+    if value == REACTION_TYPE.COC then
+        local myMeta = charge_getUnitMeta(charge_getUnitBases(myKey)[1])
+        local myTipo = myMeta and myMeta.unitType
+        local myCapabilities = myMeta and myMeta.capabilities or {}
+        local otherMeta = charge_getUnitMeta(charge_getUnitBases(otherKey)[1])
+        local otherTipo = otherMeta and otherMeta.unitType
+
+        if not charge_isMandatoryCharge(myTipo, myCapabilities, otherTipo) then
+            local myBase = charge_getUnitBases(myKey)[1]
+            if not main_isInCommandRange(myBase, slot) then
+                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale,\n non è possibile contro caricare", main_decodeExtendedUnitLabel(myKey)), player, "Yellow", 5)
+                return
+            end
+        end
+
+        charge_elementoSetResponse(elemento, slot, REACTION_TYPE.COC)
+
+        if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
+            local closestMine, closestTheirs = charge_closestBasePair(charge_getUnitBases(myKey), charge_getUnitBases(otherKey))
+            if closestMine and closestTheirs then
+                if slot == 1 then
+                    elemento.closestBaseArmy1 = closestMine.getGUID()
+                    elemento.closestBaseArmy2 = closestTheirs.getGUID()
+                else
+                    elemento.closestBaseArmy2 = closestMine.getGUID()
+                    elemento.closestBaseArmy1 = closestTheirs.getGUID()
+                end
+            end
+        end
+
+    elseif value == REACTION_TYPE.TIR then
+        local aperta = engine_subShared()
+        if aperta then
+            local def = SUBPHASES[aperta.name]
+            warningToColor("Completa prima: " .. ((def and def.title ~= "" and def.title) or "azione in corso"), player, "Yellow", 3)
+            return
+        end
+        charge_elementoSetResponse(elemento, slot, REACTION_TYPE.TIR)
+
+    else
+        charge_elementoSetResponse(elemento, slot, value)
+    end
+
+    charge_refreshDefenseRowText(slot, elemento)
+    engine_subClose("REACTION", slot, nil)
+
+    if value == REACTION_TYPE.TIR then
+        engine_subOpen("STOPFIRE", nil,
+            { queueId = elemento.id, defenderSlot = slot, attackerSlot = (slot == 1) and 2 or 1 },
+            "charge_stopfireDone")
+    end
+end
+
+-- ============================================================
+-- CHARGE_MOVE (scope player): movimento in CHARGE_AUTO. Si apre
+-- dal click sulla riga Attacco. Bottone "Carica" (o "Evadi" se
+-- la reazione scelta è l'evasione) + Annulla.
+-- ctx = { queueId, unitKey, evasione }
+-- ============================================================
+
+-- ============================================================
+-- FUNZIONE: charge_moveChoose(ctx, slot, player, rec, value)
+-- ============================================================
+function charge_moveChoose(ctx, slot, player, rec, value)
+    engine_subClose("CHARGE_MOVE", slot, nil)
+
+    local elemento = charge_elementoById(ctx.queueId)
+    if not elemento or value == "ANNULLA" then return end
+
+    if value == "EVADI" then
+        charge_executeEvade(slot, elemento)
+    elseif value == "CARICA" then
+        charge_executeChargeMove(player, ctx.unitKey)
+    end
+end
 -- ============================================================
 -- Registrazione
 -- ============================================================
@@ -271,3 +377,5 @@ registerHandler("charge_stopfireMoraleEnter", function(c,s,r)              retur
 registerHandler("charge_stopfireMoraleDone",  function(d,esito)            return charge_stopfireMoraleDone(d,esito)       end)
 registerHandler("charge_stopfireEsciEnter",   function(c,s,r)              return charge_stopfireEsciEnter(c,s,r)          end)
 registerHandler("charge_stopfireDone",        function(c,res,s)            return charge_stopfireDone(c,res,s)             end)
+registerHandler("charge_reactionChoose",      function(c,s,p,r,v)          return charge_reactionChoose(c,s,p,r,v)         end)
+registerHandler("charge_moveChoose",          function(c,s,p,r,v)          return charge_moveChoose(c,s,p,r,v)             end)

@@ -384,11 +384,7 @@ end
 -- /execute debug_chargeClearQueue()
 -- ============================================================
 function debug_chargeClearQueue()
-
-    IEF_CHARGE_QUEUE = {}
-    IEF_CHARGE_RESPONSE_PENDING[1] = nil
-    IEF_CHARGE_RESPONSE_PENDING[2] = nil
-    
+    IEF_CHARGE_QUEUE = {}  
     callHandler("buildUI")
     callHandler("updateCenterPanel")
     print("[DEBUG] Coda cariche svuotata (entrambi gli eserciti)")
@@ -526,9 +522,7 @@ function debug_reset(fase)
     end
 
     IEF_CHARGE_QUEUE = {}
-    IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_MORALE_ROLL_PENDING = { [1] = {}, [2] = {} }
-    UI.setAttribute("charge_response_panel", "active", "false")
     engine_subInitState()
     IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
 

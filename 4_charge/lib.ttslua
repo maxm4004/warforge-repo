@@ -1049,8 +1049,8 @@ function charge_getDefenseListPanelXml(slot)
     local righe = {}
 
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if charge_elementoRequest(e, otherSlot) and not charge_elementoIsReciprocal(e) and charge_elementoResponse(e, slot) == nil then
-                table.insert(righe, e)
+        if charge_elementoRequest(e, otherSlot) and not charge_elementoIsReciprocal(e) then
+            table.insert(righe, e)
         end
     end
 
@@ -1058,25 +1058,19 @@ function charge_getDefenseListPanelXml(slot)
     local attivo = ((ENGINE.phase == PHASE.CHARGE_REACT or ENGINE.phase == PHASE.CHARGE_AUTO) and #righe > 0) and "true" or "false"
 
     local rows = ""
-    for i, e in ipairs(righe) do
-        local myKey = charge_elementoUnitKey(e, slot)
+    for _, e in ipairs(righe) do
         local otherKey = charge_elementoOtherKey(e, slot)
-        local statoReazione = charge_elementoIsReciprocal(e) and REACTION_TYPE.COC or (charge_elementoResponse(e, slot))
-
-        local risposta = "è caricata" 
+        local scelta = charge_elementoResponse(e, slot) ~= nil
 
         rows = rows .. string.format(
             '<Row preferredHeight="30">' ..
                 '<Cell>' ..
-                    '<Button id="charge_defense_row_%d_%s" text="La %s %s dalla %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="charge_defenseRowClick"/>' ..
+                    '<Button id="charge_defense_row_%d_%s" text="%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="%s" alignment="MiddleLeft" onClick="charge_defenseRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
             slot, otherKey,
-            main_decodeExtendedUnitLabel(myKey),
-            risposta,
-            main_decodeExtendedUnitLabel(otherKey),
-            slot, otherKey,
-            slot, otherKey
+            charge_defenseRowText(slot, e),
+            scelta and "#AAAAAA" or "White"
         )
     end
 
@@ -1101,6 +1095,11 @@ function charge_attackRowClick(player, value, id)
     local slot = tonumber(slotStr)
     local otherSlot = charge_elementoOtherSlot(slot)
 
+    if engine_subPrivate(slot) then
+        warningToColor("Completa prima l'azione in corso oppure annulla", player, "Yellow", 3)
+        return
+    end
+
     local elemento = charge_findQueueEntry(otherSlot, otherKey)
     if not elemento then return end
 
@@ -1113,32 +1112,18 @@ function charge_attackRowClick(player, value, id)
     end
 
     if ENGINE.phase ~= PHASE.CHARGE_AUTO then return end
-    
+
     local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2) or elemento.step == CHARGE_STEP.CLO
     if giaMossoIoStesso then
         warningToColor(string.format("%s è in carica contro %s", main_decodeExtendedUnitLabel(myKey), main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 5)
         return
     end
 
-    IEF_CHARGE_RESPONSE_PENDING[slot] = { elemento = elemento, unitKey = myKey }
-
-    local buttonIds = { "btnResponseCounter", "btnResponseEvade", "btnResponseStopfire", "btnResponseHold", "btnResponseCharge", "btnResponseEvadeMove" }
-    for _, bid in ipairs(buttonIds) do
-        UI.setAttribute(bid, "active", "false")
-    end
-
-    local mioResponse = charge_elementoResponse(elemento, slot)
-
-    if mioResponse == REACTION_TYPE.EVA then
-        UI.setAttribute("btnResponseEvadeMove", "active", "true")
-        UI.setAttribute("btnResponseEvadeMove", "textColor", "white")
-    else
-        UI.setAttribute("btnResponseCharge", "active", "true")
-        UI.setAttribute("btnResponseCharge", "textColor", "white")
-    end
-
-    UI.setAttribute("charge_response_panel", "visibility", player.color)
-    UI.setAttribute("charge_response_panel", "active", "true")
+    engine_subOpen("CHARGE_MOVE", slot, {
+        queueId  = elemento.id,
+        unitKey  = myKey,
+        evasione = charge_elementoResponse(elemento, slot) == REACTION_TYPE.EVA,
+    }, nil)
 end
 -- ============================================================
 -- FUNZIONE: charge_defenseRowClick(player, value, id)
@@ -1148,6 +1133,11 @@ function charge_defenseRowClick(player, value, id)
     if not slotStr then return end
     local slot = tonumber(slotStr)
     local otherSlot = charge_elementoOtherSlot(slot)
+
+    if engine_subPrivate(slot) then
+        warningToColor("Completa prima l'azione in corso oppure annulla", player, "Yellow", 3)
+        return
+    end
 
     local elemento = charge_findQueueEntry(otherSlot, otherKey)
     if not elemento then return end
@@ -1166,63 +1156,29 @@ function charge_defenseRowClick(player, value, id)
         main_cameraToPoint(player, slot, Vector((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2))
     end
 
-    if ENGINE.phase == PHASE.CHARGE_REACT then
+    if ENGINE.phase ~= PHASE.CHARGE_REACT then return end
+    if charge_elementoIsReciprocal(elemento) then return end
+    if charge_elementoResponse(elemento, slot) ~= nil then return end
 
-        if charge_elementoIsReciprocal(elemento) then
-            return
-        end
+    local myMeta = myBases[1] and charge_getUnitMeta(myBases[1])
+    local myTipo = myMeta and myMeta.unitType
+    local myArmi = myMeta and myMeta.armi or {}
+    local myCapabilities = myMeta and myMeta.capabilities or {}
 
-        if charge_elementoResponse(elemento, slot) ~= nil then
-            -- Reazione già scelta per questo lato: solo zoom
-            -- camera (già fatto sopra), nessuna riapertura del
-            -- popup — stesso comportamento delle altre reazioni
-            -- una volta consumate.
-            return
-        end
+    local attackerMeta = attackerBases[1] and charge_getUnitMeta(attackerBases[1])
+    local attackerTipo = attackerMeta and attackerMeta.unitType
 
-        local myMeta = myBases[1] and charge_getUnitMeta(myBases[1])
-        local myTipo = myMeta and myMeta.unitType
-        local myArmi = myMeta and myMeta.armi or {}
-        local myCapabilities = myMeta and myMeta.capabilities or {}
+    local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
 
-        local attackerMeta = attackerBases[1] and charge_getUnitMeta(attackerBases[1])
-        local attackerTipo = attackerMeta and attackerMeta.unitType
-
-        local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
-
-        if not obbligato and #opzioni == 0 then
-            printToColor(string.format("[CARICA] %s non ha nessuna risposta disponibile", myKey), player.color, {r=0.7,g=0.7,b=0.7})
-            return
-        end
-
-        IEF_CHARGE_RESPONSE_PENDING[slot] = { elemento = elemento }
-
-        local disponibili = obbligato and { obbligato } or opzioni
-        local buttonIds = {
-            [REACTION_TYPE.COC] = "btnResponseCounter",
-            [REACTION_TYPE.EVA] = "btnResponseEvade",
-            [REACTION_TYPE.TIR] = "btnResponseStopfire",
-            [REACTION_TYPE.FER] = "btnResponseHold",
-        }
-
-        UI.setAttribute("btnResponseCharge", "active", "false")
-        UI.setAttribute("btnResponseEvadeMove", "active", "false")
-     
-        for _, chiave in ipairs({ REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.TIR, REACTION_TYPE.FER }) do
-            local presente = false
-            for _, d in ipairs(disponibili) do
-                if d == chiave then presente = true end
-            end
-            UI.setAttribute(buttonIds[chiave], "active", presente and "true" or "false")
-            UI.setAttribute(buttonIds[chiave], "textColor", "white")
-        end
-
-        UI.setAttribute("btnResponseCancel", "active", "true")
-        UI.setAttribute("btnResponseCancel", "textColor", "white")
-        UI.setAttribute("charge_response_panel", "visibility", player.color)
-        UI.setAttribute("charge_response_panel", "active", "true")
+    if not obbligato and #opzioni == 0 then
+        printToColor(string.format("[CARICA] %s non ha nessuna risposta disponibile", myKey), player.color, {r=0.7,g=0.7,b=0.7})
         return
     end
+
+    engine_subOpen("REACTION", slot, {
+        queueId = elemento.id,
+        opzioni = obbligato and { obbligato } or opzioni,
+    }, nil)
 end
 -- ============================================================
 -- FUNZIONE: charge_resolveConflicts()
@@ -1330,118 +1286,6 @@ function charge_turnAround180(basiObjs)
     end
 end
 -- ============================================================
--- FUNZIONE: charge_responseCounter(player, value, id)
--- ============================================================
-function charge_responseCounter(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-
-    local elemento = pending.elemento
-    local myKey = charge_elementoUnitKey(elemento, slot)
-    local otherSlot = charge_elementoOtherSlot(slot)
-    local otherKey = charge_elementoUnitKey(elemento, otherSlot)
-
-    local myMeta = charge_getUnitMeta(charge_getUnitBases(myKey)[1])
-    local myTipo = myMeta and myMeta.unitType
-    local myCapabilities = myMeta and myMeta.capabilities or {}
-    local otherMeta = charge_getUnitMeta(charge_getUnitBases(otherKey)[1])
-    local otherTipo = otherMeta and otherMeta.unitType
-
-    local obbligatoria = charge_isMandatoryCharge(myTipo, myCapabilities, otherTipo)
-
-    if not obbligatoria then
-        local myBase = charge_getUnitBases(myKey)[1]
-        if not main_isInCommandRange(myBase, slot) then
-            warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale,\n non è possibile contro caricare", main_decodeExtendedUnitLabel(myKey)), player, "Yellow", 5)
-            return
-        end
-    end
-
-    charge_elementoSetResponse(elemento, slot, REACTION_TYPE.COC)
-
-    if not elemento.closestBaseArmy1 and not elemento.closestBaseArmy2 then
-        local myBases = charge_getUnitBases(myKey)
-        local otherBases = charge_getUnitBases(otherKey)
-        local closestMine, closestTheirs = charge_closestBasePair(myBases, otherBases)
-        if closestMine and closestTheirs then
-            if slot == 1 then
-                elemento.closestBaseArmy1 = closestMine.getGUID()
-                elemento.closestBaseArmy2 = closestTheirs.getGUID()
-            else
-                elemento.closestBaseArmy2 = closestMine.getGUID()
-                elemento.closestBaseArmy1 = closestTheirs.getGUID()
-            end
-        end
-    end
-
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_refreshDefenseRowText(slot, elemento)
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-end
--- ============================================================
--- FUNZIONE: charge_responseEvade(player, value, id)
--- ============================================================
-function charge_responseEvade(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-    charge_elementoSetResponse(pending.elemento, slot, REACTION_TYPE.EVA)
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_refreshDefenseRowText(slot, pending.elemento)
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-end
-
--- ============================================================
--- FUNZIONE: charge_responseStopfire(player, value, id)
--- Click "Tiro d'Arresto" nel popup di reazione (fase CHARGE_REACT).
--- Registra SOLO la scelta (responseArmy{slot}=TIR) e chiude il
--- popup: nessuna fisica, nessun pannello dadi qui. Il salto alla
--- fase dedicata CHARGE_STOPFIRE avviene subito con main_goToPhase
--- diretto (stesso pattern dei salti asincroni del motore) — non
--- si aspetta il bottone "Reazioni Completate", la risoluzione del
--- Tiro d'Arresto è immediata.
--- ============================================================
-function charge_responseStopfire(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-
-    local aperta = engine_subShared()
-    if aperta then
-        local def = SUBPHASES[aperta.name]
-        warningToColor("Completa prima: " .. ((def and def.title) or "azione in corso"), player, "Yellow", 3)
-        return
-    end
-
-    local elemento = pending.elemento
-    local otherKey = charge_elementoOtherKey(elemento, slot)
-    charge_elementoSetResponse(elemento, slot, REACTION_TYPE.TIR)
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-
-    --UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. otherKey, "interactable", "false")
-    --UI.setAttribute("charge_defense_row_btn_" .. slot .. "_" .. otherKey, "color", "Grey")
-    UI.setAttribute("charge_response_panel", "active", "false")
-
-    charge_refreshDefenseRowText(slot, elemento)
-
-    engine_subOpen("STOPFIRE", nil,
-        { queueId = elemento.id, defenderSlot = slot, attackerSlot = (slot == 1) and 2 or 1 },
-        "charge_stopfireDone")
-end
--- ============================================================
--- FUNZIONE: charge_responseHold(player, value, id)
--- ============================================================
-function charge_responseHold(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-    charge_elementoSetResponse(pending.elemento, slot, REACTION_TYPE.FER)
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_refreshDefenseRowText(slot, pending.elemento)
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-end
--- ============================================================
 -- FUNZIONE: charge_reactQueueHasPending()
 -- Vero se c'è una risoluzione Tiro d'Arresto in corso, o se
 -- almeno una riga NON-reciproca non ha ancora una response.
@@ -1463,31 +1307,41 @@ function charge_reactQueueHasPending()
     end
     return false
 end
+-- ============================================================
+-- FUNZIONE: charge_defenseRowText(slot, elemento)
+-- Testo della riga Difesa: "La X è caricata dalla Y" finché la
+-- reazione non è scelta, poi la reazione (anche automatica).
+-- ============================================================
+function charge_defenseRowText(slot, elemento)
+    local myKey = charge_elementoUnitKey(elemento, slot)
+    local otherKey = charge_elementoOtherKey(elemento, slot)
+    local reazione = charge_elementoResponse(elemento, slot)
+    local me, lui = main_decodeExtendedUnitLabel(myKey), main_decodeExtendedUnitLabel(otherKey)
 
+    if reazione == REACTION_TYPE.EVA then
+        return string.format("La %s evade la %s", me, lui)
+    elseif reazione == REACTION_TYPE.COC then
+        return string.format("La %s contro carica la %s", me, lui)
+    elseif reazione == REACTION_TYPE.TIR then
+        return string.format("La %s fa Tiro di Arresto sulla %s", me, lui)
+    else
+        return string.format("La %s è caricata dalla %s", me, lui)
+    end
+end
 -- ============================================================
 -- FUNZIONE: charge_refreshDefenseRowText(slot, elemento)
 -- Aggiorna il testo di UNA riga Difesa dopo che la reazione è
 -- stata registrata/annullata — la riga resta sempre visibile.
 -- ============================================================
 function charge_refreshDefenseRowText(slot, elemento)
-    local myKey = charge_elementoUnitKey(elemento, slot)
     local otherKey = charge_elementoOtherKey(elemento, slot)
     local rowId = string.format("charge_defense_row_%d_%s", slot, otherKey)
-    local statoReazione = charge_elementoIsReciprocal(elemento) and REACTION_TYPE.COC or (charge_elementoResponse(elemento, slot))
-    local risposta = "è caricata da"
+    local scelta = charge_elementoResponse(elemento, slot) ~= nil
 
-     if statoReazione == REACTION_TYPE.EVA then 
-             risposta = "evade la" 
-    elseif  statoReazione == REACTION_TYPE.COC then 
-             risposta = "contro carica la" 
-    end
-
-    UI.setAttribute(rowId, "text", string.format("La %s %s %s",
-        main_decodeExtendedUnitLabel(myKey),
-        risposta,
-        main_decodeExtendedUnitLabel(otherKey)
-    ))
-    UI.setAttribute(rowId, "textColor", "White")
+    UI.setAttribute(rowId, "text", charge_defenseRowText(slot, elemento))
+    Wait.frames(function()
+        UI.setAttribute(rowId, "textColor", scelta and "#AAAAAA" or "White")
+    end, 1)
 end
 -- ============================================================
 -- FUNZIONE: charge_refreshAttackRowText(slot, elemento)
@@ -1559,25 +1413,6 @@ function charge_executeEvade(evadingSlot, elemento)
     end
 
     warning(string.format("[CARICA] %s evade la carica di %s", evadingKey, chargingKey), "Yellow")
-end
--- ============================================================
--- FUNZIONE: charge_responseCancel(player, value, id)
--- Annulla la reazione scelta: responseArmy{slot} torna a nil.
--- ============================================================
-function charge_responseCancel(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-
-    local myKey = charge_elementoUnitKey(pending.elemento, slot)
-    charge_elementoSetResponse(pending.elemento, slot, nil)
-
-    printToColor(string.format("[CARICA] Reazione annullata per %s", myKey), player.color, {r=0.7,g=0.7,b=0.7})
-
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_refreshDefenseRowText(slot, pending.elemento)
-
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
 -- ============================================================
 -- FUNZIONE: charge_hasCapability(capabilities, nome)
@@ -2064,18 +1899,6 @@ function charge_executeChargeMove(player, unitKey)
     warningToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, distanzaTotaleInch), player, "Yellow", 5)
 end
 -- ============================================================
--- FUNZIONE: charge_responseChargeMove(player, value, id)
--- ============================================================
-function charge_responseChargeMove(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending or not pending.unitKey then return end
-
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_executeChargeMove(player, pending.unitKey)
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
-end
--- ============================================================
 -- FUNZIONE: charge_moveTowardPoint(unitKey, basiObjs, targetPos, distanzaInch)
 -- ============================================================
 function charge_moveTowardPoint(basiObjs, originBase, targetPos, distanzaInch)
@@ -2114,18 +1937,6 @@ function charge_closestBaseToPoint(basiObjs, point)
         end
     end
     return migliore, migliorDist
-end
--- ============================================================
--- FUNZIONE: charge_responseEvadeMove(player, value, id)
--- ============================================================
-function charge_responseEvadeMove(player, value, id)
-    local slot = main_getArmyByColor(player)
-    local pending = slot and IEF_CHARGE_RESPONSE_PENDING[slot]
-    if not pending then return end
-
-    UI.setAttribute("charge_response_panel", "active", "false")
-    charge_executeEvade(slot, pending.elemento)
-    IEF_CHARGE_RESPONSE_PENDING[slot] = nil
 end
 -- ============================================================
 -- FUNZIONE: charge_slotStillNeedsAction(elemento, slot)

@@ -238,11 +238,9 @@ function main_restart()
     }
  
     IEF_CHARGE_QUEUE = {}
-    IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_MELEE_LIST = {}
     IEF_MELEE_NEXT_ID = 0
-    IEF_MELEE_PENDING = {}
     IEF_MELEE_INFO_HOST = {}
     IEF_MELEE_MARKED = {}
     IEF_UNIT_BASES_LOST = {}

@@ -7,7 +7,6 @@ function before_charge_declare(phaseName, phase)
 
     IEF_FIRED = {}
     IEF_CHARGE_QUEUE = {}
-    IEF_CHARGE_RESPONSE_PENDING = {}
     IEF_CHARGE_DECLARE_SESSION = {}
     IEF_CHARGE_TEST_FAILED = {}
     IEF_CHARGE_PENDING_TESTS = {}

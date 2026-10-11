@@ -99,11 +99,6 @@ IEF_CHARGE_QUEUE = IEF_CHARGE_QUEUE or {}
 -- Contatore per generare id univoci progressivi in IEF_CHARGE_QUEUE.
 IEF_CHARGE_NEXT_ID = IEF_CHARGE_NEXT_ID or 0
 
--- Proposta di risposta in attesa di scelta nel popup
--- (charge_response_panel), una per esercito:
--- [slot] = { elemento }
-IEF_CHARGE_RESPONSE_PENDING = IEF_CHARGE_RESPONSE_PENDING or {}
-
 -- Unità che hanno evaso una carica questo turno: non potranno
 -- muovere nella successiva fase di Manovra. NOTA: il flag viene
 -- impostato qui ma non è ancora letto/applicato da 6_move — da
