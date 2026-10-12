@@ -119,6 +119,8 @@ function main_updateCenterPanel()
 
     -- Livello sottofasi: pannelli e blocco dei bottoni di fase
     engine_subRedraw()
+        -- Schede unità aperte: si ricalcolano (cambio fase compreso)
+    main_unitInfoRefresh()
 end
 -- ============================================================
 -- FUNZIONE: aggiornaLinee()
@@ -250,8 +252,12 @@ function main_restart()
     IEF_MORALE_ROLL_PENDING = { [1] = {}, [2] = {} }
     IEF_MORALE_NEXT_ID = 0
     IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
+
     engine_subInitState()
-    
+    engine_dicePanelClose(1)
+    engine_dicePanelClose(2)
+    main_unitInfoClose(1)
+    main_unitInfoClose(2)
     main_setWinnerIcon(1, false)
     main_setWinnerIcon(2, false)
 
@@ -1999,7 +2005,7 @@ function main_createBaseButtons(obj, phase, unit)
     local azioniUnita = {
         [PHASE.DEPLOY_SPAWN]     = {tidy, info, form, move},
         [PHASE.DEPLOY_POSITION]  = {tidy, form, move},
-        [PHASE.CHARGE_DECLARE]   = {tidy, info, form, charge},
+        [PHASE.CHARGE_DECLARE]   = {tidy, info, charge},
         [PHASE.CHARGE_REACT]     = {tidy, info},
          [PHASE.CHARGE_AUTO]      = {tidy, info},
         [PHASE.MOVE]             = {tidy, info, form, move},
@@ -2220,18 +2226,7 @@ end
 -- FUNZIONE:  main_infoByCurrentPhase()
 -- ============================================================
 function main_infoByCurrentPhase(obj, player_color, alt_click)
-    
-    local phase = ENGINE.phase
-    local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
-
-    if phase == PHASE.CHARGE or  phase == PHASE.CHARGE_DECLARE or phase == PHASE.CHARGE_REACT or phase == PHASE.CHARGE_AUTO then
-        melee_buttonBaseClick(obj, slot, player_color, alt_click)
-    end
-
-    if phase == PHASE.MELEE then
-        melee_buttonBaseClick(obj, slot, player_color, alt_click)
-    end
-    
+    main_unitInfoOpen(obj, player_color, alt_click)
 end
 -- ============================================================
 -- FUNZIONE:  main_decodeUnitTypeLabel(unitKey)

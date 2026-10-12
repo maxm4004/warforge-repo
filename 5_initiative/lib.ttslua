@@ -1,2 +1,50 @@
--- rulesets/imperifeudi/5_initiative/lib.ttslua
--- Logica pura fase initiative — stub vuoto
+-- ============================================================
+-- FUNZIONE: initiative_dicePanelOpen(slot)
+-- Pannello dadi del tiro di iniziativa.
+-- ============================================================
+function initiative_dicePanelOpen(slot)
+    engine_dicePanelOpen(slot, {
+        titolo      = "TIRO INIZIATIVA",
+        sottotitolo = ARMY[slot] and ARMY[slot].name or nil,
+        righe       = {
+            { "Dadi", "1D6" },
+            { "Modificatori", "nessuno" },
+        },
+        serve       = "Vince il risultato piu' alto",
+    })
+end
+-- ============================================================
+-- FUNZIONE: initiative_dicePanelOutcome(r1, r2, winner)
+-- Esito nei pannelli dadi dopo un tiro: in attesa
+-- dell'avversario, vinto/perso, pareggio da ritirare.
+-- ============================================================
+function initiative_dicePanelOutcome(r1, r2, winner)
+    local tiri = { [1] = r1, [2] = r2 }
+    local pareggio = false
+    for slot = 1, 2 do
+        local mio, suo = tiri[slot], tiri[3 - slot]
+        if mio ~= nil and engine_dicePanelIsOpen(slot) then
+            if suo == nil then
+                engine_dicePanelOutcome(slot, "In attesa dell'avversario", DICEPANEL.textColor)
+            elseif winner == slot then
+                engine_dicePanelOutcome(slot, string.format("Iniziativa vinta: %d contro %d", mio, suo), DICEPANEL.okColor)
+            elseif winner == 3 - slot then
+                engine_dicePanelOutcome(slot, string.format("Iniziativa persa: %d contro %d", mio, suo), DICEPANEL.koColor)
+            else
+                engine_dicePanelOutcome(slot, string.format("Pareggio %d a %d: si ritira", mio, suo), DICEPANEL.titleColor)
+                pareggio = true
+            end
+        end
+    end
+
+    if pareggio then
+        Wait.time(function()
+            if ENGINE.phase ~= "INITIATIVE_ROLL" then return end
+            for slot = 1, 2 do
+                if DICE_CONTEST["rolledNumberArmy" .. slot] == nil then
+                    initiative_dicePanelOpen(slot)
+                end
+            end
+        end, 3)
+    end
+end

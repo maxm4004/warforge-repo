@@ -52,9 +52,11 @@ end
 -- FUNZIONE: main_moraleTestEnter(ctx, slot, rec)
 -- ============================================================
 function main_moraleTestEnter(ctx, slot, rec)
+
     IEF_MORALE_TEST_ROLLING[slot] = false
     main_clearWarning()
     engine_diceClearLastRoll(slot)
+    engine_dicePanelClose(slot)
 
     local req, idx = main_moraleFindRequest(slot, ctx.reqId)
     if req then
@@ -66,12 +68,71 @@ function main_moraleTestEnter(ctx, slot, rec)
     end
 end
 -- ============================================================
+-- FUNZIONE: main_moraleDiceScheda(req)
+-- Scheda del pannello dadi per un test di morale: classe e
+-- soglia, ogni modificatore con il suo valore, totale e
+-- risultato da ottenere sui 2D6.
+-- ============================================================
+function main_moraleDiceScheda(req)
+    local bases = main_getUnitBases(req.key)
+    local meta = bases[1] and main_getUnitMeta(bases[1])
+    local classe = meta and meta.morale
+    local moraleData = classe and main_getMorale(classe)
+    local soglia = moraleData and moraleData.threshold
+
+    local mod, dettaglio = req.mod, nil
+    if mod == nil then
+        mod, dettaglio = main_moraleCurrentModifier(req.key)
+    end
+    mod = mod or 0
+
+    local righe = {}
+    table.insert(righe, { "Motivo: " .. main_moraleMotivoText(req.motivo or req.situazione), "" })
+    if soglia then
+        table.insert(righe, { string.format("Morale %s: serve %d+ con 2D6", tostring(classe), soglia), "" })
+    end
+    if dettaglio then
+        for _, d in ipairs(dettaglio) do
+            local voce = main_moraleModifierLabel(d.chiave)
+            if d.volte > 1 then voce = string.format("%s (x%d)", voce, d.volte) end
+            table.insert(righe, { voce, string.format("%+d", d.valore) })
+        end
+        if #dettaglio == 0 then table.insert(righe, { "Nessun modificatore", "" }) end
+    else
+        table.insert(righe, { "Modificatori fissi", string.format("%+d", mod) })
+    end
+    table.insert(righe, { "Totale modificatori", string.format("%+d", mod) })
+
+    local serve = nil
+    if soglia then
+        local minimo = soglia - mod
+        if minimo <= 2 then
+            serve = "Superato con qualsiasi risultato"
+        elseif minimo > 12 then
+            serve = "Non superabile con 2D6"
+        else
+            serve = string.format("Serve almeno %d sui dadi", minimo)
+        end
+    end
+
+    return {
+        titolo      = "TEST DI MORALE",
+        sottotitolo = string.format("%s - %s", main_decodeExtendedUnitLabel(req.key), main_getCohesion(req.key)),
+        righe       = righe,
+        serve       = serve,
+    }
+end
+-- ============================================================
 -- FUNZIONE: main_moraleTestFocus(ctx, slot, player, rec)
--- Bottone del pannello sottofase: riporta la camera sui dadi.
+-- Bottone del pannello sottofase: camera sui dadi e pannello dadi.
 -- ============================================================
 function main_moraleTestFocus(ctx, slot, player, rec)
     ctx.aiDadi = true
     main_moraleCamera(player)
+    local req = main_moraleFindRequest(slot, ctx.reqId)
+    if req then
+        engine_dicePanelOpen(slot, main_moraleDiceScheda(req))
+    end
     engine_subRedraw()
 end
 -- ============================================================
@@ -92,11 +153,24 @@ function main_moraleTestRoll(ctx, slot, player, rec)
         mod = main_moraleCurrentModifier(req.key)
     end
 
+    if not engine_dicePanelIsOpen(slot) then
+        engine_dicePanelOpen(slot, main_moraleDiceScheda(req))
+    end
+
     IEF_MORALE_TEST_ROLLING[slot] = true
 
     main_testMorale(req.key, player, req.situazione, mod, function(esito, somma, soglia, effetto)
         IEF_MORALE_TEST_ROLLING[slot] = false
-        if esito == nil then return end         -- lettura dadi fallita: si ritira
+        if esito == nil then                    -- lettura dadi fallita: si ritira
+            engine_dicePanelOutcome(slot, "Lettura dei dadi non riuscita: ritira", DICEPANEL.koColor)
+            return
+        end
+
+        local superato = esito == MORALE_RESULT.OK
+        engine_dicePanelOutcome(slot,
+            string.format("%s: %d %+d = %d contro %d", esito, somma - (mod or 0), mod or 0, somma, soglia),
+            superato and DICEPANEL.okColor or DICEPANEL.koColor,
+            effetto)
 
         ctx.esito, ctx.somma, ctx.soglia, ctx.effetto = esito, somma, soglia, effetto
         engine_subStep("MORALE_TEST", slot, "ESITO")
@@ -125,6 +199,8 @@ end
 -- chiama il suo onDone (nome handler oppure funzione).
 -- ============================================================
 function main_moraleTestDone(ctx, result, slot)
+
+    engine_dicePanelClose(slot)
     local req, idx = main_moraleFindRequest(slot, ctx.reqId)
     if req then
         table.remove(IEF_MORALE_ROLL_PENDING[slot], idx)

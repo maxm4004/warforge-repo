@@ -1,0 +1,418 @@
+-- ============================================================
+-- WARFORGE IEF — 0_main/unitinfo.ttslua
+-- SCHEDA UNITÀ: pannello 2D aperto dal pulsante INFO della base
+-- capitana (main_infoByCurrentPhase).
+--
+-- Una scheda per giocatore, visibile solo a lui. Parte fissa
+-- (tipo, basi, coesione, morale, armi, capacità, movimento,
+-- Generale, terreno) + sezione della fase corrente con i dati
+-- che il gioco già calcola. Si aggiorna a ogni
+-- main_updateCenterPanel (cambio fase compreso).
+-- Click sullo stesso INFO, alt-click o X = chiude.
+-- Stato non salvato.
+-- ============================================================
+
+UNITINFO = UNITINFO or {
+    rectAlignment = "MiddleLeft",
+    offsetXY      = "20 0",
+    width         = 380,
+    bg            = "rgba(0,0,0,0.85)",
+    padding       = 12,
+    spacing       = 4,
+    titleHeight   = 24,
+    subHeight     = 18,
+    rowHeight     = 18,
+    sectionHeight = 22,
+    maxRows       = 24,
+    titleColor    = "#FFD833",
+    sectionColor  = "#B8902E",
+    textColor     = "White",
+    valueWidth    = 150,
+}
+
+-- unitKey mostrata per slot del giocatore che guarda
+IEF_UNIT_INFO = IEF_UNIT_INFO or {}
+
+-- ============================================================
+-- Utilità
+-- ============================================================
+local function uiEsc(t)
+    t = tostring(t or "")
+    t = t:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"):gsub("\n", " ")
+    return t
+end
+
+local function uiSiNo(v) return v and "si" or "no" end
+
+local function uiWeaponLabel(arma)
+    local dict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
+    local w = dict and dict[arma]
+    return (w and w.label) or arma, w
+end
+
+local function uiCapabilityLabel(cap)
+    local caps = IEF_DATA.capabilities and IEF_DATA.capabilities.capabilities
+    local c = caps and caps[cap]
+    return (c and c.label) or cap
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoFixedRows(unitKey)
+-- Parte fissa della scheda.
+-- ============================================================
+function main_unitInfoFixedRows(unitKey)
+    local righe = {}
+    local bases = main_getUnitBases(unitKey)
+    local meta = bases[1] and main_getUnitMeta(bases[1])
+    if not meta then return righe end
+
+    local slot = main_unitSlot(unitKey)
+    local generale = main_isGeneralKey(unitKey)
+    local tipo = meta.unitType
+    local tipoData = tipo and main_getUnitType(tipo)
+
+    table.insert(righe, { sezione = "UNITA'" })
+    table.insert(righe, { "Esercito", (slot and ARMY[slot] and ARMY[slot].name) or "?" })
+    table.insert(righe, { "Tipo", string.format("%s (%s)", (tipoData and tipoData.name) or "?", tostring(tipo)) })
+
+    local perse = (IEF_UNIT_BASES_LOST and IEF_UNIT_BASES_LOST[unitKey]) or 0
+    local marcate = main_markedCount(unitKey) + #((IEF_MELEE_MARKED or {})[unitKey] or {})
+    local basi = string.format("%d / %d", #bases, #bases + perse)
+    if marcate > 0 then basi = basi .. string.format(" (%d marcate)", marcate) end
+    table.insert(righe, { "Basi", basi })
+    if tipoData and tipoData.figures_per_base then
+        table.insert(righe, { "Figure per base", tostring(tipoData.figures_per_base) })
+    end
+
+    if not generale then
+        table.insert(righe, { "Coesione", main_getCohesion(unitKey) })
+        local classe = meta.morale
+        local moraleData = classe and classe ~= "" and main_getMorale(classe)
+        if moraleData then
+            table.insert(righe, { "Morale", string.format("%s (%d+ su 2D6)", classe, moraleData.threshold) })
+            local mod = main_moraleCurrentModifier(unitKey)
+            table.insert(righe, { "Modificatore morale ora", string.format("%+d", mod or 0) })
+        end
+    end
+
+    local armi, gittata = {}, nil
+    for _, a in ipairs(meta.armi or {}) do
+        local label, w = uiWeaponLabel(a)
+        table.insert(armi, label)
+        if w and w.range_inches and w.range_inches > 0 and not gittata then
+            gittata = string.format('%s %d"', label, w.range_inches)
+        end
+    end
+    table.insert(righe, { "Armi", (#armi > 0) and table.concat(armi, ", ") or "nessuna" })
+    if gittata then table.insert(righe, { "Gittata", gittata }) end
+
+    local caps = {}
+    for _, c in ipairs(meta.capabilities or {}) do table.insert(caps, uiCapabilityLabel(c)) end
+    if #caps > 0 then table.insert(righe, { "Capacita'", table.concat(caps, ", ") }) end
+
+    if tipoData and tipoData.move_inches then
+        table.insert(righe, { "Movimento", string.format('%d"', tipoData.move_inches) })
+    end
+
+    if generale then
+        table.insert(righe, { "Raggio di comando", string.format('%s"', tostring(COMMAND_RANGE_INCHES)) })
+        local host = main_getGeneralHost(unitKey)
+        table.insert(righe, { "Aggregato a", host and main_decodeExtendedUnitLabel(host) or "nessuna unita'" })
+    else
+        local gen = main_getAttachedGeneral(unitKey)
+        local inRaggio = slot and main_isInCommandRange(bases[1], slot)
+        table.insert(righe, { "Generale aggregato", gen and "si" or "no" })
+        table.insert(righe, { "In raggio di comando", uiSiNo(inRaggio) })
+        table.insert(righe, { "Terreno", main_getUnitTerrain(unitKey) or "APERTO" })
+    end
+    return righe
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoChargeRows(unitKey)
+-- Cariche della coda che coinvolgono l'unità.
+-- ============================================================
+function main_unitInfoChargeRows(unitKey)
+    local righe = {}
+    for _, e in ipairs(IEF_CHARGE_QUEUE or {}) do
+        local mySlot = (e.unitArmy1Key == unitKey and 1) or (e.unitArmy2Key == unitKey and 2) or nil
+        if mySlot then
+            local otherKey = charge_elementoOtherKey(e, mySlot)
+            local nome = main_decodeExtendedUnitLabel(otherKey)
+            if charge_elementoRequest(e, mySlot) then
+                table.insert(righe, { "Carica contro", nome })
+            else
+                table.insert(righe, { "Caricata da", nome })
+            end
+            local r = charge_elementoResponse(e, mySlot)
+            if r then
+                table.insert(righe, { "  Reazione", (CHARGE_REACTION_LABEL and CHARGE_REACTION_LABEL[r]) or r })
+            end
+        end
+    end
+    if #righe == 0 then table.insert(righe, { "Cariche", "nessuna" }) end
+    return righe
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoMeleeRows(unitKey)
+-- Dati della mischia (stesso calcolo della risoluzione).
+-- ============================================================
+function main_unitInfoMeleeRows(unitKey)
+    local gruppo = melee_getGroupOfUnit(unitKey)
+    if not gruppo then return { { "Mischia", "non in mischia" } } end
+
+    local calc = melee_computeGroup(gruppo)
+    local info = calc.unita[unitKey]
+    if not info then return { { "Mischia", "non in mischia" } } end
+
+    local det = info.dettaglio or {}
+    local nemici = {}
+    for enemyKey, _ in pairs(info.verso or {}) do
+        table.insert(nemici, main_decodeExtendedUnitLabel(enemyKey))
+    end
+    table.sort(nemici)
+
+    local righe = {}
+    table.insert(righe, { "Contro", table.concat(nemici, ", ") })
+    table.insert(righe, { "Turno di mischia", det.primoTurno and "primo" or "successivo" })
+    if det.fianco then table.insert(righe, { "Caricata sul fianco", "si" }) end
+    table.insert(righe, { "Basi in contatto", tostring(det.contatto or 0) })
+    table.insert(righe, { "Ranghi posteriori", tostring(det.posteriori or 0) })
+    table.insert(righe, { "Overlap", tostring(det.overlap or 0) })
+    if det.dimezzati then
+        table.insert(righe, { "Dadi", string.format("%d (disordinata, da %d)", info.dadi, det.dadiGrezzi or 0) })
+    else
+        table.insert(righe, { "Dadi", tostring(info.dadi or 0) })
+    end
+    table.insert(righe, { "Per colpire", string.format("%d+", (calc[info.slot] and calc[info.slot].soglia) or 5) })
+    return righe
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoRecoveryRows(unitKey)
+-- Regolamento Fase 6: DISORDINATA entro il raggio di comando;
+-- ROTTA solo con Generale aggregato e non andata in rotta in
+-- questo turno.
+-- ============================================================
+function main_unitInfoRecoveryRows(unitKey)
+    local coesione = main_getCohesion(unitKey)
+    local slot = main_unitSlot(unitKey)
+    local base = main_getUnitBases(unitKey)[1]
+
+    if coesione == COHESION.SAL then
+        return { { "Recupero", "non serve (salda)" } }
+    end
+
+    local puo, motivo
+    if coesione == COHESION.DIS then
+        puo = slot and main_isInCommandRange(base, slot)
+        motivo = puo and "in raggio di comando" or "fuori raggio di comando"
+    else
+        if main_isRoutedThisTurn(unitKey) then
+            puo, motivo = false, "in rotta da questo turno"
+        elseif not main_getAttachedGeneral(unitKey) then
+            puo, motivo = false, "senza Generale aggregato"
+        else
+            puo, motivo = true, "Generale aggregato"
+        end
+    end
+
+    local righe = { { "Puo' tentare il recupero", uiSiNo(puo) }, { "  Motivo", motivo } }
+    if puo then
+        local mod = main_moraleCurrentModifier(unitKey)
+        table.insert(righe, { "  Modificatore", string.format("%+d", mod or 0) })
+    end
+    return righe
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoPhaseRows(unitKey)
+-- Sezione della fase corrente.
+-- ============================================================
+function main_unitInfoPhaseRows(unitKey)
+    local fase = ENGINE and ENGINE.phase
+    local def = ENGINE and ENGINE.phases and ENGINE.phases[fase]
+    local righe = { { sezione = (def and def.title) or tostring(fase) } }
+    local generale = main_isGeneralKey(unitKey)
+
+    local extra = {}
+    if fase == PHASE.CHARGE_DECLARE or fase == PHASE.CHARGE_REACT or fase == PHASE.CHARGE_AUTO then
+        if not generale then extra = main_unitInfoChargeRows(unitKey) end
+    elseif fase == PHASE.SHOOT then
+        if not generale then
+            extra = { { "Ha gia' tirato", uiSiNo(IEF_FIRED and IEF_FIRED[unitKey]) } }
+        end
+    elseif fase == PHASE.MELEE then
+        if not generale then extra = main_unitInfoMeleeRows(unitKey) end
+    elseif fase == PHASE.RECOVERY then
+        if not generale then extra = main_unitInfoRecoveryRows(unitKey) end
+    end
+
+    if #extra == 0 then return {} end
+    for _, r in ipairs(extra) do table.insert(righe, r) end
+    return righe
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoRows(unitKey)
+-- ============================================================
+function main_unitInfoRows(unitKey)
+    local righe = main_unitInfoFixedRows(unitKey)
+    for _, r in ipairs(main_unitInfoPhaseRows(unitKey)) do table.insert(righe, r) end
+    local out = {}
+    for i = 1, math.min(#righe, UNITINFO.maxRows) do out[i] = righe[i] end
+    return out
+end
+
+-- ============================================================
+-- Altezza del pannello
+-- ============================================================
+local function uiHeight(righe)
+    local h = UNITINFO.padding * 2 + UNITINFO.titleHeight + UNITINFO.subHeight + UNITINFO.spacing * 2
+    for _, r in ipairs(righe) do
+        h = h + (r.sezione and UNITINFO.sectionHeight or UNITINFO.rowHeight) + UNITINFO.spacing
+    end
+    return h
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoOpen(obj, player_color, alt_click)
+-- Pulsante INFO della base capitana.
+-- ============================================================
+function main_unitInfoOpen(obj, player_color, alt_click)
+    local slot = main_SlotByColor(player_color)
+    if not slot then return end
+    local unitKey = main_getUnitKey(obj)
+    if not unitKey then return end
+
+    if alt_click or IEF_UNIT_INFO[slot] == unitKey then
+        main_unitInfoClose(slot)
+        return
+    end
+    IEF_UNIT_INFO[slot] = unitKey
+    main_unitInfoRedraw(slot)
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoClose(slot)
+-- ============================================================
+function main_unitInfoClose(slot)
+    IEF_UNIT_INFO[slot] = nil
+    main_unitInfoRedraw(slot)
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoCloseClick(player, value, id)
+-- Bottone X del pannello.
+-- ============================================================
+function main_unitInfoCloseClick(player, value, id)
+    local slot = tonumber(id:match("^unit_info_army(%d)_close$"))
+    if slot then main_unitInfoClose(slot) end
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoRefresh()
+-- Ricalcola le schede aperte (da main_updateCenterPanel).
+-- Se l'unità non è più sul tavolo la scheda si chiude.
+-- ============================================================
+function main_unitInfoRefresh()
+    for slot = 1, 2 do
+        local key = IEF_UNIT_INFO[slot]
+        if key then
+            if #main_getUnitBases(key) == 0 then IEF_UNIT_INFO[slot] = nil end
+            main_unitInfoRedraw(slot)
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoRedraw(slot)
+-- ============================================================
+function main_unitInfoRedraw(slot)
+    if UI.loading then
+        Wait.condition(function()
+            Wait.frames(function() main_unitInfoRedraw(slot) end, 1)
+        end, function() return not UI.loading end, 10)
+        return
+    end
+
+    local pre = "unit_info_army" .. slot
+    local key = IEF_UNIT_INFO[slot]
+    if not key then
+        UI.setAttribute(pre, "active", "false")
+        return
+    end
+
+    local righe = main_unitInfoRows(key)
+    UI.setAttribute(pre, "height", tostring(uiHeight(righe)))
+    UI.setAttribute(pre .. "_title", "text", main_decodeExtendedUnitLabel(key))
+    UI.setAttribute(pre .. "_sub", "text", key)
+
+    for i = 1, UNITINFO.maxRows do
+        local r = righe[i]
+        local id = pre .. "_row" .. i
+        UI.setAttribute(id, "active", r and "true" or "false")
+        if r then
+            local sezione = r.sezione ~= nil
+            UI.setAttribute(id, "preferredHeight", tostring(sezione and UNITINFO.sectionHeight or UNITINFO.rowHeight))
+            UI.setAttribute(id .. "_l", "text", sezione and r.sezione or (r[1] or ""))
+            UI.setAttribute(id .. "_l", "color", sezione and UNITINFO.sectionColor or UNITINFO.textColor)
+            UI.setAttribute(id .. "_l", "fontStyle", sezione and "Bold" or "Normal")
+            UI.setAttribute(id .. "_v", "text", sezione and "" or (r[2] or ""))
+        end
+    end
+
+    UI.setAttribute(pre, "active", "true")
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInfoPanelsXml()
+-- XML delle due schede (una per giocatore), già con lo stato
+-- corrente. Da aggiungere in getRulesetUiXml.
+-- ============================================================
+function main_unitInfoPanelsXml()
+    local xml = ""
+    for slot = 1, 2 do
+        local pre = "unit_info_army" .. slot
+        local key = IEF_UNIT_INFO[slot]
+        local righe = key and main_unitInfoRows(key) or {}
+
+        local rowsXml = ""
+        for i = 1, UNITINFO.maxRows do
+            local r = righe[i]
+            local sezione = r and r.sezione ~= nil
+            rowsXml = rowsXml .. string.format(
+                '<HorizontalLayout id="%s_row%d" preferredHeight="%d" childForceExpandWidth="true" active="%s">' ..
+                    '<Text id="%s_row%d_l" text="%s" fontSize="12" fontStyle="%s" color="%s" alignment="MiddleLeft"/>' ..
+                    '<Text id="%s_row%d_v" text="%s" fontSize="12" fontStyle="Bold" color="%s" alignment="MiddleRight" preferredWidth="%d" flexibleWidth="0"/>' ..
+                '</HorizontalLayout>',
+                pre, i, sezione and UNITINFO.sectionHeight or UNITINFO.rowHeight, r and "true" or "false",
+                pre, i, uiEsc(r and (r.sezione or r[1])), sezione and "Bold" or "Normal",
+                sezione and UNITINFO.sectionColor or UNITINFO.textColor,
+                pre, i, uiEsc(r and not sezione and r[2] or ""), UNITINFO.textColor, UNITINFO.valueWidth)
+        end
+
+        xml = xml .. string.format(
+            '<Panel id="%s" rectAlignment="%s" offsetXY="%s" width="%d" height="%d" color="%s" visibility="%s" active="%s">' ..
+                '<VerticalLayout padding="%d %d %d %d" spacing="%d" childAlignment="UpperLeft" childForceExpandHeight="false" childForceExpandWidth="true">' ..
+                    '<HorizontalLayout preferredHeight="%d" childForceExpandWidth="false" childForceExpandHeight="false">' ..
+                        '<Text id="%s_title" text="%s" fontSize="16" fontStyle="Bold" color="%s" alignment="MiddleLeft" preferredWidth="%d"/>' ..
+                        '<Button id="%s_close" text="X" fontSize="14" fontStyle="Bold" textColor="White" color="rgba(0.5,0.5,0.5,0.8)" preferredWidth="%d" preferredHeight="%d" onClick="main_unitInfoCloseClick"/>' ..
+                    '</HorizontalLayout>' ..
+                    '<Text id="%s_sub" text="%s" fontSize="10" color="rgba(0.8,0.8,0.8,1)" alignment="MiddleLeft" preferredHeight="%d"/>' ..
+                    '%s' ..
+                '</VerticalLayout>' ..
+            '</Panel>',
+            pre, UNITINFO.rectAlignment, UNITINFO.offsetXY, UNITINFO.width, uiHeight(righe), UNITINFO.bg,
+            slot == 1 and COLOR.ARMY1 or COLOR.ARMY2, key and "true" or "false",
+            UNITINFO.padding, UNITINFO.padding, UNITINFO.padding, UNITINFO.padding, UNITINFO.spacing,
+            UNITINFO.titleHeight,
+            pre, uiEsc(key and main_decodeExtendedUnitLabel(key)), UNITINFO.titleColor,
+            UNITINFO.width - UNITINFO.padding * 2 - UNITINFO.titleHeight,
+            pre, UNITINFO.titleHeight, UNITINFO.titleHeight,
+            pre, uiEsc(key), UNITINFO.subHeight,
+            rowsXml)
+    end
+    return xml
+end

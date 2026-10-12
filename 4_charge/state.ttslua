@@ -133,3 +133,11 @@ IEF_CHARGE_PENDING_TESTS = IEF_CHARGE_PENDING_TESTS or {}
 -- Test per caricare superati in questo turno:
 -- [attackerKey] = targetKey (azzerata in before_charge_declare)
 IEF_CHARGE_TEST_PASSED = IEF_CHARGE_TEST_PASSED or {}
+
+-- Etichette dei bottoni di reazione
+CHARGE_REACTION_LABEL = {
+    [REACTION_TYPE.COC] = "Contro Carica",
+    [REACTION_TYPE.EVA] = "Evasione",
+    [REACTION_TYPE.TIR] = "Tiro di Arresto",
+    [REACTION_TYPE.FER] = "Nessuna Reazione",
+}

@@ -1,0 +1,370 @@
+-- ============================================================
+-- engine/dicepanel.ttslua
+-- PANNELLO DADI condiviso: riepilogo dei tiri, visibile a
+-- entrambi i giocatori.
+--
+-- Un solo pannello con due colonne (Army1 a sinistra, Army2 a
+-- destra). Ogni colonna è il tiro di uno slot: dadi,
+-- modificatori, cosa serve, facce uscite come icone (immagini
+-- "d1" ... "d6") ed esito. Se tira un solo giocatore si vede
+-- solo la sua colonna; se tirano entrambi (iniziativa,
+-- mischia) le colonne stanno affiancate.
+--
+-- Colonne speculari: Army1 allineata a sinistra, Army2 a
+-- destra, valori verso il centro. Righe allineate: ogni
+-- elemento presente in una colonna occupa lo stesso spazio
+-- anche nell'altra (vuoto se lì manca).
+--
+-- Scheda (la prepara chi gestisce il tiro):
+-- {
+--   titolo      = "TEST DI MORALE",
+--   sottotitolo = "Cavalieri - SALDA",            -- opzionale
+--   righe       = { { "voce", "valore" }, ... },   -- valore opzionale
+--   serve       = "Serve almeno 6 sui dadi",       -- opzionale
+--   soglia      = 4,   -- opzionale: successo per singolo dado (v >= soglia)
+-- }
+--
+-- API:
+--   engine_dicePanelOpen(slot, scheda)
+--   engine_dicePanelResults(slot, risultati)   -- chiamata da engine_diceReadResults
+--   engine_dicePanelOutcome(slot, testo, colore, nota)
+--   engine_dicePanelClose(slot)
+--   engine_dicePanelCloseAfter(slot, secondi)
+--   engine_dicePanelIsOpen(slot)
+--   engine_dicePanelsXml()                      -- dentro buildUI
+--
+-- Stato non salvato: un tiro non sopravvive a un caricamento.
+-- ============================================================
+
+DICEPANEL = DICEPANEL or {
+    rectAlignment = "MiddleCenter",
+    offsetXY      = "0 -345",
+    colWidth      = 330,      -- larghezza di una colonna
+    colGap        = 16,       -- spazio fra le due colonne
+    bg            = "rgba(0,0,0,0.50)",
+    padding       = 12,
+    spacing       = 6,
+    titleColor    = "#FFD833",
+    textColor     = "White",
+    titleHeight   = 22,
+    subHeight     = 18,
+    rowHeight     = 18,
+    needHeight    = 20,
+    outcomeHeight = 22,
+    noteHeight    = 32,       -- nota sotto l'esito (2 righe)
+    maxRows       = 10,
+    maxFaces      = 24,
+    faceSize      = 30,
+    faceSpacing   = 4,
+    faceKoColor   = "rgba(1,1,1,0.3)",   -- dado non riuscito (con soglia)
+    okColor       = "#5BD35B",
+    koColor       = "#E05050",
+}
+
+IEF_DICE_PANEL     = IEF_DICE_PANEL or {}
+IEF_DICE_PANEL_GEN = IEF_DICE_PANEL_GEN or 0
+
+-- ============================================================
+-- Utilità
+-- ============================================================
+local function dpEsc(t)
+    t = tostring(t or "")
+    t = t:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"):gsub("\n", "&#10;")
+    return t
+end
+
+local function dpFacesPerRow()
+    local utile = DICEPANEL.colWidth + DICEPANEL.faceSpacing
+    return math.max(1, math.floor(utile / (DICEPANEL.faceSize + DICEPANEL.faceSpacing)))
+end
+
+-- Righe della scheda limitate a maxRows
+local function dpRows(p)
+    local righe = (p and p.scheda and p.scheda.righe) or {}
+    local out = {}
+    for i = 1, math.min(#righe, DICEPANEL.maxRows) do out[i] = righe[i] end
+    return out
+end
+
+-- Numero di facce da mostrare
+local function dpFaces(p)
+    return (p and p.risultati) and math.min(#p.risultati, DICEPANEL.maxFaces) or 0
+end
+
+-- Altezza della griglia delle facce
+local function dpFacesHeight(facce)
+    local file = math.max(1, math.ceil(facce / dpFacesPerRow()))
+    return file * DICEPANEL.faceSize + (file - 1) * DICEPANEL.faceSpacing
+end
+
+-- Layout comune alle colonne aperte: quali elementi mostrare e
+-- con quante righe/facce, così le due colonne restano allineate.
+local function dpLayout()
+    local L = { sub = false, rows = 0, need = false, faces = 0, esito = false, nota = false, colonne = 0 }
+    for slot = 1, 2 do
+        local p = IEF_DICE_PANEL[slot]
+        if p then
+            local s = p.scheda or {}
+            L.colonne = L.colonne + 1
+            if s.sottotitolo then L.sub = true end
+            L.rows  = math.max(L.rows, #dpRows(p))
+            if s.serve then L.need = true end
+            L.faces = math.max(L.faces, dpFaces(p))
+            if p.esito then L.esito = true end
+            if p.esito and p.esito.nota then L.nota = true end
+        end
+    end
+    return L
+end
+
+-- Altezza del contenuto di una colonna (senza padding)
+local function dpColHeight(L)
+    local h, n = 0, 0
+    local function add(x) h = h + x; n = n + 1 end
+
+    add(DICEPANEL.titleHeight)
+    if L.sub then add(DICEPANEL.subHeight) end
+    for _ = 1, L.rows do add(DICEPANEL.rowHeight) end
+    if L.need then add(DICEPANEL.needHeight) end
+    if L.faces > 0 then add(dpFacesHeight(L.faces)) end
+    if L.esito then add(DICEPANEL.outcomeHeight) end
+    if L.nota then add(DICEPANEL.noteHeight) end
+
+    return h + math.max(0, n - 1) * DICEPANEL.spacing
+end
+
+-- Dimensioni del pannello in base alle colonne aperte
+local function dpSize(L)
+    if L.colonne == 0 then return DICEPANEL.colWidth, 50 end
+    local w = DICEPANEL.padding * 2 + L.colonne * DICEPANEL.colWidth + (L.colonne - 1) * DICEPANEL.colGap
+    local h = DICEPANEL.padding * 2 + dpColHeight(L)
+    return w, h
+end
+
+-- Allineamenti speculari: Army1 a sinistra, Army2 a destra
+local function dpAlign(slot, verticale)
+    local lato = (slot == 2) and "Right" or "Left"
+    return (verticale or "Middle") .. lato
+end
+
+-- Colore dell'icona di un dado
+local function dpFaceColor(p, v)
+    local soglia = p.scheda and p.scheda.soglia
+    if soglia and v < soglia then return DICEPANEL.faceKoColor end
+    return "White"
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelOpen(slot, scheda)
+-- ============================================================
+function engine_dicePanelOpen(slot, scheda)
+    if slot ~= 1 and slot ~= 2 then return end
+    IEF_DICE_PANEL_GEN = IEF_DICE_PANEL_GEN + 1
+    IEF_DICE_PANEL[slot] = { scheda = scheda or {}, risultati = nil, esito = nil, gen = IEF_DICE_PANEL_GEN }
+    engine_dicePanelRedraw()
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelIsOpen(slot)
+-- ============================================================
+function engine_dicePanelIsOpen(slot)
+    return IEF_DICE_PANEL[slot] ~= nil
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelResults(slot, risultati)
+-- Facce uscite. Ignorata se la colonna dello slot è chiusa.
+-- ============================================================
+function engine_dicePanelResults(slot, risultati)
+    local p = IEF_DICE_PANEL[slot]
+    if not p then return end
+    p.risultati = {}
+    for i, v in ipairs(risultati or {}) do p.risultati[i] = v end
+    p.esito = nil
+    engine_dicePanelRedraw()
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelOutcome(slot, testo, colore, nota)
+-- nota: testo facoltativo più piccolo sotto l'esito (es. effetto)
+-- ============================================================
+function engine_dicePanelOutcome(slot, testo, colore, nota)
+    local p = IEF_DICE_PANEL[slot]
+    if not p then return end
+    p.esito = { testo = testo or "", colore = colore or DICEPANEL.textColor, nota = nota }
+    engine_dicePanelRedraw()
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelClose(slot)
+-- ============================================================
+function engine_dicePanelClose(slot)
+    if not IEF_DICE_PANEL[slot] then return end
+    IEF_DICE_PANEL[slot] = nil
+    engine_dicePanelRedraw()
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelCloseAfter(slot, secondi)
+-- Chiude dopo N secondi, solo se nel frattempo non è stato
+-- aperto un altro tiro sullo stesso slot.
+-- ============================================================
+function engine_dicePanelCloseAfter(slot, secondi)
+    local p = IEF_DICE_PANEL[slot]
+    if not p then return end
+    local gen = p.gen
+    Wait.time(function()
+        local q = IEF_DICE_PANEL[slot]
+        if q and q.gen == gen then engine_dicePanelClose(slot) end
+    end, secondi or 3)
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelRedraw()
+-- Applica lo stato al pannello. Se la UI si sta ricaricando
+-- aspetta (un setAttribute durante UI.loading si perde).
+-- ============================================================
+function engine_dicePanelRedraw()
+    if UI.loading then
+        Wait.condition(function()
+            Wait.frames(function() engine_dicePanelRedraw() end, 1)
+        end, function() return not UI.loading end, 10)
+        return
+    end
+
+    local L = dpLayout()
+    if L.colonne == 0 then
+        UI.setAttribute("dice_panel", "active", "false")
+        return
+    end
+
+    local w, h = dpSize(L)
+    UI.setAttribute("dice_panel", "width", tostring(w))
+    UI.setAttribute("dice_panel", "height", tostring(h))
+
+    for slot = 1, 2 do
+        local p = IEF_DICE_PANEL[slot]
+        local pre = "dice_col_army" .. slot
+        UI.setAttribute(pre, "active", p and "true" or "false")
+
+        if p then
+            local s = p.scheda or {}
+            UI.setAttribute(pre .. "_title", "text", s.titolo or "")
+            UI.setAttribute(pre .. "_sub", "text", s.sottotitolo or "")
+            UI.setAttribute(pre .. "_sub", "active", L.sub and "true" or "false")
+
+            local righe = dpRows(p)
+            for i = 1, DICEPANEL.maxRows do
+                local r = righe[i]
+                UI.setAttribute(pre .. "_row" .. i, "active", (i <= L.rows) and "true" or "false")
+                if i <= L.rows then
+                    UI.setAttribute(pre .. "_row" .. i .. "_l", "text", r and r[1] or "")
+                    UI.setAttribute(pre .. "_row" .. i .. "_v", "text", r and r[2] or "")
+                end
+            end
+
+            UI.setAttribute(pre .. "_need", "text", s.serve or "")
+            UI.setAttribute(pre .. "_need", "active", L.need and "true" or "false")
+
+            local facce = dpFaces(p)
+            UI.setAttribute(pre .. "_faces", "active", L.faces > 0 and "true" or "false")
+            if L.faces > 0 then
+                UI.setAttribute(pre .. "_faces", "preferredHeight", tostring(dpFacesHeight(L.faces)))
+            end
+            for i = 1, DICEPANEL.maxFaces do
+                local v = (i <= facce) and p.risultati[i] or nil
+                local id = pre .. "_face" .. i
+                UI.setAttribute(id, "active", v and "true" or "false")
+                if v then
+                    UI.setAttribute(id, "image", "d" .. v)
+                    UI.setAttribute(id, "color", dpFaceColor(p, v))
+                end
+            end
+
+            local esito = p.esito
+            UI.setAttribute(pre .. "_outcome", "active", L.esito and "true" or "false")
+            UI.setAttribute(pre .. "_outcome", "text", esito and esito.testo or "")
+            if esito then UI.setAttribute(pre .. "_outcome", "color", esito.colore) end
+            UI.setAttribute(pre .. "_note", "active", L.nota and "true" or "false")
+            UI.setAttribute(pre .. "_note", "text", esito and esito.nota or "")
+        end
+    end
+
+    UI.setAttribute("dice_panel", "active", "true")
+end
+
+-- ============================================================
+-- XML di una colonna, già con lo stato corrente
+-- ============================================================
+local function dpColXml(slot, L)
+    local p = IEF_DICE_PANEL[slot]
+    local s = (p and p.scheda) or {}
+    local pre = "dice_col_army" .. slot
+    local destra = slot == 2
+
+    local righe = dpRows(p)
+    local rowsXml = ""
+    for i = 1, DICEPANEL.maxRows do
+        local r = righe[i]
+        local voce = string.format('<Text id="%s_row%d_l" text="%s" fontSize="12" color="%s" alignment="%s"/>',
+            pre, i, dpEsc(r and r[1]), DICEPANEL.textColor, dpAlign(slot))
+        local valore = string.format('<Text id="%s_row%d_v" text="%s" fontSize="12" fontStyle="Bold" color="%s" alignment="%s" preferredWidth="60" flexibleWidth="0"/>',
+            pre, i, dpEsc(r and r[2]), DICEPANEL.textColor, destra and "MiddleLeft" or "MiddleRight")
+        rowsXml = rowsXml .. string.format(
+            '<HorizontalLayout id="%s_row%d" preferredHeight="%d" childForceExpandWidth="true" active="%s">%s</HorizontalLayout>',
+            pre, i, DICEPANEL.rowHeight, (i <= L.rows) and "true" or "false",
+            destra and (valore .. voce) or (voce .. valore))
+    end
+
+    local facce = dpFaces(p)
+    local facesXml = ""
+    for i = 1, DICEPANEL.maxFaces do
+        local v = (i <= facce) and p.risultati[i] or nil
+        facesXml = facesXml .. string.format(
+            '<Image id="%s_face%d" image="%s" color="%s" preserveAspect="true" active="%s"/>',
+            pre, i, v and ("d" .. v) or "d1", v and dpFaceColor(p, v) or "White", v and "true" or "false")
+    end
+
+    local esito = p and p.esito
+    return string.format(
+        '<VerticalLayout id="%s" preferredWidth="%d" spacing="%d" childAlignment="%s" childForceExpandHeight="false" childForceExpandWidth="true" active="%s">' ..
+            '<Text id="%s_title" text="%s" fontSize="16" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d"/>' ..
+            '<Text id="%s_sub" text="%s" fontSize="12" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
+            '%s' ..
+            '<Text id="%s_need" text="%s" fontSize="14" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
+            '<GridLayout id="%s_faces" cellSize="%d %d" spacing="%d %d" startCorner="%s" childAlignment="%s" preferredHeight="%d" active="%s">%s</GridLayout>' ..
+            '<Text id="%s_outcome" text="%s" fontSize="15" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
+            '<Text id="%s_note" text="%s" fontSize="11" color="%s" alignment="%s" horizontalOverflow="Wrap" preferredHeight="%d" active="%s"/>' ..
+        '</VerticalLayout>',
+        pre, DICEPANEL.colWidth, DICEPANEL.spacing, dpAlign(slot, "Upper"), p and "true" or "false",
+        pre, dpEsc(s.titolo), DICEPANEL.titleColor, dpAlign(slot), DICEPANEL.titleHeight,
+        pre, dpEsc(s.sottotitolo), DICEPANEL.textColor, dpAlign(slot), DICEPANEL.subHeight, L.sub and "true" or "false",
+        rowsXml,
+        pre, dpEsc(s.serve), DICEPANEL.titleColor, dpAlign(slot), DICEPANEL.needHeight, L.need and "true" or "false",
+        pre, DICEPANEL.faceSize, DICEPANEL.faceSize, DICEPANEL.faceSpacing, DICEPANEL.faceSpacing,
+        dpAlign(slot, "Upper"), dpAlign(slot, "Upper"),
+        dpFacesHeight(L.faces), L.faces > 0 and "true" or "false", facesXml,
+        pre, dpEsc(esito and esito.testo), (esito and esito.colore) or DICEPANEL.textColor,
+        dpAlign(slot), DICEPANEL.outcomeHeight, L.esito and "true" or "false",
+        pre, dpEsc(esito and esito.nota), DICEPANEL.textColor, dpAlign(slot, "Upper"), DICEPANEL.noteHeight,
+        L.nota and "true" or "false")
+end
+
+-- ============================================================
+-- FUNZIONE: engine_dicePanelsXml()
+-- XML del pannello, già con lo stato corrente (buildUI è
+-- asincrono). Visibile a tutti.
+-- ============================================================
+function engine_dicePanelsXml()
+    local L = dpLayout()
+    local w, h = dpSize(L)
+    return string.format(
+        '<Panel id="dice_panel" rectAlignment="%s" offsetXY="%s" width="%d" height="%d" color="%s" active="%s">' ..
+            '<HorizontalLayout padding="%d %d %d %d" spacing="%d" childAlignment="UpperCenter" childForceExpandWidth="false" childForceExpandHeight="false">' ..
+                '%s%s' ..
+            '</HorizontalLayout>' ..
+        '</Panel>',
+        DICEPANEL.rectAlignment, DICEPANEL.offsetXY, w, h, DICEPANEL.bg, (L.colonne > 0) and "true" or "false",
+        DICEPANEL.padding, DICEPANEL.padding, DICEPANEL.padding, DICEPANEL.padding, DICEPANEL.colGap,
+        dpColXml(1, L), dpColXml(2, L))
+end

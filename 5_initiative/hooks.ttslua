@@ -14,6 +14,10 @@ function before_initiative_roll(phaseName, phase)
     UI.setAttribute("charge_attack_list_army2", "active", "false")
     UI.setAttribute("charge_defense_list_army1", "active", "false")
     UI.setAttribute("charge_defense_list_army2", "active", "false")
+
+    initiative_dicePanelOpen(1)
+    initiative_dicePanelOpen(2)
+
     callHandler("updateCenterPanel")
 
 end
@@ -21,8 +25,6 @@ end
 -- FUNZIONE: after_initiative_roll()
 -- ============================================================
 function after_initiative_roll(phaseName, phase)
-    engine_diceClearLastRoll(1)
-    engine_diceClearLastRoll(2)
 end
 -- ============================================================
 -- FUNZIONE: before_initiative_choice()
@@ -40,4 +42,6 @@ end
 -- FUNZIONE: after_initiative_choice()
 -- ============================================================
 function after_initiative_choice(phaseName, phase)
+    engine_dicePanelClose(1)
+    engine_dicePanelClose(2)
 end

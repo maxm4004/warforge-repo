@@ -30,10 +30,51 @@ function melee_resolveCtx(groupId)
     end
     return nil
 end
+-- ============================================================
+-- FUNZIONE: melee_diceScheda(slot, calc)
+-- Scheda del pannello dadi per la mischia di uno slot: dadi di
+-- ogni unità (contatto, posteriori, overlap, fianco,
+-- disordinata), totale, soglia. Solo dati semplici (va in ctx).
+-- ============================================================
+function melee_diceScheda(slot, calc)
+    local righe = {}
+    local primo = false
 
+    for key, info in pairs((calc and calc.unita) or {}) do
+        if info.slot == slot then
+            local d = info.dettaglio or {}
+            if d.primoTurno then primo = true end
+            local parti = string.format("contatto %d, posteriori %d", d.contatto or 0, d.posteriori or 0)
+            if (d.overlap or 0) > 0 then
+                parti = parti .. string.format(", overlap %d", d.overlap)
+            end
+            table.insert(righe, { main_decodeExtendedUnitLabel(key) .. ": " .. parti, tostring(d.dadiGrezzi or 0) })
+            if d.fianco then
+                table.insert(righe, { "  caricata sul fianco: niente dadi verso chi carica", "" })
+            end
+            if d.dimezzati then
+                table.insert(righe, { "  disordinata: meta' dei dadi", tostring(info.dadi or 0) })
+            end
+        end
+    end
+
+    local dadi = (calc and calc[slot].dadi) or 0
+    local soglia = (calc and calc[slot].soglia) or 5
+    table.insert(righe, { "Totale dadi", dadi .. "D6" })
+    table.insert(righe, { "Turno di mischia", primo and "primo" or "successivo" })
+    table.insert(righe, { "Modificatori", "nessuno" })
+
+    return {
+        titolo      = "MISCHIA",
+        sottotitolo = ARMY[slot] and ARMY[slot].name or nil,
+        righe       = righe,
+        serve       = string.format("Serve %d+ su ogni dado", soglia),
+        soglia      = soglia,
+    }
+end
 -- ============================================================
 -- FUNZIONE: melee_resolveEnter(ctx, slot, rec)
--- Apertura: calcola i dadi del gruppo.
+-- Apertura: calcola i dadi del gruppo e le schede del pannello dadi.
 -- ============================================================
 function melee_resolveEnter(ctx, slot, rec)
     engine_diceClearLastRoll(1)
@@ -48,6 +89,7 @@ function melee_resolveEnter(ctx, slot, rec)
         ctx["soglia" .. s]   = calc and calc[s].soglia or 5
         ctx["rolled" .. s]   = ctx["dadi" .. s] <= 0
         ctx["successi" .. s] = 0
+        ctx["scheda" .. s]   = melee_diceScheda(s, calc)
         printToAll(string.format("[MISCHIA] %s: %d D6, colpisce con %d+",
             ARMY[s].name, ctx["dadi" .. s], ctx["soglia" .. s]), {r=1,g=0.8,b=0.3})
     end
@@ -70,12 +112,15 @@ end
 
 -- ============================================================
 -- FUNZIONE: melee_resolveFocus(ctx, slot, player, rec)
--- Bottone dello step TIRO: camera sui dadi.
+-- Bottone dello step TIRO: camera sui dadi e pannello dadi.
 -- ============================================================
 function melee_resolveFocus(ctx, slot, player, rec)
     ctx["aiDadi" .. slot] = true
     if player then
         engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
+    end
+    if ctx["scheda" .. slot] and not ctx["rolled" .. slot] then
+        engine_dicePanelOpen(slot, ctx["scheda" .. slot])
     end
     engine_subRedraw()
 end
@@ -92,6 +137,9 @@ function melee_resolveRoll(ctx, slot, player, rec)
     local dadi, soglia = ctx["dadi" .. slot], ctx["soglia" .. slot]
     IEF_DICE_ROLL_TRY[slot] = { dadi = dadi, soglia = soglia }
     warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", ARMY[slot].name, dadi, soglia), player, "Yellow", 5, true)
+    if ctx["scheda" .. slot] and not engine_dicePanelIsOpen(slot) then
+        engine_dicePanelOpen(slot, ctx["scheda" .. slot])
+    end
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         Wait.time(function()
@@ -104,6 +152,10 @@ function melee_resolveRoll(ctx, slot, player, rec)
         c["rolled" .. slot]   = true
         c["successi" .. slot] = successi or 0
         printToAll(string.format("[MISCHIA] %s: %d colpi a segno", ARMY[slot].name, c["successi" .. slot]), {r=1,g=0.8,b=0.3})
+        local hits = c["successi" .. slot]
+        engine_dicePanelOutcome(slot,
+            (hits == 1) and "1 colpo a segno" or string.format("%d colpi a segno", hits),
+            (hits > 0) and DICEPANEL.okColor or DICEPANEL.koColor)
 
         if c.rolled1 and c.rolled2 then
             melee_resolveOutcome(c)
@@ -112,7 +164,6 @@ function melee_resolveRoll(ctx, slot, player, rec)
         end
     end)
 end
-
 -- ============================================================
 -- FUNZIONE: melee_moraleTestDone(dati, esito)
 -- onDone dei test di morale IMMEDIATI nati dalla mischia.
@@ -155,6 +206,10 @@ end
 -- Si resta in MELEE.
 -- ============================================================
 function melee_resolveDone(ctx, result, slot)
+
+    engine_dicePanelClose(1)
+    engine_dicePanelClose(2)
+
     local gruppo = melee_getGroupById(ctx.groupId)
     if gruppo then
         local turno = melee_currentTurn()

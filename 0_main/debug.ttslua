@@ -524,6 +524,13 @@ function debug_reset(fase)
     IEF_CHARGE_QUEUE = {}
     IEF_MORALE_ROLL_PENDING = { [1] = {}, [2] = {} }
     engine_subInitState()
+
+    engine_dicePanelClose(1)
+    engine_dicePanelClose(2)
+
+    main_unitInfoClose(1)
+    main_unitInfoClose(2)
+    
     IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
 
         -- Perdite marcate (tiro/carica e mischia): le basi tornano normali

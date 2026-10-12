@@ -11,6 +11,9 @@ function roll_btn_all(player, value, id, buttonConfig)
     end
 
     engine_diceCameraZoom(player, slot)
+    if not engine_dicePanelIsOpen(slot) then
+        initiative_dicePanelOpen(slot)
+    end
     return false
 end
 -- ============================================================

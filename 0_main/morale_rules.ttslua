@@ -122,12 +122,22 @@ end
 -- IEF_MORALE_CONDITIONS che ritorna quante volte si applica.
 -- ============================================================
 IEF_MORALE_MODIFIERS = {
-    { chiave = "generale_con_unita",      condizione = "GENERALE_AGGREGATO" },
-    { chiave = "ogni_base_persa",         condizione = "BASI_PERSE_DA_INIZIO" },
-    { chiave = "fianco_retro_caricabile", condizione = "NEMICO_FIANCO_RETRO" },
-    { chiave = "unita_disordinata",       condizione = "COESIONE_DIS" },
-    { chiave = "unita_in_rotta",          condizione = "COESIONE_ROT" },
+    { chiave = "generale_con_unita",      condizione = "GENERALE_AGGREGATO",   label = "Generale aggregato" },
+    { chiave = "ogni_base_persa",         condizione = "BASI_PERSE_DA_INIZIO", label = "Basi perse" },
+    { chiave = "fianco_retro_caricabile", condizione = "NEMICO_FIANCO_RETRO",  label = "Nemico su fianco o retro" },
+    { chiave = "unita_disordinata",       condizione = "COESIONE_DIS",         label = "Unita' disordinata" },
+    { chiave = "unita_in_rotta",          condizione = "COESIONE_ROT",         label = "Unita' in rotta" },
 }
+-- ============================================================
+-- FUNZIONE: main_moraleModifierLabel(chiave)
+-- Etichetta leggibile di un modificatore (IEF_MORALE_MODIFIERS).
+-- ============================================================
+function main_moraleModifierLabel(chiave)
+    for _, m in ipairs(IEF_MORALE_MODIFIERS) do
+        if m.chiave == chiave then return m.label or chiave end
+    end
+    return chiave
+end
 
 -- Tolleranza di contatto per il Generale aggregato (pollici)
 IEF_GENERAL_ATTACH_INCHES = 0.1

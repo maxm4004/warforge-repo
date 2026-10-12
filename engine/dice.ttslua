@@ -254,6 +254,7 @@ function engine_diceReadResults(slot, dadi, sogliaSuccesso, onComplete)
                 end
                 
                 warningToColor("Dadi: " .. table.concat(testo, ", "), Player[main_ColorByArmySlot("Army"..slot)], "Yellow", 3, true)
+                engine_dicePanelResults(slot, risultati)
                 Wait.time(function ()
                     engine_diceClearLastRoll(slot)
                 end, 2)
@@ -518,12 +519,18 @@ function engine_diceRoll_start(player)
         local key = slot == 1 and "rolledNumberArmy1" or "rolledNumberArmy2"
         if DICE_CONTEST[key] ~= nil then return end
 
+        if not engine_dicePanelIsOpen(slot) then
+            initiative_dicePanelOpen(slot)
+        end
+
         engine_diceThrowFromBag(slot, nil, function(risultati, successi)
             DICE_CONTEST[key] = risultati[1]
             TURN.completed["Army" .. slot] = true
             engine_diceCameraReturn(player, slot, faseOrigine)
             local bothRolled = DICE_CONTEST.rolledNumberArmy1 ~= nil and DICE_CONTEST.rolledNumberArmy2 ~= nil
+            local r1, r2 = DICE_CONTEST.rolledNumberArmy1, DICE_CONTEST.rolledNumberArmy2
             callHandler("dice_check")
+            initiative_dicePanelOutcome(r1, r2, DICE_CONTEST.winner)
             if bothRolled and DICE_CONTEST.winner == nil then
                 TURN.completed.Army1 = false
                 TURN.completed.Army2 = false
