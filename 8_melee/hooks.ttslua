@@ -3,9 +3,10 @@
 -- Rientro anche da MELEE_RESOLVE: l'import è idempotente.
 -- ============================================================
 function before_melee(phaseName, phase)
+    if TURN.phase ~= phaseName then main_resetTurnForPhase() end
     TURN.phase = phaseName
     TURN.completed = { Army1 = false, Army2 = false }
-
+    
     melee_importFromCharges()
     melee_pruneList()
 

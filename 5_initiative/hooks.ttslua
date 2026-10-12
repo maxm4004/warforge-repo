@@ -21,7 +21,6 @@ end
 -- FUNZIONE: after_initiative_roll()
 -- ============================================================
 function after_initiative_roll(phaseName, phase)
-
     engine_diceClearLastRoll(1)
     engine_diceClearLastRoll(2)
 end
@@ -30,8 +29,8 @@ end
 -- ============================================================
 function before_initiative_choice(phaseName, phase)
     if DICE_CONTEST and DICE_CONTEST.winner then
-           UI.setAttribute("iconWinnerArmy"..DICE_CONTEST.winner, "active", "true")
-           warning("Il tiro per assegnare l'iniziativa è stato vinto dall'esercito " .. ARMY[DICE_CONTEST.winner].name, "Yellow")
+          main_setWinnerIcon(DICE_CONTEST.winner, true)
+          warning("Il tiro per assegnare l'iniziativa è stato vinto dall'esercito " .. ARMY[DICE_CONTEST.winner].name, "Yellow")
     end
 
     TURN.phase = phaseName
@@ -41,7 +40,4 @@ end
 -- FUNZIONE: after_initiative_choice()
 -- ============================================================
 function after_initiative_choice(phaseName, phase)
-    if DICE_CONTEST and DICE_CONTEST.winner then
-        UI.setAttribute("iconWinnerArmy"..DICE_CONTEST.winner, "active", "false")
-    end
 end

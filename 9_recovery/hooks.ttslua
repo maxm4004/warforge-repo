@@ -38,5 +38,8 @@ function after_recovery(phaseName, phase)
     IEF_CHARGE_QUEUE = {}
     IEF_CHARGE_DECLARE_SESSION = {}
 
+    main_setWinnerIcon(1, false)
+    main_setWinnerIcon(2, false)
+
     printToAll("Turno " .. tostring(ENGINE.turn) .. " inizia", {r=0.4,g=0.9,b=0.4})
 end

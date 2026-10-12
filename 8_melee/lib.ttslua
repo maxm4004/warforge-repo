@@ -19,7 +19,7 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
 
     local gruppo = melee_getGroupOfUnit(unitKey)
     if not gruppo then
-        warningToColor("Questa unità non è in mischia", player, "Yellow", 5)
+        warningToColor("Questa unità non è in mischia", player, "Yellow", 5, true)
         return
     end
 
@@ -459,7 +459,7 @@ function melee_rowClick(player, value, id)
             return
         end
         local def = SUBPHASES[aperta.name]
-        warningToColor("Completa prima: " .. ((def and def.title ~= "" and def.title) or "azione in corso"), player, "Yellow", 3)
+        warningToColor("Completa prima: " .. ((def and def.title ~= "" and def.title) or "azione in corso"), player, "Yellow", 5, true)
         return
     end
 
@@ -471,7 +471,7 @@ function melee_rowClick(player, value, id)
     if ENGINE.phase ~= PHASE.MELEE then return end
 
     if not melee_groupIsPending(gruppo) then
-        warningToColor("Questa mischia è già stata risolta in questo turno", player, "Yellow", 5)
+        warningToColor("Questa mischia è già stata risolta in questo turno", player, "Yellow", 5, true)
         return
     end
 
@@ -936,7 +936,7 @@ function melee_startEndOfPhaseTests(player)
     local coda = IEF_MORALE_END_QUEUE
     IEF_MORALE_END_QUEUE = {}
     main_runMoraleQueue(coda, nil, true)
-    warningToColor("Test di morale di fine fase: tirali dal pannello, poi chiudi la fase", player, "Yellow", 5)
+    warningToColor("Test di morale di fine fase: tirali dal pannello, poi chiudi la fase", player, "Yellow", 5, true)
     return true
 end
 -- ============================================================

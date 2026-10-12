@@ -632,7 +632,7 @@ function deployment_validateDeploy(player)
     end
 
     if #fuori + #sbagliata > 0 then
-         warningToColor("Posizionare tutte le unità nell'area di DEPLOY", player, "Yellow")
+         warningToColor("Posizionare tutte le unità nell'area di DEPLOY", player, "Yellow", 5, true)
          return false
     end
 

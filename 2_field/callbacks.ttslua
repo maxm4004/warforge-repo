@@ -39,7 +39,7 @@ end
 -- ============================================================
 function field_done_army1(player, value, id)
     TURN.completed.Army1 = true
-    warningToColor("Gli Elementi 3d per Army1 sono stati creati sul tavolo", player, "Yellow")
+    warningToColor("Gli Elementi 3d per Army1 sono stati creati sul tavolo", player, "Yellow", 5, false)
     Wait.time(function()
         engine_handleAction({ type = ACTION.ARMY1_CLICK }) 
         return true
@@ -50,7 +50,7 @@ end
 -- ============================================================
 function field_done_army2(player, value, id)
     TURN.completed.Army2 = true
-    warningToColor("Gli Elementi 3d per Army2 sono stati creati sul tavolo", player, "Yellow")
+    warningToColor("Gli Elementi 3d per Army2 sono stati creati sul tavolo", player, "Yellow", 5, false)
     Wait.time(function()
         engine_handleAction({ type = ACTION.ARMY2_CLICK }) 
         return true

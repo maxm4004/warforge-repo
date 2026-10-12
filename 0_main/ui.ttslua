@@ -66,8 +66,11 @@ function getRulesetUiXml()
                   fontSize="12"
                   color="rgba(0.8,0.8,0.8,1)"
                   alignment="MiddleCenter"/>
-            <HorizontalLayout spacing="6" childAlignment="MiddleCenter">
+            <HorizontalLayout spacing="6" childAlignment="MiddleCenter" color="rgba(0,0,0,0)">
                 <Text id="army1" text="Army 1" fontSize="14" fontStyle="Bold" color="Grey" alignment="MiddleCenter"/>
+                <Button id="iconWinnerArmy1" icon="left" iconColor="rgba(1,1,1,0)" color="rgba(0,0,0,0)"/>
+                <Button icon="iniziativa" tooltip="Iniziativa" tooltipPosition="Below" iconAlignment="Left" color="rgba(0,0,0,0)"/>
+                <Button id="iconWinnerArmy2" icon="right" iconColor="rgba(1,1,1,0)" color="rgba(0,0,0,0)"/>
                 <Text id="army2" text="Army 2" fontSize="14" fontStyle="Bold" color="Grey" alignment="MiddleCenter"/>
             </HorizontalLayout>
         </VerticalLayout>
@@ -106,25 +109,15 @@ function getRulesetUiXml()
         </VerticalLayout>
     </Panel>
     <!--
-        <Panel id="panelDices"
-        rectAlignment="UpperCenter"
-        width="450" height="100"
-        color="rgba(0,0,0,0.35)"
-        offsetXY="0 -296">
-            <HorizontalLayout spacing="6" childAlignment=" MiddleCenter" height="60">
-                <Image id="diceArmy1" image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/1d6.png" preserveAspect="1"/>
-                <Image id="diceArmy2" image="https://raw.githubusercontent.com/maxm4004/Tabletop-Simulator-Lua/refs/heads/main/dice/1d6.png" preserveAspect="1"/>
-            </HorizontalLayout>
-    </Panel>
-    -->
     <Panel id="iconWinnerArmy1" rectAlignment="UpperCenter" width="50" height="30" 
-    offsetXY="-195 -233" color="rgba(0,0,0,0)" active="false">
+    offsetXY="-195 -180" color="rgba(0,0,0,0)" active="false">
         <Image outline="#000000" outlineSize="0.6" image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/crown.png" preserveAspect="1"/>
     </Panel>
     <Panel id="iconWinnerArmy2" rectAlignment="UpperCenter" width="50" height="30" 
-    offsetXY="195 -233" color="rgba(0,0,0,0)" active="false">
+    offsetXY="195 -180" color="rgba(0,0,0,0)" active="false">
         <Image outline="#000000" outlineSize="0.6" image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/crown.png" preserveAspect="1"/>
     </Panel>
+    -->
     <Panel id="iconMoveArmy1" rectAlignment="UpperCenter" width="40" height="20" offsetXY="-35 -206" color="rgba(0,0,0,0)" active="false">
         <Image outline="#000000" outlineSize="0.6" image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/arr11.png" preserveAspect="1"/>
     </Panel>

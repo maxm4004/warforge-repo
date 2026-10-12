@@ -253,7 +253,7 @@ function engine_diceReadResults(slot, dadi, sogliaSuccesso, onComplete)
                     table.insert(testo, tostring(v))
                 end
                 
-                warningToColor("Dadi: " .. table.concat(testo, ", "), Player[main_ColorByArmySlot("Army"..slot)], "Yellow", 3)
+                warningToColor("Dadi: " .. table.concat(testo, ", "), Player[main_ColorByArmySlot("Army"..slot)], "Yellow", 3, true)
                 Wait.time(function ()
                     engine_diceClearLastRoll(slot)
                 end, 2)
@@ -508,7 +508,7 @@ function engine_diceRoll_start(player)
 
     -- Test di morale in coda: si tirano solo dal pannello morale
     if main_moraleQueueCount(slot) > 0 then
-        warningToColor("Scegli il test dal pannello morale", player, "Yellow", 4)
+        warningToColor("Scegli il test dal pannello morale", player, "Yellow", 4, true)
         return
     end
   

@@ -635,14 +635,14 @@ function charge_checkTarget(player, unitKey)
         end
 
         if charge_alreadyDeclared(slot, session.attackerKey) then
-            warningToColor("Questa unità ha già dichiarato una carica questo turno", player, "Yellow", 5)
+            warningToColor("Questa unità ha già dichiarato una carica questo turno", player, "Yellow", 5, true)
             return
         end
 
         charge_drawCorridor(newHost, startLeft, startRight, endLeft, endRight)
 
         if not targetKey then
-            warningToColor(string.format(tostring(a)), player, "Yellow", 5)
+            warningToColor(string.format(tostring(a)), player, "Yellow", 5, true)
             return
         end
 
@@ -658,7 +658,7 @@ function charge_checkTarget(player, unitKey)
         if not obbligatoria then
             local myBase = charge_getUnitBases(session.attackerKey)[1]
             if not main_isInCommandRange(myBase, slot) then
-                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale, impossibile caricare", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5)
+                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale, impossibile caricare", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5, true)
                 return
             end
         end
@@ -681,9 +681,9 @@ function charge_checkTarget(player, unitKey)
 
         UI.setAttribute("btnActionCharge", "text", "Dichiara")
         setTextColor("btnActionCharge")
-        warningToColor(string.format("la %s è ad una distanza di %.2f %s dalla %s", main_decodeExtendedUnitLabel(session.attackerKey), distanzaMinima, MEASURE_UNIT, main_decodeExtendedUnitLabel(session.targetKey)), player, "Yellow", 5)
+        warningToColor(string.format("la %s è ad una distanza di %.2f %s dalla %s", main_decodeExtendedUnitLabel(session.attackerKey), distanzaMinima, MEASURE_UNIT, main_decodeExtendedUnitLabel(session.targetKey)), player, "Yellow", 5, true)
         Wait.time(function ()
-            warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5)
+            warningToColor(string.format("La %s è nel raggio di comando di un Generale", main_decodeExtendedUnitLabel(session.attackerKey)), player, "Yellow", 5, true)
         end, 5)
 
         UI.setAttribute("confirm_panel_morale", "active", "false")
@@ -789,7 +789,7 @@ function charge_declareConfirm(player, value, id, buttonConfig)
     end
 
     if charge_alreadyDeclared(slot, session.attackerKey) or IEF_CHARGE_TEST_FAILED[session.attackerKey] then
-        warningToColor("Questa unità ha già dichiarato (o tentato) una carica questo turno", player, "Yellow", 5)
+        warningToColor("Questa unità ha già dichiarato (o tentato) una carica questo turno", player, "Yellow", 5, true)
         charge_close(unitKey)
         return
     end
@@ -822,7 +822,7 @@ function charge_declareConfirm(player, value, id, buttonConfig)
         end
     end
 
-    warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(attackerKey), main_decodeExtendedUnitLabel(targetKey)), player, "Yellow", 5)
+    warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(attackerKey), main_decodeExtendedUnitLabel(targetKey)), player, "Yellow", 5, true)
     charge_close(unitKey)
     callHandler("buildUI")
     callHandler("updateCenterPanel")
@@ -861,7 +861,7 @@ function charge_moraleConfirm(player, value, id)
     end
 
     if main_moraleQueueCount(slot) > 0 then
-        warningToColor("C'è un test di morale in attesa: tiralo dal pannello morale", player, "Yellow", 5)
+        warningToColor("C'è un test di morale in attesa: tiralo dal pannello morale", player, "Yellow", 5, true)
         return
     end
 
@@ -894,11 +894,11 @@ function charge_declareTestDone(ctx, esito)
 
     if esito == MORALE_RESULT.OK then
         IEF_CHARGE_TEST_PASSED[ctx.attackerKey] = ctx.targetKey
-        warningToColor(string.format("La %s supera il test: conferma la carica", main_decodeExtendedUnitLabel(ctx.attackerKey)), player, "Yellow", 5)
+        warningToColor(string.format("La %s supera il test: conferma la carica", main_decodeExtendedUnitLabel(ctx.attackerKey)), player, "Yellow", 5, true)
         charge_checkTarget(player, ctx.unitKey)
     else
         IEF_CHARGE_TEST_FAILED[ctx.attackerKey] = true
-        warningToColor(string.format("La %s non supera il test: non carica", main_decodeExtendedUnitLabel(ctx.attackerKey)), player, "Yellow", 5)
+        warningToColor(string.format("La %s non supera il test: non carica", main_decodeExtendedUnitLabel(ctx.attackerKey)), player, "Yellow", 5, true)
         charge_close(ctx.unitKey)
         callHandler("buildUI")
         callHandler("updateCenterPanel")
@@ -1096,7 +1096,7 @@ function charge_attackRowClick(player, value, id)
     local otherSlot = charge_elementoOtherSlot(slot)
 
     if engine_subPrivate(slot) then
-        warningToColor("Completa prima l'azione in corso oppure annulla", player, "Yellow", 3)
+        warningToColor("Completa prima l'azione in corso oppure annulla", player, "Yellow", 3, true)
         return
     end
 
@@ -1115,7 +1115,7 @@ function charge_attackRowClick(player, value, id)
 
     local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2) or elemento.step == CHARGE_STEP.CLO
     if giaMossoIoStesso then
-        warningToColor(string.format("%s è in carica contro %s", main_decodeExtendedUnitLabel(myKey), main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 5)
+        warningToColor(string.format("%s è in carica contro %s", main_decodeExtendedUnitLabel(myKey), main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 5, true)
         return
     end
 
@@ -1135,7 +1135,7 @@ function charge_defenseRowClick(player, value, id)
     local otherSlot = charge_elementoOtherSlot(slot)
 
     if engine_subPrivate(slot) then
-        warningToColor("Completa prima l'azione in corso oppure annulla", player, "Yellow", 3)
+        warningToColor("Completa prima l'azione in corso oppure annulla", player, "Yellow", 5, true)
         return
     end
 
@@ -1808,7 +1808,7 @@ function charge_executeChargeMove(player, unitKey)
 
         local otherMoved = (otherSlot == 1 and elemento.movedArmy1) or (otherSlot == 2 and elemento.movedArmy2)
     if otherResponse == REACTION_TYPE.EVA and not otherMoved then
-        warningToColor(string.format("Attendi l'evasione della %s prima di caricare", main_decodeExtendedUnitLabel(charge_elementoUnitKey(elemento, otherSlot))), player, "Yellow", 5)
+        warningToColor(string.format("Attendi l'evasione della %s prima di caricare", main_decodeExtendedUnitLabel(charge_elementoUnitKey(elemento, otherSlot))), player, "Yellow", 5, true)
         return
     end
 
@@ -1836,7 +1836,7 @@ function charge_executeChargeMove(player, unitKey)
             elemento.step = CHARGE_STEP.CLO
         end
 
-        warningToColor(string.format("[CARICA] %s percorre %.2f\" (bersaglio evaso, distanza dichiarata)", main_decodeExtendedUnitLabel(unitKey), distanzaDichiarata), player, "Yellow", 5)
+        warningToColor(string.format("[CARICA] %s percorre %.2f\" (bersaglio evaso, distanza dichiarata)", main_decodeExtendedUnitLabel(unitKey), distanzaDichiarata), player, "Yellow", 5, true)
         return
     end
 
@@ -1847,7 +1847,7 @@ function charge_executeChargeMove(player, unitKey)
     local myBaseGUID = (slot == 1) and elemento.closestBaseArmy1 or elemento.closestBaseArmy2
     local otherBaseGUID = (slot == 1) and elemento.closestBaseArmy2 or elemento.closestBaseArmy1
     if not myBaseGUID or not otherBaseGUID then
-        warningToColor("[CARICA] Nessuna base di riferimento salvata per " .. main_decodeExtendedUnitLabel(unitKey), player, "Yellow", 5)
+        warningToColor("[CARICA] Nessuna base di riferimento salvata per " .. main_decodeExtendedUnitLabel(unitKey), player, "Yellow", 5, true)
         return
     end
 
@@ -1896,7 +1896,7 @@ function charge_executeChargeMove(player, unitKey)
         elemento.step = CHARGE_STEP.CLO
     end
 
-    warningToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, distanzaTotaleInch), player, "Yellow", 5)
+    warningToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, distanzaTotaleInch), player, "Yellow", 5, true)
 end
 -- ============================================================
 -- FUNZIONE: charge_moveTowardPoint(unitKey, basiObjs, targetPos, distanzaInch)

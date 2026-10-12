@@ -137,7 +137,7 @@ function charge_stopfireRoll(ctx, slot, player, rec)
     IEF_DICE_ROLL_TRY[slot] = { dadi = numDadi, soglia = soglia }
     IEF_FIRED[defenderKey] = true
 
-    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", defenderKey, numDadi, soglia), player, "Yellow", 7)
+    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", defenderKey, numDadi, soglia), player, "Yellow", 5, true)
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         Wait.time(function()
@@ -301,7 +301,7 @@ function charge_reactionChoose(ctx, slot, player, rec, value)
         if not charge_isMandatoryCharge(myTipo, myCapabilities, otherTipo) then
             local myBase = charge_getUnitBases(myKey)[1]
             if not main_isInCommandRange(myBase, slot) then
-                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale,\n non è possibile contro caricare", main_decodeExtendedUnitLabel(myKey)), player, "Yellow", 5)
+                warningToColor(string.format("La %s è fuori dal raggio di comando di un Generale,\n non è possibile contro caricare", main_decodeExtendedUnitLabel(myKey)), player, "Yellow", 5, true)
                 return
             end
         end
@@ -325,7 +325,7 @@ function charge_reactionChoose(ctx, slot, player, rec, value)
         local aperta = engine_subShared()
         if aperta then
             local def = SUBPHASES[aperta.name]
-            warningToColor("Completa prima: " .. ((def and def.title ~= "" and def.title) or "azione in corso"), player, "Yellow", 3)
+            warningToColor("Completa prima: " .. ((def and def.title ~= "" and def.title) or "azione in corso"), player, "Yellow", 5, true)
             return
         end
         charge_elementoSetResponse(elemento, slot, REACTION_TYPE.TIR)

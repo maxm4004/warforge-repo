@@ -252,8 +252,8 @@ function main_restart()
     IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
     engine_subInitState()
     
-    UI.setAttribute("iconWinnerArmy1", "active", "false")
-    UI.setAttribute("iconWinnerArmy2", "active", "false")
+    main_setWinnerIcon(1, false)
+    main_setWinnerIcon(2, false)
 
     UI.setAttribute("iconMoveArmy1", "active", "false")
     UI.setAttribute("iconMoveArmy2", "active", "false")
@@ -314,7 +314,7 @@ function main_SlotByColor(color)
     return nil
 end
 -- ============================================================
--- FUNZIONE: getArmySlotByColor()
+-- FUNZIONE: getArmyByColor()
 -- ============================================================
 function main_ArmyByColor(color)
     if color == COLOR.ARMY1 then return "Army1" end
@@ -491,14 +491,14 @@ function main_canUseButton(slot, player, value, id, button, phase)
 
         if slot == BUTTONS.BTN_ARMY1 then
             if not player or player.color ~= COLOR.ARMY1 then
-                warningToColor("Non è possibile usare questo pulsante", player, "Yellow")
+                warningToColor("Non è possibile usare questo pulsante", player, "Yellow", 5, false)
                 return false
             end
         end
 
         if slot == BUTTONS.BTN_ARMY2 then
             if not player or player.color ~= COLOR.ARMY2 then
-                warningToColor("Non è possibile usare questo pulsante", player, "Yellow")
+                warningToColor("Non è possibile usare questo pulsante", player, "Yellow", 5, false)
                 return false
             end
         end
@@ -521,7 +521,7 @@ function main_canUseButton(slot, player, value, id, button, phase)
                 return false
             end
             if not player or player.color ~= activeColor then
-                warningToColor("Non è possibile usare questo pulsante", player, "Yellow")
+                warningToColor("Non è possibile usare questo pulsante", player, "Yellow", 5, false)
                 return false
             end
         end
@@ -630,20 +630,6 @@ function main_data_onLoaded(errors)
 
     callHandler("ief_data_ready")
 end
--- ============================================================
--- FUNZIONE: ief_loadButtonBar()
--- ============================================================
--- function main_loadButtonBar(callback)
---     WebRequest.get(IEF_URL_BUTTONBAR, function(request)
---         if request.is_error then
---             printToAll("[IEF] Errore download buttonbar.json", {r=1,g=0.3,b=0.3})
---             if callback then callback(false) end
---             return
---         end
---         local ok = callHandler("engine_buttonBarLoadJson", request.text)
---         if callback then callback(ok) end
---     end)
--- end
 -- ============================================================
 -- FUNZIONE: ief_loadArmy(nome, callback)
 -- Carica on-demand l'esercito richiesto (cache in IEF_DATA.armies).
@@ -2013,7 +1999,7 @@ function main_createBaseButtons(obj, phase, unit)
     local azioniUnita = {
         [PHASE.DEPLOY_SPAWN]     = {tidy, info, form, move},
         [PHASE.DEPLOY_POSITION]  = {tidy, form, move},
-        [PHASE.CHARGE_DECLARE]   = {tidy, info, charge},
+        [PHASE.CHARGE_DECLARE]   = {tidy, info, form, charge},
         [PHASE.CHARGE_REACT]     = {tidy, info},
          [PHASE.CHARGE_AUTO]      = {tidy, info},
         [PHASE.MOVE]             = {tidy, info, form, move},
@@ -2130,7 +2116,7 @@ function moveGeneral(obj, unit, pos, rot, w, h, color, textColor)
         label = "MOVIMENTO",
         position = pos,
         rotation = rot,
-        width = w + 20, 
+        width = w + 50, 
         height = h, 
         font_size = 70,
         color = color,
@@ -2148,7 +2134,7 @@ function move(obj, unit, pos, rot, w, h, color, textColor)
         label = "MOVIMENTO",
         position = pos,
         rotation = rot,
-        width = w + 20, 
+        width = w + 50, 
         height = h, 
         font_size = 70,
         color = color,
@@ -2166,7 +2152,7 @@ function form(obj, unit, pos, rot, w, h, color, textColor)
         label = "FORMAZIONE",
         position = pos,
         rotation = rot,
-        width = w + 20, 
+        width = w + 50, 
         height = h, 
         font_size = 70,
         color = color,
@@ -2655,4 +2641,13 @@ function main_applyLosses(unitKey, hits)
         main_decodeExtendedUnitLabel(unitKey), hits, n, colpiPersi), {r=1,g=0.4,b=0.4})
 
     return n, colpiPersi
+end
+-- ============================================================
+-- FUNZIONE: main_setWinnerIcon(slot, visibile)
+-- Mostra/nasconde la freccia del vincitore dell'iniziativa senza
+-- disattivarla (dentro un HorizontalLayout un elemento inattivo
+-- sposta gli altri): rende trasparente solo l'icona.
+-- ============================================================
+function main_setWinnerIcon(slot, visibile)
+    UI.setAttribute("iconWinnerArmy" .. slot, "iconColor", visibile and "White" or "rgba(1,1,1,0)")
 end

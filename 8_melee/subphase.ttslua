@@ -91,7 +91,7 @@ function melee_resolveRoll(ctx, slot, player, rec)
     local groupId = ctx.groupId
     local dadi, soglia = ctx["dadi" .. slot], ctx["soglia" .. slot]
     IEF_DICE_ROLL_TRY[slot] = { dadi = dadi, soglia = soglia }
-    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", ARMY[slot].name, dadi, soglia), player, "Yellow", 7)
+    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", ARMY[slot].name, dadi, soglia), player, "Yellow", 5, true)
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         Wait.time(function()

@@ -10,7 +10,7 @@ function sitting_btn_all(player, value, id, buttonConfig)
             player.changeColor(COLOR.ARMY1)
             colorArmy1 = COLOR.ARMY1
         else
-           warningToColor("Colore già in uso", player, "Yellow")
+           warningToColor("Colore già in uso", player, "Yellow", 5, false)
         end
     end
 
@@ -20,7 +20,7 @@ function sitting_btn_all(player, value, id, buttonConfig)
             player.changeColor(COLOR.ARMY2)
             colorArmy2 = COLOR.ARMY2
         else
-            warningToColor("Colore già in uso", player, "Yellow")
+            warningToColor("Colore già in uso", player, "Yellow", 5, false)
         end
     end
 

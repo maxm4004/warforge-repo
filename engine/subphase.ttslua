@@ -319,7 +319,7 @@ function engine_subRoll(player, slot)
     if step and step.onRoll and engine_subActors(rec)[slot] then
         callHandler(step.onRoll, rec.ctx, slot, player, rec)
     else
-        warningToColor("Non è il momento di tirare i dadi", player, "Yellow", 3)
+        warningToColor("Non è il momento di tirare i dadi", player, "Yellow", 5, true)
     end
     return true
 end

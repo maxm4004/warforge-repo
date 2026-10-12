@@ -606,7 +606,7 @@ end
 function main_moraleBlocksPhase(player, slot)
     local n = main_moraleQueueCount(slot)
     if n == 0 then return false end
-    warningToColor(string.format("%d test di morale da tirare: usa il pannello morale", n), player, "Yellow", 4)
+    warningToColor(string.format("%d test di morale da tirare: usa il pannello morale", n), player, "Yellow", 5, true)
     return true
 end
 -- ============================================================
@@ -737,7 +737,7 @@ function main_moraleRowClick(player, value, id)
         if aperta.name == "MORALE_TEST" and aperta.ctx.reqId == req.id then
             return
         else
-            warningToColor("Completa prima il test in corso", player, "Yellow", 3)
+            warningToColor("Completa prima il test in corso", player, "Yellow", 5, true)
         end
         return
     end

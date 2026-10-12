@@ -10,7 +10,7 @@ function melee_phase()
             render = "2BtnClickMeleeList",
             subphases = { "MELEE_RESOLVE" },
             enforceOwnership = true,
-            inputMode = "OWNER",
+            inputMode = "INITIATIVE",
             buttons = {
                 BTN_ARMY1 = { action="ARMY1_CLICK", label="Mischie Completate", textColor="White", color="Red",   callback="melee_btn_army1" },
                 BTN_ARMY2 = { action="ARMY2_CLICK", label="Mischie Completate", textColor="White", color="Green", callback="melee_btn_army2" },

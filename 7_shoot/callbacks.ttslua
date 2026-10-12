@@ -44,7 +44,7 @@ end
 -- ============================================================
 function shoot_startEndOfPhaseTests(player)
     if IEF_SHOOT_END_TESTS_RUNNING then
-        warningToColor("Test di morale di fine fase in corso", player, "Yellow", 5)
+        warningToColor("Test di morale di fine fase in corso", player, "Yellow", 5, true)
         return true
     end
     if #IEF_MORALE_END_QUEUE == 0 then return false end
@@ -52,7 +52,7 @@ function shoot_startEndOfPhaseTests(player)
     local coda = IEF_MORALE_END_QUEUE
     IEF_MORALE_END_QUEUE = {}
     IEF_SHOOT_END_TESTS_RUNNING = true
-    warningToColor("Test di morale di fine fase: " .. #coda, player, "Yellow", 5)
+    warningToColor("Test di morale di fine fase: " .. #coda, player, "Yellow", 5, true)
 
     main_runMoraleQueue(coda, function()
         IEF_SHOOT_END_TESTS_RUNNING = false

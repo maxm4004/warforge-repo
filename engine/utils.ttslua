@@ -47,25 +47,32 @@ end
 -- FUNZIONE: warningToColor()
 -- ============================================================
 
-messages = nil
-function warningToColor(warning, player, textColor, second)
+IEF_MSG_GEN = 0
+function warningToColor(warning, player, textColor, second, inConsole)
 
     local color = textColor == "Yellow" and "#FFD833" or textColor
     messages = warning
 
     if player then
+        IEF_MSG_GEN = IEF_MSG_GEN + 1
+        local gen = IEF_MSG_GEN
+
         UI.setAttribute("playerGameMessage", "Color", color)
         UI.setAttribute("playerGameMessage", "text", warning)
         UI.setAttribute("playerGameMessage", "active", "true")
         UI.setAttribute("playerGameMessage", "visibility", player.color)
     
         Wait.time(function()
-            UI.setAttribute("playerGameMessage", "active", "false")
+            engine_hideGameMessage(gen)
         end, not second and 5 or second)
+
+        if not inConsole then
+            return
+        end
 
         if player.seated then
             Wait.time(function () 
-                printToColor("[" .. ENGINE.phase .."] " .. warning, player.color, {1, 1, 1})
+                printToColor("[LOG] " .. warning, player.color, {1, 1, 1})
             end, 2)
         end
     end
@@ -74,12 +81,14 @@ end
 -- FUNZIONE: warningListToColor()
 -- ============================================================
 IEF_WARNING_ACTIVE = false
-
 function warningListToColor(warnings, player, textColor, second)
 
     local color = textColor == "Yellow" and "#FFD833" or textColor
 
     if player then
+        IEF_MSG_GEN = IEF_MSG_GEN + 1
+        local gen = IEF_MSG_GEN
+
         UI.setAttribute("playerGameMessage", "Color", color)
         UI.setAttribute("playerGameMessage", "active", "true")
         UI.setAttribute("playerGameMessage", "visibility", player.color)
@@ -88,11 +97,11 @@ function warningListToColor(warnings, player, textColor, second)
         local a = true
 
         local function step(i)
-            if not IEF_WARNING_ACTIVE then return end
+            if not IEF_WARNING_ACTIVE or gen ~= IEF_MSG_GEN then return end
 
             UI.setAttribute("playerGameMessage", "text", warnings[i])
             if a then
-                printToColor("[" .. ENGINE.phase .. "] " .. warnings[i], player.color, {1, 1, 1})
+                printToColor("[LOG] " .. warnings[i], player.color, {1, 1, 1})
             end
 
             local nextI = i + 1
@@ -107,16 +116,18 @@ function warningListToColor(warnings, player, textColor, second)
     end
 end
 -- ============================================================
--- FUNZIONE: warningToColor()
+-- FUNZIONE: warning()
 -- ============================================================
 function warning(warning, color)
+        IEF_MSG_GEN = IEF_MSG_GEN + 1
+        local gen = IEF_MSG_GEN
  
         UI.setAttribute("playerGameMessage", "Color", color)
         UI.setAttribute("playerGameMessage", "text", warning)
         UI.setAttribute("playerGameMessage", "active", "true")
    
     Wait.time(function()
-        UI.setAttribute("playerGameMessage", "active", "false")
+        engine_hideGameMessage(gen)
     end, 5)
 end
 -- ============================================================
@@ -134,4 +145,16 @@ end
 function getVersion()
     return VERSION
 end
-
+-- ============================================================
+-- FUNZIONE: engine_hideGameMessage(gen)
+-- ============================================================
+function engine_hideGameMessage(gen)
+    if gen ~= IEF_MSG_GEN then return end
+    if UI.loading then
+        Wait.condition(function()
+            Wait.frames(function() engine_hideGameMessage(gen) end, 1)
+        end, function() return not UI.loading end, 10)
+        return
+    end
+    UI.setAttribute("playerGameMessage", "active", "false")
+end

@@ -23,19 +23,25 @@ function assign_initiative_btn_all(player, value, id, buttonConfig)
     local clicked = ARMY[main_getArmyByButton(id)]
     
     if clicker and winner and clicker.name ~= winner.name then
-        warningToColor(clicker.name.." non può usare questo pulsante", player, "Yellow", 5)
-        return
+        warningToColor(clicker.name.." non può usare questo pulsante", player, "Yellow", 5, true)
+        return false
     else
         DICE_CONTEST.initiative = clicked
         callHandler("resetTurnForPhase")
-        local army = callHandler("getArmySlotByColor", clicked.color)
-
+        local army = callHandler("getArmyByColor", clicked.color)
+ 
         TURN.firstArmy = army
         TURN.activeArmy = army
 
         TURN.completed.Army1 = false
         TURN.completed.Army2 = false
-        warning("Iniziativa assegnata a "..clicked.name, player.color)
+
+        if(clicker.name ~= clicked.name) then
+            main_setWinnerIcon(main_SlotByColor(clicker.color), false)      
+            main_setWinnerIcon(main_SlotByColor(clicked.color), true)      
+        end
+
+        warning("Iniziativa assegnata a "..clicked.name, "Yellow")
     end
 end
 
