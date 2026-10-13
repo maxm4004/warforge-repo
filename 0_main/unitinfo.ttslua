@@ -191,31 +191,32 @@ end
 
 -- ============================================================
 -- FUNZIONE: main_unitInfoRecoveryRows(unitKey)
--- Regolamento Fase 6: DISORDINATA entro il raggio di comando;
--- ROTTA solo con Generale aggregato e non andata in rotta in
--- questo turno.
+-- Stesso criterio di recovery_isEligible (9_recovery): DISORDINATA
+-- con almeno una base nel raggio di comando; ROTTA solo con
+-- Generale aggregato e non andata in rotta in questo turno; un
+-- solo tentativo per fase (IEF_RECOVERY_DONE).
 -- ============================================================
 function main_unitInfoRecoveryRows(unitKey)
     local coesione = main_getCohesion(unitKey)
     local slot = main_unitSlot(unitKey)
-    local base = main_getUnitBases(unitKey)[1]
 
     if coesione == COHESION.SAL then
         return { { "Recupero", "non serve (salda)" } }
     end
+    if IEF_RECOVERY_DONE and IEF_RECOVERY_DONE[unitKey] then
+        return { { "Recupero", "gia' tentato" } }
+    end
 
-    local puo, motivo
+    local puo = slot and recovery_isEligible(unitKey, slot) or false
+    local motivo
     if coesione == COHESION.DIS then
-        puo = slot and main_isInCommandRange(base, slot)
         motivo = puo and "in raggio di comando" or "fuori raggio di comando"
+    elseif main_isRoutedThisTurn(unitKey) then
+        motivo = "in rotta da questo turno"
+    elseif not main_getAttachedGeneral(unitKey) then
+        motivo = "senza Generale aggregato"
     else
-        if main_isRoutedThisTurn(unitKey) then
-            puo, motivo = false, "in rotta da questo turno"
-        elseif not main_getAttachedGeneral(unitKey) then
-            puo, motivo = false, "senza Generale aggregato"
-        else
-            puo, motivo = true, "Generale aggregato"
-        end
+        motivo = "Generale aggregato"
     end
 
     local righe = { { "Puo' tentare il recupero", uiSiNo(puo) }, { "  Motivo", motivo } }
@@ -225,7 +226,6 @@ function main_unitInfoRecoveryRows(unitKey)
     end
     return righe
 end
-
 -- ============================================================
 -- FUNZIONE: main_unitInfoPhaseRows(unitKey)
 -- Sezione della fase corrente.
