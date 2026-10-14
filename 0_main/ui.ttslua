@@ -223,5 +223,5 @@ function getRulesetUiXml()
             onClick="charge_moraleCancel"/>
 </HorizontalLayout>
 </Panel>
-        ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2 .. moraleQueue1 .. moraleQueue2 .. main_unitInfoPanelsXml()
+            ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2 .. moraleQueue1 .. moraleQueue2 .. main_getRoutListPanelXml(1) .. main_getRoutListPanelXml(2) .. main_unitInfoPanelsXml()
 end

@@ -762,66 +762,15 @@ function melee_removeMarkedLosses()
 end
 
 -- ============================================================
--- FUNZIONE: melee_routMove(unitKey)
--- Movimento di rotta immediato, come l'evasione: cambio fronte
--- di 180° e movimento in linea retta per tutta la propria mossa.
--- NON ancora: blocco da nemici/terreno intransitabile
--- (distruzione) e disordine delle amiche interpenetrate.
--- ============================================================
-function melee_routMove(unitKey)
-    local bases = main_getUnitBases(unitKey)
-    if #bases == 0 then return end
-
-    local meta = main_getUnitMeta(bases[1])
-    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
-    local moveInches = (ut and ut.move_inches) or 0
-
-    local oldFwd = bases[1].getTransformForward()
-    local fleeXZ = Vector(-oldFwd.x, 0, -oldFwd.z):normalized()
-    local delta = moveInches * INCH_TO_TTS
-
-    melee_infoCloseUnit(unitKey)
-
-    for _, obj in ipairs(bases) do
-        local rot = obj.getRotation()
-        obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
-        local p = obj.getPosition()
-        obj.setPosition(Vector(p.x + fleeXZ.x * delta, p.y, p.z + fleeXZ.z * delta))
-    end
-
-    printToAll(string.format("[ROTTA] %s fugge di %s\"", main_decodeExtendedUnitLabel(unitKey), tostring(moveInches)), {r=1,g=0.3,b=0.3})
-end
--- ============================================================
 -- FUNZIONE: melee_onRout(cur, unitKey, slot)
--- Unità appena andata in ROTTA: situazioni FRIEND_ROUT della
--- tabella (amiche entro il raggio, valutate prima della fuga),
--- poi movimento di rotta immediato.
+-- Unità appena andata in ROTTA in mischia: conseguenze comuni
+-- (main_onRout: test delle amiche, elenco rotte); i test nati
+-- qui passano da melee_queueTest.
 -- ============================================================
 function melee_onRout(cur, unitKey, slot)
-    local bases = main_getUnitBases(unitKey)
-    local meta = bases[1] and main_getUnitMeta(bases[1])
-
-    local situazioni = main_moraleSituationsFor("FRIEND_ROUT", {
-        tipoOrigine = meta and meta.unitType,
-        origineGiaInFuga = false,
-    })
-
-    for _, s in ipairs(situazioni) do
-        if s.def.testa == "AMICHE_IN_RAGGIO" then
-            for altraKey, altreBasi in pairs(main_unitsOfSlot(slot)) do
-                if altraKey ~= unitKey
-                   and not main_isGeneralKey(altraKey)
-                   and main_getCohesion(altraKey) ~= COHESION.ROT then
-                    local d = main_unitsDistanceInches(bases, altreBasi)
-                    if d and d <= (s.def.raggio or 0) then
-                        melee_queueTest(cur, { key = altraKey, slot = slot, motivo = s.nome, effetto = s.def.effetto }, s.def.quando)
-                    end
-                end
-            end
-        end
-    end
-
-    melee_routMove(unitKey)
+    main_onRout(unitKey, slot, function(item, quando)
+        melee_queueTest(cur, item, quando)
+    end)
 end
 -- ============================================================
 -- FUNZIONE: melee_queueTest(ctx, item, quando)

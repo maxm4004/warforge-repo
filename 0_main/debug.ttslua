@@ -523,6 +523,8 @@ function debug_reset(fase)
 
     IEF_CHARGE_QUEUE = {}
     IEF_MORALE_ROLL_PENDING = { [1] = {}, [2] = {} }
+    IEF_ROUT_PENDING = { [1] = {}, [2] = {} }
+    
     engine_subInitState()
 
     engine_dicePanelClose(1)

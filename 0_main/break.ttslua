@@ -1,0 +1,573 @@
+-- ============================================================
+-- WARFORGE IEF — 0_main/rout.ttslua
+-- Rotta: regole di interpenetrazione e geometria del percorso.
+-- Solo funzioni di calcolo: nessun oggetto viene mosso.
+-- Distanze in pollici; rettangoli delle basi con le dimensioni
+-- dichiarate (unit_types) e gli assi nativi TTS, mai getBounds().
+-- ============================================================
+
+-- ============================================================
+-- TABELLA: IEF_INTERPENETRATION
+-- Regolamento, "Muovere attraverso unità": tipi che possono
+-- attraversare unità amiche, o esserne attraversati, senza
+-- disordinarle e senza esserne disordinati. "TUTTI" = ogni tipo.
+-- ============================================================
+IEF_INTERPENETRATION = {
+    FL = { attraversa = "TUTTI",               attraversataDa = "TUTTI" },
+    CL = { attraversa = { "KN", "CP", "CL" }, attraversataDa = { "KN", "CP", "CL" } },
+}
+
+-- ============================================================
+-- TABELLA: IEF_ROUT_BLOCKING_TERRAIN
+-- Categorie di terreno che fermano la rotta ("terreno
+-- intransitabile"), solo se per il tipo dell'unità il movimento
+-- in terrain.json è "NO". Le penalità di rotto/difficile si
+-- ignorano in rotta.
+-- ============================================================
+IEF_ROUT_BLOCKING_TERRAIN = { INTRANSITABILE = true }
+
+IEF_ROUT_TOLERANCE_INCHES    = 0.05   -- basi solo a contatto: non è sovrapposizione
+IEF_ROUT_TERRAIN_STEP_INCHES = 0.25   -- passo di campionamento del terreno
+
+-- ============================================================
+-- FUNZIONE: main_routTipoIn(lista, tipo)
+-- ============================================================
+function main_routTipoIn(lista, tipo)
+    if lista == "TUTTI" then return true end
+    return type(lista) == "table" and main_listHas(lista, tipo)
+end
+
+-- ============================================================
+-- FUNZIONE: main_canInterpenetrate(tipoCheMuove, tipoAttraversato)
+-- True se chi muove può attraversare l'altra unità amica senza
+-- disordinarla (IEF_INTERPENETRATION).
+-- ============================================================
+function main_canInterpenetrate(tipoCheMuove, tipoAttraversato)
+    local a = IEF_INTERPENETRATION[tipoCheMuove]
+    if a and main_routTipoIn(a.attraversa, tipoAttraversato) then return true end
+    local b = IEF_INTERPENETRATION[tipoAttraversato]
+    if b and main_routTipoIn(b.attraversataDa, tipoCheMuove) then return true end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: main_baseRect(obj)
+-- Rettangolo della base sul piano XZ: centro, assi (fronte e
+-- destra, normalizzati) e semidimensioni in unità TTS.
+-- ============================================================
+function main_baseRect(obj)
+    local meta = main_getUnitMeta(obj)
+    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+    local widthCm = (ut and ut.base_width_cm) or 4
+    local depthCm = (ut and ut.base_depth_cm) or 3
+
+    local p = obj.getPosition()
+    local f = obj.getTransformForward()
+    local r = obj.getTransformRight()
+    local fXZ = Vector(f.x, 0, f.z):normalized()
+    local rXZ = Vector(r.x, 0, r.z):normalized()
+
+    return {
+        x = p.x, z = p.z,
+        fx = fXZ.x, fz = fXZ.z,
+        rx = rXZ.x, rz = rXZ.z,
+        hw = widthCm * CM_TO_TTS / 2,
+        hd = depthCm * CM_TO_TTS / 2,
+        obj = obj,
+    }
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitRects(unitKey)
+-- ============================================================
+function main_unitRects(unitKey)
+    local out = {}
+    for _, b in ipairs(main_getUnitBases(unitKey)) do
+        table.insert(out, main_baseRect(b))
+    end
+    return out
+end
+
+-- ============================================================
+-- FUNZIONE: main_rectSweepInterval(a, dirX, dirZ, b, tol)
+-- Il rettangolo a trasla lungo (dirX, dirZ) (versore XZ) di t
+-- unità TTS; b è fermo. Ritorna l'intervallo (t1, t2) in cui i
+-- due si sovrappongono (assi separatori dei due rettangoli),
+-- oppure nil. tol riduce la sovrapposizione: basi solo a
+-- contatto non si sovrappongono.
+-- ============================================================
+function main_rectSweepInterval(a, dirX, dirZ, b, tol)
+    local tMin, tMax = -math.huge, math.huge
+    local assi = { { a.fx, a.fz }, { a.rx, a.rz }, { b.fx, b.fz }, { b.rx, b.rz } }
+
+    for _, n in ipairs(assi) do
+        local nx, nz = n[1], n[2]
+        local ra = a.hw * math.abs(a.rx * nx + a.rz * nz) + a.hd * math.abs(a.fx * nx + a.fz * nz)
+        local rb = b.hw * math.abs(b.rx * nx + b.rz * nz) + b.hd * math.abs(b.fx * nx + b.fz * nz)
+        local R = ra + rb - tol
+        if R <= 0 then return nil end
+
+        local s0 = (b.x - a.x) * nx + (b.z - a.z) * nz
+        local v = dirX * nx + dirZ * nz
+        if math.abs(v) < 1e-6 then
+            if math.abs(s0) >= R then return nil end
+        else
+            local t1, t2 = (s0 - R) / v, (s0 + R) / v
+            if t1 > t2 then t1, t2 = t2, t1 end
+            if t1 > tMin then tMin = t1 end
+            if t2 < tMax then tMax = t2 end
+            if tMin >= tMax then return nil end
+        end
+    end
+    return tMin, tMax
+end
+
+-- ============================================================
+-- FUNZIONE: main_routSweep(unitKey, rects, dirX, dirZ, distInches)
+-- Basi di altre unità (di entrambi gli eserciti) toccate dai
+-- rettangoli rects che traslano lungo (dirX, dirZ) da 0 a
+-- distInches. Una voce per ogni coppia base-base:
+-- { key, slot, tipo, nemico, generale, guid, inizio, fine }
+-- inizio/fine in pollici, non tagliati (inizio < 0 = già
+-- sovrapposte alla partenza).
+-- ignoraDietro: salta le basi già sovrapposte alla partenza che
+-- stanno dietro (il movimento le allontana, es. il nemico della
+-- mischia dopo il cambio di fronte).
+-- ============================================================
+function main_routSweep(unitKey, rects, dirX, dirZ, distInches, ignoraDietro)
+    local mySlot = main_unitSlot(unitKey)
+    local tol = IEF_ROUT_TOLERANCE_INCHES * INCH_TO_TTS
+    local distTTS = distInches * INCH_TO_TTS
+    local out = {}
+
+    for slot = 1, 2 do
+        for key, basi in pairs(main_unitsOfSlot(slot)) do
+            if key ~= unitKey then
+                local meta = main_getUnitMeta(basi[1])
+                for _, b in ipairs(basi) do
+                    local rb = main_baseRect(b)
+                    for _, ra in ipairs(rects) do
+                        local t1, t2 = main_rectSweepInterval(ra, dirX, dirZ, rb, tol)
+                        local dietro = ignoraDietro and t1 and t1 < 0
+                            and ((rb.x - ra.x) * dirX + (rb.z - ra.z) * dirZ) <= 0
+                        if t1 and t2 > 0 and t1 < distTTS and not dietro then
+                            table.insert(out, {
+                                key = key,
+                                slot = slot,
+                                tipo = meta and meta.unitType,
+                                nemico = (slot ~= mySlot),
+                                generale = main_isGeneralKey(key),
+                                guid = b.getGUID(),
+                                inizio = t1 / INCH_TO_TTS,
+                                fine = t2 / INCH_TO_TTS,
+                            })
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- ============================================================
+-- FUNZIONE: main_terrainAtPoint(x, y, z)
+-- Categoria di terreno nel punto: raggio verso il basso, tag
+-- dei pezzi di terreno (stesso criterio di main_getUnitTerrain).
+-- ============================================================
+function main_terrainAtPoint(x, y, z)
+    local peggiore, gravita = "APERTO", 0
+    local mappa = IEF_FIELD_TIPO_TO_CATEGORIA or {}
+
+    local hits = Physics.cast({
+        origin       = Vector(x, y + 5, z),
+        direction    = Vector(0, -1, 0),
+        type         = 1,
+        max_distance = 15,
+    })
+    for _, hit in ipairs(hits) do
+        local o = hit.hit_object
+        if o then
+            for _, tag in ipairs(o.getTags()) do
+                local cat = mappa[tag] or (IEF_TERRAIN_SEVERITY[tag] and tag)
+                if cat and (IEF_TERRAIN_SEVERITY[cat] or 0) > gravita then
+                    peggiore, gravita = cat, IEF_TERRAIN_SEVERITY[cat]
+                end
+            end
+        end
+    end
+    return peggiore
+end
+
+-- ============================================================
+-- FUNZIONE: main_routTerrainBlocks(categoria, tipo)
+-- ============================================================
+function main_routTerrainBlocks(categoria, tipo)
+    if not IEF_ROUT_BLOCKING_TERRAIN[categoria] then return false end
+    local eff = main_getTerrainEffect(categoria, tipo)
+    return eff ~= nil and eff.movement == "NO"
+end
+
+-- ============================================================
+-- FUNZIONE: main_routTerrainFirstBlock(rects, tipo, dirX, dirZ, distInches)
+-- Prima distanza (pollici, campionata ogni
+-- IEF_ROUT_TERRAIN_STEP_INCHES) a cui centro o angoli di una
+-- base finiscono su terreno che ferma la rotta; nil se libero.
+-- ============================================================
+function main_routTerrainFirstBlock(rects, tipo, dirX, dirZ, distInches)
+    if #rects == 0 then return nil end
+    local tol = IEF_ROUT_TOLERANCE_INCHES * INCH_TO_TTS
+    local step = IEF_ROUT_TERRAIN_STEP_INCHES
+    local y = rects[1].obj.getPosition().y
+    local n = math.ceil(distInches / step)
+
+    for i = 0, n do
+        local t = math.min(i * step, distInches)
+        local off = t * INCH_TO_TTS
+        for _, r in ipairs(rects) do
+            local hw, hd = r.hw - tol, r.hd - tol
+            local punti = { { 0, 0 }, { hw, hd }, { hw, -hd }, { -hw, hd }, { -hw, -hd } }
+            for _, p in ipairs(punti) do
+                local px = r.x + r.rx * p[1] + r.fx * p[2] + dirX * off
+                local pz = r.z + r.rz * p[1] + r.fz * p[2] + dirZ * off
+                if main_routTerrainBlocks(main_terrainAtPoint(px, y, pz), tipo) then
+                    return t
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_routCheckStep(unitKey, distInches)
+-- Un passo in avanti di rotta dalla posizione attuale, lungo il
+-- fronte dell'unità. Ritorna:
+-- { avanza   = pollici percorribili,
+--   nemico   = unitKey del primo nemico incontrato (= distrutta) o nil,
+--   terreno  = true se il passo si ferma al bordo di terreno
+--              che blocca,
+--   amiche   = { [unitKey] = tipo } amiche (non Generali) toccate
+--              nel tratto percorso }
+-- ============================================================
+function main_routCheckStep(unitKey, distInches)
+    local basi = main_getUnitBases(unitKey)
+    local res = { avanza = 0, amiche = {} }
+    if #basi == 0 or distInches <= 0 then return res end
+
+    local meta = main_getUnitMeta(basi[1])
+    local tipo = meta and meta.unitType
+    local f = basi[1].getTransformForward()
+    local dir = Vector(f.x, 0, f.z):normalized()
+    local rects = main_unitRects(unitKey)
+
+    local avanza = distInches
+
+    local tTerreno = main_routTerrainFirstBlock(rects, tipo, dir.x, dir.z, distInches)
+    if tTerreno then
+        avanza = math.max(0, tTerreno - IEF_ROUT_TERRAIN_STEP_INCHES)
+        res.terreno = true
+    end
+
+    local contatti = main_routSweep(unitKey, rects, dir.x, dir.z, distInches, true)
+
+    local primoNemico, tNemico = nil, math.huge
+    for _, c in ipairs(contatti) do
+        if c.nemico and not c.generale and c.inizio < tNemico then
+            primoNemico, tNemico = c.key, c.inizio
+        end
+    end
+    if primoNemico and (not tTerreno or tNemico <= tTerreno) then
+        res.nemico = primoNemico
+        res.terreno = nil
+        avanza = math.max(0, tNemico)
+    end
+
+    for _, c in ipairs(contatti) do
+        if not c.nemico and not c.generale and c.inizio < avanza then
+            res.amiche[c.key] = c.tipo
+        end
+    end
+
+    res.avanza = avanza
+    return res
+end
+
+-- ============================================================
+-- FUNZIONE: main_routSettle(unitKey)
+-- Fine della mossa di rotta: se l'unità è sopra un'amica (non
+-- Generale) arretra lungo il fronte fino al contatto, anche più
+-- volte se le amiche sono vicine. Ritorna:
+-- { arretra   = pollici di arretramento,
+--   davanti   = { [unitKey] = true } amiche davanti a cui si ferma
+--               (non attraversate, quindi non disordinate),
+--   generali  = { [unitKey] = true } Generali sotto la posizione
+--               finale (da spostare) }
+-- ============================================================
+function main_routSettle(unitKey)
+    local basi = main_getUnitBases(unitKey)
+    local res = { arretra = 0, davanti = {}, generali = {} }
+    if #basi == 0 then return res end
+
+    local f = basi[1].getTransformForward()
+    local back = Vector(-f.x, 0, -f.z):normalized()
+    local rects = main_unitRects(unitKey)
+    local meta = main_getUnitMeta(basi[1])
+    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+    local maxBack = (ut and ut.move_inches) or 12
+
+    local contatti = main_routSweep(unitKey, rects, back.x, back.z, maxBack, false)
+    local margine = IEF_ROUT_TOLERANCE_INCHES / 2
+
+    local arretra = 0
+    for _ = 1, 20 do
+        local nuovo = arretra
+        for _, c in ipairs(contatti) do
+            if not c.nemico and not c.generale and c.inizio < arretra and c.fine > arretra then
+                res.davanti[c.key] = true
+                if c.fine + margine > nuovo then nuovo = c.fine + margine end
+            end
+        end
+        if nuovo == arretra then break end
+        arretra = nuovo
+    end
+    res.arretra = arretra
+
+    for _, c in ipairs(contatti) do
+        if c.generale and c.inizio < arretra and c.fine > arretra then
+            res.generali[c.key] = true
+        end
+    end
+    return res
+end
+
+-- ============================================================
+-- FUNZIONE: debug_routCheck(unitKey, distInches)
+-- Solo test: /execute debug_routCheck("CHIAVE_UNITA", 6)
+-- Stampa il controllo del passo e della fine rotta senza muovere.
+-- ============================================================
+function debug_routCheck(unitKey, distInches)
+    local s = main_routCheckStep(unitKey, distInches or 6)
+    print(string.format("[ROTTA DEBUG] %s: avanza %.2f\" nemico=%s terreno=%s",
+        unitKey, s.avanza, tostring(s.nemico), tostring(s.terreno)))
+    for key, tipo in pairs(s.amiche) do
+        local tipoMio = main_getUnitMeta(main_getUnitBases(unitKey)[1]).unitType
+        print(string.format("  amica %s (%s) disordinata=%s", key, tostring(tipo),
+            tostring(not main_canInterpenetrate(tipoMio, tipo))))
+    end
+    local st = main_routSettle(unitKey)
+    print(string.format("  posizione attuale: arretra %.2f\"", st.arretra))
+    for key in pairs(st.davanti) do print("  si ferma davanti a " .. key) end
+    for key in pairs(st.generali) do print("  Generale da spostare " .. key) end
+end
+
+-- ============================================================
+-- ELENCO ROTTE
+-- Unità andate in rotta, in attesa del movimento di rotta
+-- (obbligatorio). Una lista per esercito; il click sulla riga
+-- apre la sottofase ROUT_MOVE. La fase non si chiude con righe
+-- in elenco (main_routBlocksPhase).
+-- [slot] = { { id, key }, ... }
+-- ============================================================
+IEF_ROUT_PENDING = IEF_ROUT_PENDING or { [1] = {}, [2] = {} }
+IEF_ROUT_NEXT_ID = IEF_ROUT_NEXT_ID or 0
+
+-- ============================================================
+-- FUNZIONE: main_routEnqueue(unitKey, slot)
+-- Mette l'unità nell'elenco rotte del suo esercito (una volta sola).
+-- ============================================================
+function main_routEnqueue(unitKey, slot)
+    IEF_ROUT_PENDING[slot] = IEF_ROUT_PENDING[slot] or {}
+    for _, item in ipairs(IEF_ROUT_PENDING[slot]) do
+        if item.key == unitKey then return item.id end
+    end
+    IEF_ROUT_NEXT_ID = (IEF_ROUT_NEXT_ID or 0) + 1
+    table.insert(IEF_ROUT_PENDING[slot], { id = IEF_ROUT_NEXT_ID, key = unitKey })
+    printToAll(string.format("[ROTTA] %s in rotta: movimento di rotta da eseguire",
+        main_decodeExtendedUnitLabel(unitKey)), {r=1,g=0.3,b=0.3})
+    main_moraleRefreshUI()
+    return IEF_ROUT_NEXT_ID
+end
+
+-- ============================================================
+-- FUNZIONE: main_routFind(slot, id)
+-- ============================================================
+function main_routFind(slot, id)
+    for i, item in ipairs(IEF_ROUT_PENDING[slot] or {}) do
+        if item.id == id then return item, i end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_routCount(slot)
+-- ============================================================
+function main_routCount(slot)
+    local lista = IEF_ROUT_PENDING[slot]
+    return lista and #lista or 0
+end
+
+-- ============================================================
+-- FUNZIONE: main_routBlocksPhase(player, slot)
+-- True (e avviso) se l'esercito ha ancora movimenti di rotta da fare.
+-- ============================================================
+function main_routBlocksPhase(player, slot)
+    local n = main_routCount(slot)
+    if n == 0 then return false end
+    warningToColor(string.format("%d movimenti di rotta da eseguire: usa l'elenco rotte", n), player, "Yellow", 5, true)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: main_routIsActive(slot, id)
+-- ============================================================
+function main_routIsActive(slot, id)
+    local rec = engine_subPrivate(slot)
+    return rec ~= nil and rec.name == "ROUT_MOVE" and rec.ctx.routId == id
+end
+
+-- ============================================================
+-- FUNZIONE: main_routRowText(item, inCorso)
+-- ============================================================
+function main_routRowText(item, inCorso)
+    return string.format("La %s: movimento di rotta%s",
+        main_decodeExtendedUnitLabel(item.key),
+        inCorso and " - in corso" or "")
+end
+
+-- ============================================================
+-- FUNZIONE: main_routRowClick(player, value, id)
+-- Camera sull'unità e apertura di ROUT_MOVE.
+-- ============================================================
+function main_routRowClick(player, value, id)
+    local slotStr, idxStr = id:match("^rout_row_(%d)_(%d+)$")
+    if not slotStr then return end
+    local slot = tonumber(slotStr)
+    if main_getArmyByColor(player) ~= slot then return end
+
+    local item = (IEF_ROUT_PENDING[slot] or {})[tonumber(idxStr)]
+    if not item then return end
+
+    local aperta = engine_subPrivate(slot)
+    if aperta then
+        if aperta.name == "ROUT_MOVE" and aperta.ctx.routId == item.id then
+            local basi = main_getUnitBases(item.key)
+            if #basi > 0 then main_cameraToUnitPanel(player, basi, 30, ArmyYaw["ButtonBase"][slot], 15) end
+        else
+            warningToColor("Completa prima l'azione in corso", player, "Yellow", 5, true)
+        end
+        return
+    end
+
+    local basi = main_getUnitBases(item.key)
+    if #basi > 0 then
+        main_cameraToUnitPanel(player, basi, 30, ArmyYaw["ButtonBase"][slot], 15)
+    end
+
+    engine_subOpen("ROUT_MOVE", slot, { routId = item.id, key = item.key }, "main_routMoveDone")
+end
+
+-- ============================================================
+-- FUNZIONE: main_getRoutListPanelXml(slot)
+-- Pannello "Elenco rotte": una riga per unità in attesa del
+-- movimento di rotta, attivo solo se l'elenco non è vuoto.
+-- Sotto il pannello morale.
+-- ============================================================
+function main_getRoutListPanelXml(slot)
+    local lista = IEF_ROUT_PENDING[slot] or {}
+    local colore = ARMY[slot] and ARMY[slot].color or "White"
+    local attivo = (#lista > 0) and "true" or "false"
+
+    local rows = ""
+    for i, item in ipairs(lista) do
+        rows = rows .. string.format(
+            '<Row preferredHeight="25">' ..
+                '<Cell>' ..
+                    '<Button id="rout_row_%d_%d" text="%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="main_routRowClick"/>' ..
+                '</Cell>' ..
+            '</Row>',
+            slot, i, main_routRowText(item, main_routIsActive(slot, item.id))
+        )
+    end
+
+    return string.format(
+        '<Panel id="rout_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="150" offsetXY="-10 -330" visibility="%s" active="%s">' ..
+        '<Text id="rout_list_title_army%d" text="ELENCO ROTTE %s" font="warforge_font" fontSize="12" color="White" position="0 55 0" alignment="UpperCenter" width="300" height="22"/>' ..
+        '<TableLayout width="400" height="110" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="400" position="0 -10 0">' ..
+        '%s' ..
+        '</TableLayout>' ..
+        '</Panel>',
+        slot, colore, attivo, slot, ARMY[slot].name, rows
+    )
+end
+
+-- ============================================================
+-- SOTTOFASE ROUT_MOVE (scope player, apribile in ogni fase)
+-- Un solo bottone "Rotta" che esegue il movimento di rotta.
+-- ============================================================
+function main_routSubphases()
+    return {
+        ROUT_MOVE = {
+            scope    = "player",
+            anywhere = true,
+            title    = "ROTTA",
+            first    = "ROTTA",
+            onEnter  = "main_routMoveEnter",
+            steps = {
+                ROTTA = { render = "routMove", actor = "owner", label = "Movimento di Rotta", icon="break", onClick = "main_routMoveGo" },
+            },
+        },
+    }
+end
+
+registerSubRenderer("routMove", function(rec, def, step, slot, isActor)
+    return {
+        title  = def.title,
+        button = isActor and step.label or nil,
+    }
+end)
+
+-- ============================================================
+-- FUNZIONE: main_routMoveEnter(ctx, slot, rec)
+-- Riga in corso nell'elenco.
+-- ============================================================
+function main_routMoveEnter(ctx, slot, rec)
+    local item, idx = main_routFind(slot, ctx.routId)
+    if item then
+        local id = string.format("rout_row_%d_%d", slot, idx)
+        UI.setAttribute(id, "text", main_routRowText(item, true))
+        Wait.frames(function()
+            UI.setAttribute(id, "textColor", "White")
+        end, 1)
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_routMoveGo(ctx, slot, player, rec)
+-- Bottone "Rotta": movimento di rotta, poi chiusura.
+-- ============================================================
+function main_routMoveGo(ctx, slot, player, rec)
+    if #main_getUnitBases(ctx.key) > 0 then
+        main_routMove(ctx.key)
+    end
+    engine_subClose("ROUT_MOVE", slot, { mosso = true })
+end
+
+-- ============================================================
+-- FUNZIONE: main_routMoveDone(ctx, result, slot)
+-- onDone di ROUT_MOVE: riga tolta dall'elenco se il movimento
+-- è stato fatto; camera a casa quando l'elenco è vuoto.
+-- ============================================================
+function main_routMoveDone(ctx, result, slot)
+    if result and result.mosso then
+        local _, idx = main_routFind(slot, ctx.routId)
+        if idx then table.remove(IEF_ROUT_PENDING[slot], idx) end
+    end
+
+    main_moraleRefreshUI()
+
+    if main_routCount(slot) == 0 then
+        local player = Player[ARMY[slot].color]
+        if player then engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME) end
+    end
+end

@@ -54,6 +54,8 @@ function main_onSave()
     ief_sub             = ENGINE and ENGINE.sub or nil,
     ief_morale_pending  = main_moraleSerializableQueue(),
     ief_morale_next_id  = IEF_MORALE_NEXT_ID,
+    ief_rout_pending    = IEF_ROUT_PENDING,
+    ief_rout_next_id    = IEF_ROUT_NEXT_ID,    
 }    
     return JSON.encode(saveData)
 end
@@ -157,9 +159,22 @@ function main_restoreState(save_state)
             [2] = data.ief_morale_pending[2] or data.ief_morale_pending["2"] or {},
         }
     end
+
     if data.ief_morale_next_id then
         IEF_MORALE_NEXT_ID = data.ief_morale_next_id
     end
+    
+    if data.ief_rout_pending then
+        IEF_ROUT_PENDING = {
+            [1] = data.ief_rout_pending[1] or data.ief_rout_pending["1"] or {},
+            [2] = data.ief_rout_pending[2] or data.ief_rout_pending["2"] or {},
+        }
+    end
+    
+    if data.ief_rout_next_id then
+        IEF_ROUT_NEXT_ID = data.ief_rout_next_id
+    end
+    
     if data.ief_sub then
         ENGINE.sub = data.ief_sub
         Wait.time(function()
