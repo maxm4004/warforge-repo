@@ -55,7 +55,8 @@ function main_onSave()
     ief_morale_pending  = main_moraleSerializableQueue(),
     ief_morale_next_id  = IEF_MORALE_NEXT_ID,
     ief_rout_pending    = IEF_ROUT_PENDING,
-    ief_rout_next_id    = IEF_ROUT_NEXT_ID,    
+    ief_rout_next_id    = IEF_ROUT_NEXT_ID, 
+    ief_general_attached = IEF_GENERAL_ATTACHED,
 }    
     return JSON.encode(saveData)
 end
@@ -173,6 +174,10 @@ function main_restoreState(save_state)
     
     if data.ief_rout_next_id then
         IEF_ROUT_NEXT_ID = data.ief_rout_next_id
+    end
+
+    if data.ief_general_attached then
+        IEF_GENERAL_ATTACHED = data.ief_general_attached
     end
     
     if data.ief_sub then

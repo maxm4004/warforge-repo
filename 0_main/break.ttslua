@@ -340,27 +340,6 @@ function main_routSettle(unitKey)
     end
     return res
 end
-
--- ============================================================
--- FUNZIONE: debug_routCheck(unitKey, distInches)
--- Solo test: /execute debug_routCheck("CHIAVE_UNITA", 6)
--- Stampa il controllo del passo e della fine rotta senza muovere.
--- ============================================================
-function debug_routCheck(unitKey, distInches)
-    local s = main_routCheckStep(unitKey, distInches or 6)
-    print(string.format("[ROTTA DEBUG] %s: avanza %.2f\" nemico=%s terreno=%s",
-        unitKey, s.avanza, tostring(s.nemico), tostring(s.terreno)))
-    for key, tipo in pairs(s.amiche) do
-        local tipoMio = main_getUnitMeta(main_getUnitBases(unitKey)[1]).unitType
-        print(string.format("  amica %s (%s) disordinata=%s", key, tostring(tipo),
-            tostring(not main_canInterpenetrate(tipoMio, tipo))))
-    end
-    local st = main_routSettle(unitKey)
-    print(string.format("  posizione attuale: arretra %.2f\"", st.arretra))
-    for key in pairs(st.davanti) do print("  si ferma davanti a " .. key) end
-    for key in pairs(st.generali) do print("  Generale da spostare " .. key) end
-end
-
 -- ============================================================
 -- ELENCO ROTTE
 -- Unità andate in rotta, in attesa del movimento di rotta

@@ -1,0 +1,301 @@
+-- ============================================================
+-- WARFORGE IEF — 0_main/general.ttslua
+-- Generale aggregato: stato esplicito e riposizionamento da
+-- script (il Fixed Joint di TTS non segue setPosition).
+-- Il Generale si aggrega/disaggrega solo nel Movimento
+-- (regolamento, Fase 3) e poi segue l'unità in ogni spostamento.
+--
+-- IEF_GENERAL_ATTACHED[genKey] = {
+--     host    = unitKey dell'unità,
+--     refGuid = GUID della base dell'unità di riferimento,
+--     lx, lz  = posizione del Generale nel sistema locale della
+--               base di riferimento (destra, fronte), unità TTS,
+--     dyaw    = rotazione Y del Generale meno quella della base }
+-- ============================================================
+IEF_GENERAL_ATTACHED = IEF_GENERAL_ATTACHED or {}
+
+-- ============================================================
+-- FUNZIONE: main_generalOffsetFrom(gen, ref)
+-- Offset del Generale nel sistema locale della base ref.
+-- ============================================================
+function main_generalOffsetFrom(gen, ref)
+    local pg, pr = gen.getPosition(), ref.getPosition()
+    local f, r = ref.getTransformForward(), ref.getTransformRight()
+    local fXZ = Vector(f.x, 0, f.z):normalized()
+    local rXZ = Vector(r.x, 0, r.z):normalized()
+    local dx, dz = pg.x - pr.x, pg.z - pr.z
+    return dx * rXZ.x + dz * rXZ.z,
+           dx * fXZ.x + dz * fXZ.z,
+           gen.getRotation().y - ref.getRotation().y
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalTouchedBase(genKey)
+-- Base amica (non di un Generale) toccata dal Generale entro
+-- IEF_GENERAL_ATTACH_INCHES; se più d'una, la più vicina.
+-- Ritorna: base, unitKey (oppure nil).
+-- ============================================================
+function main_generalTouchedBase(genKey)
+    local gen = main_getUnitBases(genKey)[1]
+    local slot = main_unitSlot(genKey)
+    if not gen or not slot then return nil end
+
+    local migliore, chiave, dist = nil, nil, nil
+    for key, basi in pairs(main_unitsOfSlot(slot)) do
+        if key ~= genKey and not main_isGeneralKey(key) then
+            for _, b in ipairs(basi) do
+                local d = main_distanceInches(gen, b)
+                if d and d <= IEF_GENERAL_ATTACH_INCHES and (not dist or d < dist) then
+                    migliore, chiave, dist = b, key, d
+                end
+            end
+        end
+    end
+    return migliore, chiave
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalInFrontOrBehindCaptain(gen, hostKey)
+-- True se il Generale sta davanti o dietro la base capitana
+-- (dove ci sono i pulsanti): proiezione dentro la larghezza
+-- della capitana lungo il suo asse frontale.
+-- ============================================================
+function main_generalInFrontOrBehindCaptain(gen, hostKey)
+    local guid = IEF_UNIT_BUTTON_BASE and IEF_UNIT_BUTTON_BASE[hostKey]
+    local cap = guid and getObjectFromGUID(guid)
+    if not cap then return false end
+    local lx = main_generalOffsetFrom(gen, cap)
+    local meta = main_getUnitMeta(cap)
+    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+    local halfWidth = ((ut and ut.base_width_cm) or 4) * CM_TO_TTS / 2
+    return math.abs(lx) < halfWidth
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalAttach(genKey)
+-- Aggrega il Generale all'unità che tocca. Ritorna hostKey
+-- oppure nil + motivo.
+-- ============================================================
+function main_generalAttach(genKey)
+    local gen = main_getUnitBases(genKey)[1]
+    if not gen then return nil, "Generale non trovato" end
+
+    local ref, hostKey = main_generalTouchedBase(genKey)
+    if not ref then return nil, "Il Generale deve toccare un'unita' amica" end
+    if main_generalInFrontOrBehindCaptain(gen, hostKey) then
+        return nil, "Non davanti o dietro la base capitana"
+    end
+
+    local lx, lz, dyaw = main_generalOffsetFrom(gen, ref)
+    IEF_GENERAL_ATTACHED[genKey] = { host = hostKey, refGuid = ref.getGUID(), lx = lx, lz = lz, dyaw = dyaw }
+    printToAll(string.format("[GENERALE] %s aggregato a %s",
+        main_decodeExtendedUnitLabel(genKey), main_decodeExtendedUnitLabel(hostKey)), {r=0.6,g=0.8,b=1})
+    return hostKey
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalDetach(genKey)
+-- ============================================================
+function main_generalDetach(genKey)
+    local a = IEF_GENERAL_ATTACHED[genKey]
+    if not a then return end
+    IEF_GENERAL_ATTACHED[genKey] = nil
+    printToAll(string.format("[GENERALE] %s disaggregato da %s",
+        main_decodeExtendedUnitLabel(genKey), main_decodeExtendedUnitLabel(a.host)), {r=0.6,g=0.8,b=1})
+end
+
+-- ============================================================
+-- FUNZIONE: main_syncAttachedGeneral(hostKey)
+-- Riporta ogni Generale aggregato all'unità nella sua posizione
+-- relativa alla base di riferimento. Se quella base non c'è
+-- più, prende la base superstite più vicina al Generale e
+-- ricalcola l'offset (il Generale resta dov'è). Unità senza
+-- basi: il Generale si disaggrega.
+-- Da chiamare a fine di ogni spostamento dell'unità.
+-- ============================================================
+function main_syncAttachedGeneral(hostKey)
+    for genKey, a in pairs(IEF_GENERAL_ATTACHED) do
+        if a.host == hostKey then
+            local gen = main_getUnitBases(genKey)[1]
+            local ref = getObjectFromGUID(a.refGuid)
+            if ref and main_getUnitKey(ref) ~= hostKey then ref = nil end
+
+            if gen and not ref then
+                local dist = nil
+                for _, b in ipairs(main_getUnitBases(hostKey)) do
+                    local d = main_distanceInches(gen, b)
+                    if d and (not dist or d < dist) then ref, dist = b, d end
+                end
+                if ref then
+                    a.refGuid = ref.getGUID()
+                    a.lx, a.lz, a.dyaw = main_generalOffsetFrom(gen, ref)
+                end
+            end
+
+            if not gen or not ref then
+                IEF_GENERAL_ATTACHED[genKey] = nil
+            else
+                local pr = ref.getPosition()
+                local f, r = ref.getTransformForward(), ref.getTransformRight()
+                local fXZ = Vector(f.x, 0, f.z):normalized()
+                local rXZ = Vector(r.x, 0, r.z):normalized()
+                local pg = gen.getPosition()
+                gen.setPosition(Vector(
+                    pr.x + rXZ.x * a.lx + fXZ.x * a.lz,
+                    pg.y,
+                    pr.z + rXZ.z * a.lx + fXZ.z * a.lz))
+                local rg = gen.getRotation()
+                gen.setRotation(Vector(rg.x, ref.getRotation().y + a.dyaw, rg.z))
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalAttachedHost(genKey)
+-- Unità a cui il Generale è aggregato (stato), o nil.
+-- ============================================================
+function main_generalAttachedHost(genKey)
+    local a = IEF_GENERAL_ATTACHED[genKey]
+    return a and a.host or nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalReanchor(hostKey)
+-- Ricalcola l'offset dei Generali aggregati dalle posizioni
+-- attuali (il Generale resta dov'è).
+-- ============================================================
+function main_generalReanchor(hostKey)
+    for genKey, a in pairs(IEF_GENERAL_ATTACHED) do
+        if a.host == hostKey then
+            local gen = main_getUnitBases(genKey)[1]
+            local ref = getObjectFromGUID(a.refGuid)
+            if gen and ref then
+                a.lx, a.lz, a.dyaw = main_generalOffsetFrom(gen, ref)
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalFlipAndMove(hostKey, dirX, dirZ, deltaTTS)
+-- Movimenti in cui ogni base si gira di 180° sul posto e poi
+-- trasla (rotta, evasione): il Generale fa lo stesso, come una
+-- base dell'unità, poi si ricalcola l'offset. (Con
+-- main_syncAttachedGeneral finirebbe sul lato opposto, dentro
+-- l'unità.)
+-- ============================================================
+function main_generalFlipAndMove(hostKey, dirX, dirZ, deltaTTS)
+    for genKey, a in pairs(IEF_GENERAL_ATTACHED) do
+        if a.host == hostKey then
+            local gen = main_getUnitBases(genKey)[1]
+            if gen then
+                local rg = gen.getRotation()
+                gen.setRotation(Vector(rg.x, rg.y + 180, rg.z))
+                local pg = gen.getPosition()
+                gen.setPosition(Vector(pg.x + dirX * deltaTTS, pg.y, pg.z + dirZ * deltaTTS))
+            end
+        end
+    end
+    main_generalReanchor(hostKey)
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalAttachedTo(unitKey)
+-- Generale aggregato all'unità (stato), o nil.
+-- ============================================================
+function main_generalAttachedTo(unitKey)
+    for genKey, a in pairs(IEF_GENERAL_ATTACHED) do
+        if a.host == unitKey and #main_getUnitBases(genKey) > 0 then
+            return genKey
+        end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_syncGeneralsOfBases(basiObjs)
+-- Come main_syncAttachedGeneral, partendo dalle basi mosse
+-- (per le funzioni di movimento che ricevono solo le basi).
+-- ============================================================
+function main_syncGeneralsOfBases(basiObjs)
+    local b = basiObjs and basiObjs[1]
+    local key = b and main_getUnitKey(b)
+    if key then main_syncAttachedGeneral(key) end
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalRefreshButtons(genKey)
+-- Ricrea i pulsanti sulla base del Generale (AGGREGA /
+-- DISAGGREGA cambiano con lo stato).
+-- ============================================================
+function main_generalRefreshButtons(genKey)
+    local gen = main_getUnitBases(genKey)[1]
+    if gen then main_createBaseButtons(gen, TURN.phase, genKey) end
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalAttachFromButton(obj, player_color, alt_click)
+-- Pulsante AGGREGA sulla base del Generale (fase Movimento).
+-- ============================================================
+function main_generalAttachFromButton(obj, player_color, alt_click)
+    local genKey = main_getUnitKey(obj)
+    local slot = main_unitSlot(genKey)
+    local player = Player[player_color]
+    if not genKey or not slot or main_getArmyByColor(player) ~= slot then return end
+
+    local host, motivo = main_generalAttach(genKey)
+    if not host then
+        warningToColor(motivo, player, "Yellow", 5, true)
+        return
+    end
+    if IEF_MOVE_UNITS[genKey] then move_close(genKey) end
+    main_generalRefreshButtons(genKey)
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalDetachFromButton(obj, player_color, alt_click)
+-- Pulsante DISAGGREGA sulla base del Generale (fase Movimento).
+-- ============================================================
+function main_generalDetachFromButton(obj, player_color, alt_click)
+    local genKey = main_getUnitKey(obj)
+    local slot = main_unitSlot(genKey)
+    if not genKey or not slot or main_getArmyByColor(Player[player_color]) ~= slot then return end
+
+    main_generalDetach(genKey)
+    main_generalRefreshButtons(genKey)
+end
+
+-- ============================================================
+-- FUNZIONE: attachGeneral(obj, unit, pos, rot, w, h, color, textColor)
+-- Pulsante AGGREGA (solo Generale non aggregato).
+-- ============================================================
+function attachGeneral(obj, unit, pos, rot, w, h, color, textColor)
+    if main_generalAttachedHost(unit) then return end
+    obj.createButton({
+        click_function = "main_generalAttachFromButton",
+        function_owner = Global,
+        label = "AGGREGA",
+        position = pos,
+        rotation = rot,
+        width = w + 50,
+        height = h,
+        font_size = 70,
+        color = color,
+        font_color = textColor,
+        tooltip = "Aggrega il Generale all'unita' che tocca"
+    })
+end
+
+-- ============================================================
+-- FUNZIONE: debug_generalAttach(genKey) / debug_generalDetach(genKey)
+-- Solo test: /execute debug_generalAttach("ANG_GEN_FP_1")
+-- ============================================================
+function debug_generalAttach(genKey)
+    local host, motivo = main_generalAttach(genKey)
+    if not host then print("[GENERALE] " .. tostring(motivo)) end
+end
+
+function debug_generalDetach(genKey)
+    main_generalDetach(genKey)
+end

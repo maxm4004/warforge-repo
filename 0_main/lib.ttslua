@@ -251,6 +251,7 @@ function main_restart()
     IEF_MARKED_LOSSES = {}
     IEF_MORALE_ROLL_PENDING = { [1] = {}, [2] = {} }
     IEF_MORALE_NEXT_ID = 0
+    IEF_GENERAL_ATTACHED = {}
     IEF_ROUT_PENDING = { [1] = {}, [2] = {} }
     IEF_ROUT_NEXT_ID = 0
     IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
@@ -1071,6 +1072,7 @@ end
 -- aggiornati (abilitati/disabilitati secondo fase e tipo).
 -- ============================================================
 function main_formationRedraw(unitKey)
+    main_syncAttachedGeneral(unitKey)
     local state = IEF_FORM_UNITS[unitKey]
     if not state or not state.panel3DObj or not state.basiObjs then return end
     if state.panel3DObj.isDestroyed() then
@@ -1489,14 +1491,29 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
             table.insert(basiObjs, o)
         end
     end
+
     if #basiObjs == 0 then return end
+
+    -- Regolamento: per muovere l'unità deve essere nel raggio di
+    -- comando di un Generale (Generali esclusi)
+    if ENGINE.phase == PHASE.MOVE and not main_isGeneralKey(unitKey) then
+        local inRaggio = false
+        for _, b in ipairs(basiObjs) do
+            if main_isInCommandRange(b, slot) then inRaggio = true break end
+        end
+        if not inRaggio then
+            warningToColor("Unita' fuori dal raggio di comando: non puo' muovere", Player[player_color], "Yellow", 5, true)
+            return
+        end
+    end
 
     main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
 
     if IEF_MOVE_BUDGET[unitKey] == nil or IEF_MOVE_TEST_MODE then
         local unitTypesDict = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
         local baseInfo = main_parseNickname(obj.getName())
-        local typeData = unitTypesDict and baseInfo and unitTypesDict[baseInfo.unitType]
+        local tipoMovimento = main_isGeneralKey(unitKey) and "GEN" or (baseInfo and baseInfo.unitType)
+        local typeData = unitTypesDict and tipoMovimento and unitTypesDict[tipoMovimento]
         IEF_MOVE_BUDGET[unitKey] = typeData and typeData.move_inches or 0
     end
     if IEF_PIVOT_BUDGET[unitKey] == nil or IEF_MOVE_TEST_MODE then
@@ -2005,11 +2022,11 @@ function main_createBaseButtons(obj, phase, unit)
     obj.clearButtons()
 
     local azioniUnita = {
-        [PHASE.DEPLOY_SPAWN]     = {tidy, info, form, move},
-        [PHASE.DEPLOY_POSITION]  = {tidy, form, move},
+        [PHASE.DEPLOY_SPAWN]     = {tidy, info, form},
+        [PHASE.DEPLOY_POSITION]  = {tidy, info, form},
         [PHASE.CHARGE_DECLARE]   = {tidy, info, charge},
         [PHASE.CHARGE_REACT]     = {tidy, info},
-         [PHASE.CHARGE_AUTO]      = {tidy, info},
+        [PHASE.CHARGE_AUTO]      = {tidy, info},
         [PHASE.MOVE]             = {tidy, info, form, move},
         [PHASE.SHOOT]            = {tidy, info, shoot},
         [PHASE.MELEE]            = {tidy, info},
@@ -2020,7 +2037,7 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.CHARGE_DECLARE]   = {range, info},
         [PHASE.CHARGE_REACT]     = {range, info},
         [PHASE.CHARGE_AUTO]      = {range, info},
-        [PHASE.MOVE]             = {moveGeneral, info, range},
+        [PHASE.MOVE]             = {moveGeneral, info, range, attachGeneral},
         [PHASE.SHOOT]            = {range, info},
         [PHASE.MELEE]            = {range, info},
         [PHASE.RECOVERY]         = {range, info}
@@ -2058,6 +2075,8 @@ function main_createBaseButtons(obj, phase, unit)
             pos.x = pos.x - 0.8
         end
     end        
+
+    print("oeeeeeeeeee")
 end
 -- ============================================================
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
@@ -2117,7 +2136,26 @@ end
 -- ============================================================
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
+-- ============================================================
+-- FUNZIONE: move(obj, unit, pos, rot, w, h)
+-- ============================================================
 function moveGeneral(obj, unit, pos, rot, w, h, color, textColor)
+    if main_generalAttachedHost(unit) then
+        obj.createButton({
+            click_function = "main_generalDetachFromButton",
+            function_owner = Global,
+            label = "DISTACCA",
+            position = pos,
+            rotation = rot,
+            width = w + 50,
+            height = h,
+            font_size = 70,
+            color = color,
+            font_color = textColor,
+            tooltip = "Disaggrega il Generale dall'unita'"
+        })
+        return
+    end
     obj.createButton({
         click_function = "main_movementOpenFromButton",
         function_owner = Global,
@@ -2603,6 +2641,9 @@ function main_removeBases(unitKey, daRimuovere)
             if obj and not obj.isDestroyed() then obj.destruct() end
         end, 2)
     end
+  
+    -- Generale aggregato: nuova base di riferimento a basi tolte
+    Wait.time(function() main_syncAttachedGeneral(unitKey) end, 2.5)
 end
 
 -- ============================================================

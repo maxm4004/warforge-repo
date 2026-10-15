@@ -714,6 +714,7 @@ function charge_declareRestorePosition(session)
         if session.startPos[i] then b.setPosition(session.startPos[i]) end
         if session.startRot[i] then b.setRotation(session.startRot[i]) end
     end
+    main_syncGeneralsOfBases(session.myBases)
 end
 -- ============================================================
 -- FUNZIONE: charge_declareAbort(player, unitKey)
@@ -1257,6 +1258,8 @@ function charge_applyPivot(basiObjs, pivotBase, angoloSigned)
         local rot = obj.getRotation()
         obj.setRotation(Vector(rot.x, rot.y - angoloGradi, rot.z))
     end
+
+    main_syncGeneralsOfBases(basiObjs)
 end
 
 -- ============================================================
@@ -1395,6 +1398,8 @@ function charge_executeEvade(evadingSlot, elemento)
             local p = obj.getPosition()
             obj.setPosition(Vector(p.x + fleeXZ.x*deltaUnits, p.y, p.z + fleeXZ.z*deltaUnits))
         end
+
+        main_generalFlipAndMove(evadingKey, fleeXZ.x, fleeXZ.z, deltaUnits)
 
         -- Dopo il dietrofront il rango posteriore è cambiato: il
         -- pulsante va sulla nuova base d'angolo (come in formazione).
@@ -1826,6 +1831,7 @@ function charge_executeChargeMove(player, unitKey)
         IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
         IEF_MOVE_BUDGET[unitKey] = distanzaDichiarata
         move_avanti_apply(unitKey, distanzaDichiarata)
+        main_syncAttachedGeneral(unitKey)
         IEF_MOVE_UNITS[unitKey] = nil
         IEF_MOVE_BUDGET[unitKey] = nil
 
@@ -1923,6 +1929,8 @@ function charge_moveTowardPoint(basiObjs, originBase, targetPos, distanzaInch)
         local p = obj.getPosition()
         obj.setPosition(Vector(p.x + dirNorm.x*deltaUnits, p.y, p.z + dirNorm.z*deltaUnits))
     end
+
+    main_syncGeneralsOfBases(basiObjs)
 end
 -- ============================================================
 -- FUNZIONE: charge_closestBaseToPoint(basiObjs, point)

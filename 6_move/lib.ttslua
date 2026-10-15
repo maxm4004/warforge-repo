@@ -79,6 +79,8 @@ function move_redraw(unitKey)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state or not state.panel3DObj or not state.basiObjs then return end
 
+    main_syncAttachedGeneral(unitKey)
+
     local basiObjs = state.basiObjs
 
     local moveResiduo  = IEF_MOVE_BUDGET[unitKey]  or 0

@@ -282,45 +282,21 @@ function main_unitsDistanceInches(basiA, basiB)
     end
     return minimo
 end
-
 -- ============================================================
 -- FUNZIONE: main_getGeneralHost(genKey)
--- Unità amica a cui il Generale è aggregato: la sua base tocca
--- (entro IEF_GENERAL_ATTACH_INCHES) una base dell'unità; se ne
--- tocca più d'una, la più vicina. Calcolato al volo.
+-- Unità a cui il Generale è aggregato (stato salvato, si
+-- cambia solo nel Movimento: 0_main/general.ttslua).
 -- ============================================================
 function main_getGeneralHost(genKey)
-    local slot = main_unitSlot(genKey)
-    if not slot then return nil end
-    local genBasi = main_getUnitBases(genKey)
-
-    local migliore, distMigliore = nil, nil
-    for key, basi in pairs(main_unitsOfSlot(slot)) do
-        if key ~= genKey and not main_isGeneralKey(key) then
-            local d = main_unitsDistanceInches(genBasi, basi)
-            if d and d <= IEF_GENERAL_ATTACH_INCHES and (not distMigliore or d < distMigliore) then
-                migliore, distMigliore = key, d
-            end
-        end
-    end
-    return migliore
+    return main_generalAttachedHost(genKey)
 end
-
 -- ============================================================
 -- FUNZIONE: main_getAttachedGeneral(unitKey)
 -- Generale aggregato all'unità (chiave) o nil.
 -- ============================================================
 function main_getAttachedGeneral(unitKey)
-    local slot = main_unitSlot(unitKey)
-    if not slot then return nil end
-    for key, _ in pairs(main_unitsOfSlot(slot)) do
-        if main_isGeneralKey(key) and main_getGeneralHost(key) == unitKey then
-            return key
-        end
-    end
-    return nil
+    return main_generalAttachedTo(unitKey)
 end
-
 -- ============================================================
 -- FUNZIONE: main_enemyOnFlankOrRear(unitKey)
 -- True se un'unità nemica (non in ROTTA) è a contatto sul
@@ -503,6 +479,8 @@ function main_routMove(unitKey)
         local p = obj.getPosition()
         obj.setPosition(Vector(p.x + fleeXZ.x * delta, p.y, p.z + fleeXZ.z * delta))
     end
+
+        main_generalFlipAndMove(unitKey, fleeXZ.x, fleeXZ.z, delta)
 
     printToAll(string.format("[ROTTA] %s fugge di %s\"", main_decodeExtendedUnitLabel(unitKey), tostring(moveInches)), {r=1,g=0.3,b=0.3})
 end
