@@ -167,27 +167,28 @@ function deployment_spawnArmy(slot, armyData)
         local base = 0
         local rango = tonumber(unitData.basi_per_rango)
         local tipo = unitData.tipo or ""
-        local gap = 0
 
-        if tipo ~= "" then
-            if tipo == "FP" then 
-                gap = FP_GAP 
-            else 
-                if tipo == "FM" then 
-                    gap = FM_GAP 
-                else 
-                    if tipo == "CP" then 
-                        gap = CP_GAP 
-                    else 
-                        if tipo == "FL" then 
-                           gap = FL_GAP 
-                        else 
-                           gap = 0    
-                        end
-                    end                
-                end
-            end
-        end
+        -- local gap = 0
+
+        -- if tipo ~= "" then
+        --     if tipo == "FP" then 
+        --         gap = FP_GAP 
+        --     else 
+        --         if tipo == "FM" then 
+        --             gap = FM_GAP 
+        --         else 
+        --             if tipo == "CP" then 
+        --                 gap = CP_GAP 
+        --             else 
+        --                 if tipo == "FL" then 
+        --                    gap = FL_GAP 
+        --                 else 
+        --                    gap = 0    
+        --                 end
+        --             end                
+        --         end
+        --     end
+        -- end
         
             counters[unitData.model] = (counters[unitData.model] or 0) + 1
             local unitNumber = counters[unitData.model]
@@ -200,15 +201,13 @@ function deployment_spawnArmy(slot, armyData)
                         if base <= rango then
                             -- stessa sotto-unità, nessuna modifica
                         else
-                            -- QUI il codice già capisce che è una NUOVA unità fisica
-                            if slot == 1 then    
-                                unitOffsetZ = unitOffsetZ + gap
-                            else
-                                unitOffsetZ = unitOffsetZ + gap
-                            end
-
+                            -- if slot == 1 then    
+                            --     unitOffsetZ = unitOffsetZ + gap
+                            -- else
+                            --     unitOffsetZ = unitOffsetZ + gap
+                            -- end
                             base = 1
-                            subUnitCounter = subUnitCounter + 1   -- <-- NUOVO: incrementa qui, esattamente dove il codice riconosce il cambio
+                            subUnitCounter = subUnitCounter + 1
                         end
                     end
                 else
@@ -304,8 +303,8 @@ function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
     local x1 = ((unitOffsetX or 0) + (sourcePos.x or 0) * CM_TO_TTS + col * horizGap)
     local x2 = ((unitOffsetX or 0) - (sourcePos.x or 0) * CM_TO_TTS - col * horizGap)
 
-    local z1 = ((sourcePos.z or 0) * CM_TO_TTS + zOffset + (unitOffsetZ or 0) * zSign)
-    local z2 = (zOffset + (unitOffsetZ or 0)) - ((sourcePos.z or 0) * CM_TO_TTS)
+    local z1 = zOffset - (sourcePos.z or 0) * CM_TO_TTS + (unitOffsetZ or 0) * zSign
+    local z2 = zOffset + (unitOffsetZ or 0) + (sourcePos.z or 0) * CM_TO_TTS
    
     local x = slot == 1 and x1 or x2
     local z = slot == 1 and z1 or z2

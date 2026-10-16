@@ -8,10 +8,11 @@ function before_move(phaseName, phase)
     IEF_MOVE_BUDGET  = {}
     IEF_PIVOT_BUDGET = {}
     IEF_REFORM_USED  = {}
+    main_generalMoveStartAll()
 end
 -- ============================================================
 -- FUNZIONE: after_move(phaseName, phase)
 -- ============================================================
 function after_move(phaseName, phase)
-    -- stub
+    main_generalMoveEnd()
 end

@@ -243,14 +243,13 @@ function move_avanti_apply(unitKey, distanzaInch)
 
     for _, obj in ipairs(basiObjs) do
         local p = obj.getPosition()
-        obj.setPosition(Vector(p.x + fwdXZ.x*deltaUnits, p.y, p.z + fwdXZ.z*deltaUnits))
+        main_setPositionOnGround(obj, p.x + fwdXZ.x*deltaUnits, p.z + fwdXZ.z*deltaUnits)
     end
 
     IEF_MOVE_BUDGET[unitKey] = residuo - distanzaInch
     move_redraw(unitKey)
     return true
 end
-
 -- ============================================================
 -- FUNZIONE: move_perno_apply(unitKey, direction)
 -- ============================================================
@@ -301,8 +300,9 @@ function move_perno_apply(unitKey, direction)
             local rel = Vector(p.x - pivotPos.x, 0, p.z - pivotPos.z)
             local rx = rel.x * math.cos(angoloSigned) - rel.z * math.sin(angoloSigned)
             local rz = rel.x * math.sin(angoloSigned) + rel.z * math.cos(angoloSigned)
-            local newPos = Vector(pivotPos.x + rx, p.y, pivotPos.z + rz)
-            obj.setPosition(newPos)
+            main_setPositionOnGround(obj, pivotPos.x + rx, pivotPos.z + rz, angoloSigned)
+        else
+            main_setPositionOnGround(obj, pivotPos.x, pivotPos.z, angoloSigned)
         end
         local rot = obj.getRotation()
         obj.setRotation(Vector(rot.x, rot.y - angoloGradi, rot.z))

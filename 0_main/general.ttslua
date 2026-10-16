@@ -288,6 +288,246 @@ function attachGeneral(obj, unit, pos, rot, w, h, color, textColor)
 end
 
 -- ============================================================
+-- MOVIMENTO DEL GENERALE (fase Movimento)
+-- Regolamento: Generali e Comandanti 9", in qualsiasi direzione.
+-- Si trascina a mano; i 9" si misurano in linea retta (centro
+-- della base) dalla posizione di inizio fase. Durante il
+-- trascinamento un "filo" dalla partenza: verde entro 9", rosso
+-- oltre. Al rilascio oltre i 9" il Generale va a 9" esatti lungo
+-- il filo. A fine fase controllo finale (main_generalMoveBlocksPhase).
+--
+-- IEF_GENERAL_MOVE_START[genKey] = { x, y, z } (salvato)
+-- IEF_GENERAL_MOVE_CIRCLE[genKey] = true se il cerchio è acceso
+-- IEF_GENERAL_DRAG[genKey] = { waitId, color } trascinamento in corso
+-- ============================================================
+IEF_GENERAL_MOVE_START  = IEF_GENERAL_MOVE_START  or {}
+IEF_GENERAL_MOVE_CIRCLE = IEF_GENERAL_MOVE_CIRCLE or {}
+IEF_GENERAL_DRAG        = IEF_GENERAL_DRAG        or {}
+
+IEF_GENERAL_DRAG_TICK   = 0.1    -- secondi fra un ridisegno del filo e l'altro
+IEF_GENERAL_MOVE_TOL    = 0.05   -- pollici di tolleranza nel controllo finale
+IEF_GENERAL_LINE_Y      = 1.22
+
+-- ============================================================
+-- FUNZIONE: main_generalMoveInches()
+-- Movimento dei Generali da unit_types (GEN), 9" di default.
+-- ============================================================
+function main_generalMoveInches()
+    local ut = main_getUnitType(UNIT_TYPE_LABELS.GEN)
+    return (ut and ut.move_inches) or 9
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalMoveStartAll()
+-- Inizio fase Movimento: posizione di partenza di ogni Generale.
+-- ============================================================
+function main_generalMoveStartAll()
+    IEF_GENERAL_MOVE_START = {}
+    IEF_GENERAL_MOVE_CIRCLE = {}
+    for slot = 1, 2 do
+        for key, basi in pairs(main_unitsOfSlot(slot)) do
+            if main_isGeneralKey(key) and basi[1] then
+                local p = basi[1].getPosition()
+                IEF_GENERAL_MOVE_START[key] = { x = p.x, y = p.y, z = p.z }
+            end
+        end
+    end
+    main_aggiornaLinee()
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalMoveDistance(genKey, pos)
+-- Pollici in linea retta dalla partenza (centro della base).
+-- ============================================================
+function main_generalMoveDistance(genKey, pos)
+    local s = IEF_GENERAL_MOVE_START[genKey]
+    if not s or not pos then return 0 end
+    local dx, dz = pos.x - s.x, pos.z - s.z
+    return math.sqrt(dx * dx + dz * dz) / INCH_TO_TTS
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalMoveLines()
+-- Linee globali del movimento dei Generali (cerchi accesi e filo
+-- del trascinamento), raccolte da main_aggiornaLinee.
+-- ============================================================
+function main_generalMoveLines()
+    local out = {}
+    local y = IEF_GENERAL_LINE_Y
+    local raggio = main_generalMoveInches() * INCH_TO_TTS
+
+    for genKey, _ in pairs(IEF_GENERAL_MOVE_CIRCLE) do
+        local s = IEF_GENERAL_MOVE_START[genKey]
+        if s then
+            local punti = {}
+            for i = 0, 48 do
+                local a = (i / 48) * 2 * math.pi
+                table.insert(punti, { s.x + math.cos(a) * raggio, y, s.z + math.sin(a) * raggio })
+            end
+            table.insert(out, { points = punti, color = { 1, 0.6, 0 }, thickness = 0.05 })
+        end
+    end
+
+    for genKey, _ in pairs(IEF_GENERAL_DRAG) do
+        local s = IEF_GENERAL_MOVE_START[genKey]
+        local gen = main_getUnitBases(genKey)[1]
+        if s and gen then
+            local p = gen.getPosition()
+            local entro = main_generalMoveDistance(genKey, p) <= main_generalMoveInches()
+            table.insert(out, {
+                points = { { s.x, y, s.z }, { p.x, y, p.z } },
+                color = entro and { 0.2, 0.9, 0.2 } or { 1, 0.1, 0.1 },
+                thickness = 0.08,
+            })
+        end
+    end
+    return out
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalMoveButton(obj, player_color, alt_click)
+-- Pulsante MOVIMENTO del Generale libero: accende/spegne il
+-- cerchio dei 9" attorno alla partenza; alt-click riporta il
+-- Generale alla partenza.
+-- ============================================================
+function main_generalMoveButton(obj, player_color, alt_click)
+    local genKey = main_getUnitKey(obj)
+    local slot = main_unitSlot(genKey)
+    if not genKey or not slot or main_getArmyByColor(Player[player_color]) ~= slot then return end
+
+    local s = IEF_GENERAL_MOVE_START[genKey]
+    if not s then
+        local p = obj.getPosition()
+        s = { x = p.x, y = p.y, z = p.z }
+        IEF_GENERAL_MOVE_START[genKey] = s
+    end
+
+    if alt_click then
+        local p = obj.getPosition()
+        obj.setPosition(Vector(s.x, p.y, s.z))
+    elseif IEF_GENERAL_MOVE_CIRCLE[genKey] then
+        IEF_GENERAL_MOVE_CIRCLE[genKey] = nil
+    else
+        IEF_GENERAL_MOVE_CIRCLE[genKey] = true
+    end
+    main_aggiornaLinee()
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalDragStart(genKey, player_color)
+-- ============================================================
+function main_generalDragStart(genKey, player_color)
+    main_generalDragStop(genKey)
+    local id = Wait.time(function()
+        local gen = main_getUnitBases(genKey)[1]
+        if not gen or gen.isDestroyed() or not gen.held_by_color then
+            main_generalDragStop(genKey)
+            return
+        end
+        main_aggiornaLinee()
+    end, IEF_GENERAL_DRAG_TICK, -1)
+    IEF_GENERAL_DRAG[genKey] = { waitId = id, color = player_color }
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalDragStop(genKey)
+-- ============================================================
+function main_generalDragStop(genKey)
+    local d = IEF_GENERAL_DRAG[genKey]
+    if not d then return end
+    if d.waitId then Wait.stop(d.waitId) end
+    IEF_GENERAL_DRAG[genKey] = nil
+    main_aggiornaLinee()
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalOnPickUp(player_color, obj)
+-- Da onObjectPickUp: filo solo nel Movimento e per Generali liberi.
+-- ============================================================
+function main_generalOnPickUp(player_color, obj)
+    if ENGINE.phase ~= PHASE.MOVE then return end
+    local genKey = main_getUnitKey(obj)
+    if not main_isGeneralKey(genKey) or main_generalAttachedHost(genKey) then return end
+    if not IEF_GENERAL_MOVE_START[genKey] then
+        local p = obj.getPosition()
+        IEF_GENERAL_MOVE_START[genKey] = { x = p.x, y = p.y, z = p.z }
+    end
+    main_generalDragStart(genKey, player_color)
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalOnDrop(player_color, obj)
+-- Da onObjectDrop: Generale aggregato -> torna attaccato
+-- all'unità; libero oltre i 9" -> a 9" esatti lungo il filo.
+-- ============================================================
+function main_generalOnDrop(player_color, obj)
+    local genKey = main_getUnitKey(obj)
+    if not main_isGeneralKey(genKey) then return end
+    main_generalDragStop(genKey)
+
+    local host = main_generalAttachedHost(genKey)
+    if host then
+        main_syncAttachedGeneral(host)
+        return
+    end
+    if ENGINE.phase ~= PHASE.MOVE then return end
+
+    local s = IEF_GENERAL_MOVE_START[genKey]
+    if not s then return end
+    local p = obj.getPosition()
+    local max = main_generalMoveInches()
+    local d = main_generalMoveDistance(genKey, p)
+    if d > max then
+        local f = (max * INCH_TO_TTS) / (d * INCH_TO_TTS)
+        obj.setPosition(Vector(s.x + (p.x - s.x) * f, p.y, s.z + (p.z - s.z) * f))
+        warningToColor(string.format("Il Generale muove al massimo %d\": riportato a %d\"", max, max),
+            Player[player_color], "Yellow", 4, false)
+    end
+    main_aggiornaLinee()
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalMoveBlocksPhase(player, slot)
+-- Fine Movimento: true (e avviso) se un Generale dell'esercito è
+-- oltre i 9" dalla partenza.
+-- ============================================================
+function main_generalMoveBlocksPhase(player, slot)
+    local max = main_generalMoveInches() + IEF_GENERAL_MOVE_TOL
+    for key, basi in pairs(main_unitsOfSlot(slot)) do
+        if main_isGeneralKey(key) and basi[1] and not main_generalAttachedHost(key) then
+            local d = main_generalMoveDistance(key, basi[1].getPosition())
+            if d > max then
+                warningToColor(string.format("%s ha mosso %.1f\": massimo %d\"",
+                    main_decodeExtendedUnitLabel(key), d, main_generalMoveInches()), player, "Yellow", 5, true)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: main_generalMoveEnd()
+-- Fine Movimento: spegne cerchi e fili.
+-- ============================================================
+function main_generalMoveEnd()
+    for key, _ in pairs(IEF_GENERAL_DRAG) do main_generalDragStop(key) end
+    IEF_GENERAL_MOVE_CIRCLE = {}
+    main_aggiornaLinee()
+end
+
+-- ============================================================
+-- Eventi TTS (non definiti altrove)
+-- ============================================================
+function onObjectPickUp(player_color, obj)
+    main_generalOnPickUp(player_color, obj)
+end
+
+function onObjectDrop(player_color, obj)
+    main_generalOnDrop(player_color, obj)
+end
+
+-- ============================================================
 -- FUNZIONE: debug_generalAttach(genKey) / debug_generalDetach(genKey)
 -- Solo test: /execute debug_generalAttach("ANG_GEN_FP_1")
 -- ============================================================

@@ -57,6 +57,7 @@ function main_onSave()
     ief_rout_pending    = IEF_ROUT_PENDING,
     ief_rout_next_id    = IEF_ROUT_NEXT_ID, 
     ief_general_attached = IEF_GENERAL_ATTACHED,
+    ief_general_move_start = IEF_GENERAL_MOVE_START,
 }    
     return JSON.encode(saveData)
 end
@@ -178,6 +179,10 @@ function main_restoreState(save_state)
 
     if data.ief_general_attached then
         IEF_GENERAL_ATTACHED = data.ief_general_attached
+    end
+
+    if data.ief_general_move_start then
+        IEF_GENERAL_MOVE_START = data.ief_general_move_start
     end
     
     if data.ief_sub then

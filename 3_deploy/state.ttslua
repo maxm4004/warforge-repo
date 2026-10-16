@@ -71,10 +71,6 @@ function deployment_reset()
 end
 
     GAP_DIVERSO = 5 * CM_TO_TTS
-    FP_GAP  = 8 * CM_TO_TTS
-    FM_GAP  = 8 * CM_TO_TTS
-    FL_GAP = 9 * CM_TO_TTS
-    CP_GAP  = 9 * CM_TO_TTS
 
 DEPLOYMENT.fogArm1 = [[
 {
