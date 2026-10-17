@@ -87,6 +87,7 @@ function move_redraw(unitKey)
     local pivotResiduo = IEF_PIVOT_BUDGET[unitKey] or 0
 
     if moveResiduo <= 0 and not IEF_MOVE_TEST_MODE then
+        if state.rotta then main_routContinueDone(unitKey, state) end
         move_close(unitKey)
         return
     end
@@ -146,7 +147,7 @@ function move_redraw(unitKey)
         -- restante"): o perni o avanti, non entrambi.
         local perniUsati = 3 - pivotResiduo
         local avanzato = (main_unitFullMove(unitKey) - moveResiduo) > perniUsati + 0.001
-        local soloPerno = not canDo("perno_max3_e_muovi") and not IEF_MOVE_TEST_MODE
+        local soloPerno = not canDo("perno_max3_e_muovi") and not IEF_MOVE_TEST_MODE and not state.rotta
 
         local avantiOk = canDo("avanti") and not (soloPerno and perniUsati > 0)
         setBtn("btn_" .. unitKey .. "_Move1",   avantiOk and moveResiduo >= 1)
@@ -157,6 +158,11 @@ function move_redraw(unitKey)
                         and not (soloPerno and avanzato)
         setBtn("btn_" .. unitKey .. "_PivotSx", pivotOk)
         setBtn("btn_" .. unitKey .. "_PivotDx", pivotOk)
+
+        -- Rotta: mossa obbligatoria, si chiude solo se bloccata
+        if state.rotta then
+            setBtn("btn_" .. unitKey .. "_Close", state.bloccata == true)
+        end
     end, 5)
 end
 -- ============================================================
@@ -176,10 +182,18 @@ function move_snapshot(unitKey)
         rot[i] = b.getRotation()
     end
 
+    local amiche = nil
+    if state.amicheRotta then
+        amiche = {}
+        for k, v in pairs(state.amicheRotta) do amiche[k] = v end
+    end
+
     return {
         pos = pos, rot = rot,
         budget      = IEF_MOVE_BUDGET[unitKey],
         pivotBudget = IEF_PIVOT_BUDGET[unitKey],
+        amiche      = amiche,
+        bloccata    = state.bloccata,
     }
 end
 
@@ -198,6 +212,10 @@ function move_restoreSnapshot(unitKey, snap)
 
     IEF_MOVE_BUDGET[unitKey]  = snap.budget
     IEF_PIVOT_BUDGET[unitKey] = snap.pivotBudget
+    if state.rotta then
+        state.amicheRotta = snap.amiche or {}
+        state.bloccata = snap.bloccata
+    end
 end
 
 -- ============================================================
@@ -240,9 +258,37 @@ function move_avanti_apply(unitKey, distanzaInch)
     local residuo = IEF_MOVE_BUDGET[unitKey] or 0
     if residuo <= 0 and not IEF_MOVE_TEST_MODE then return false end
     if distanzaInch > residuo and not IEF_MOVE_TEST_MODE then distanzaInch = residuo end
+
+    -- Prosecuzione della rotta: nemico o intransitabile fermano il
+    -- passo (si evitano con perno o contraendo il fronte); le amiche
+    -- attraversate si annotano (disordinate a fine mossa).
+    if state.rotta then
+        local passo = main_routCheckStep(unitKey, distanzaInch)
+        if passo.avanza < distanzaInch - 0.01 then
+            state.bloccata = true
+            local p = state.activePlayer
+            if p then
+                warningToColor(passo.nemico and "Rotta: nemico davanti, la fuga si ferma qui"
+                    or "Rotta: terreno intransitabile davanti, usa il perno o contrai il fronte", p, "Yellow", 5, true)
+            end
+        else
+            state.bloccata = nil
+        end
+        state.nuoveAmiche = passo.amiche
+        distanzaInch = passo.avanza
+        if distanzaInch <= 0 then
+            move_redraw(unitKey)
+            return false
+        end
+    end
     
     state.history = state.history or {}
     table.insert(state.history, move_snapshot(unitKey))
+
+    if state.rotta then
+        for key, tipo in pairs(state.nuoveAmiche or {}) do state.amicheRotta[key] = tipo end
+        state.nuoveAmiche = nil
+    end
     
     local fwd   = basiObjs[1].getTransformForward()
     local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
@@ -386,7 +432,16 @@ end
 -- ============================================================
 function move_btnClose(player, value, id)
     local unitKey = id:match("^btn_(.+)_Close$")
-    if unitKey then move_close(unitKey) end
+    if not unitKey then return end
+    local state = IEF_MOVE_UNITS[unitKey]
+    if state and state.rotta then
+        if not state.bloccata and (IEF_MOVE_BUDGET[unitKey] or 0) > 0 then
+            warningToColor("La rotta è obbligatoria: completa la mossa", player, "Yellow", 5, true)
+            return
+        end
+        main_routContinueDone(unitKey, state)
+    end
+    move_close(unitKey)
 end
 -- ============================================================
 -- FUNZIONE: move_btnUndoLast(player, value, id)

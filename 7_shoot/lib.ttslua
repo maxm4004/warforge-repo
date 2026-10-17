@@ -1,956 +1,894 @@
--- ============================================================
--- FUNZIONE: shoot_buttonBaseClick(obj, player_color, alt_click)
--- ============================================================
-function shoot_buttonBaseClick(obj, player_color, alt_click)
+-- terrains: mappa nome → URL texture per diffuseURL = "erba_verde" ecc.
+DEPLOYMENT_TERRAINS = {
+    terra_fango = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523998487/F1855119665D8199F8E2AD87F6C8DB9ADEC7E6F9/",
+    erba_mista  = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523994816/56D1D3CBC31E99107B1BAD94F46FA7B335540040/",
+    autunno     = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523990770/9EBBA093EC1C1CA2CEBD5286AB2BEAF40E79FB4E/",
+    terra_secca = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523987577/7B0CDDFBEF5CF9960B959A037B0140030E2B05A2/",
+    erba_verde  = "https://steamusercontent-a.akamaihd.net/ugc/1014942544699601731/8CA9A0469A8383413D7ED3B2732CC52D29F840C2/",
+    sabbia      = "https://steamusercontent-a.akamaihd.net/ugc/1014942732524001712/C11D0581583CC167D7A51ACA1763CBA4EF43E44C/",
+}
 
-    local slot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
-    if not slot then return end
+nomeUnit = {}
+basiModel = {}
+minisModel = {}
 
-    if shoot_rollPending(slot) then
-        warningToColor("C'è un tiro confermato: tira prima i dadi", Player[player_color], "Yellow", 5, true)
-        return
+-- ============================================================
+-- FUNZIONE: deployment_loadArmySlot()
+-- Punto di ingresso dal pulsante spawn.
+-- Carica generated/[tag]-army.json e spawna l'esercito.
+-- ============================================================
+function deployment_loadArmySlot(slot, player)
+
+    slot = tonumber(slot)
+
+    if not deployment_isValidSlot(slot) then
+        printToAll("[DEPLOY] slot non valido: " .. tostring(slot), {r=1,g=0.3,b=0.3})
+        return false
     end
 
-    local unitKey = main_getUnitKey(obj)
-    if not unitKey then return end
-
-    local basiObjs = {}
-    for _, o in ipairs(getAllObjects()) do
-        if main_getUnitKey(o) == unitKey then
-            table.insert(basiObjs, o)
-        end
+    if deployment_isArmyLoaded(slot) then
+        printToAll("[DEPLOY] Army" .. slot .. " già caricata", {r=1,g=0.8,b=0.2})
+        return false
     end
 
-    if #basiObjs == 0 then return end
+    if deployment_isBusy(slot) then
+        printToAll("[DEPLOY] Army" .. slot .. " già in caricamento", {r=1,g=0.8,b=0.2})
+        return false
+    end
 
-    local player = Player[ARMY[slot].color]
-    main_cameraToUnitPanel(player, basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
-    shoot_range_and_target(player, basiObjs)
-end
--- ============================================================
--- FUNZIONE: shoot_range_and_target(player, selection)
--- ============================================================
-function shoot_range_and_target(player, selection)
+    local url = DEPLOYMENT.urls["army" .. slot]
+    if not url or url == "" then
+        printToAll("[DEPLOY] URL Army" .. slot .. " non configurata", {r=1,g=0.3,b=0.3})
+        return false
+    end
 
-    local phase = ENGINE.phases[ENGINE.phase]
-    if not phase then print("No phase") return false end
-    local selected = selection
+    deployment_setBusy(slot, true)
+    local playerName  = player and player.steam_name or "---"
+    local playerColor = player and player.color      or "---"
+
+    printToAll("[DEPLOY] Download Army" .. slot .. "... " .. url, {r=0.8,g=0.8,b=0.8})
+
+    WebRequest.get(url, function(req)
         
-    if not selected or #selected < 1 then
-        printToAll("[TIRO] Seleziona una base", {r=1,g=0.6,b=0})
-        return false
-    end
-
-    UI.setAttribute("btnAction", "Text", "Fire")
-    UI.setAttribute("btnAction", "onClick", "shoot_shootConfirm")
-    UI.setAttribute("btnCancelShoot", "onClick", "shoot_shootResetLines")
-    UI.setAttribute("btnAction", "textColor", "White")
-    UI.setAttribute("btnCancelShoot", "textColor", "White")
-
-    local shooter = selected[1]
-    local shooterSlot = nil
-    if shooter.hasTag("Army1") then shooterSlot = 1 end
-    if shooter.hasTag("Army2") then shooterSlot = 2 end
-    if shooterSlot == nil then return false end
-    local unitKey = main_getUnitKey(shooter)
-
-    local playerSlot = main_getArmyByColor(player)
-    if playerSlot ~= shooterSlot then
-        printToColor("[TIRO] Non è la tua unità", player.color, {r=1,g=0.3,b=0.3})
-        return false
-    end
-
-    local nickname    = shooter.getName()
-    local baseInfo    = main_parseNickname(nickname)
-    local shooterUnit = baseInfo and main_findUnit(shooterSlot, baseInfo.unitType, baseInfo.unitNumber)
-
-    if not shooterUnit then
-        printToColor("[TIRO] Impossibile leggere le informazioni dell'unità", player.color, {r=1,g=0.6,b=0})
-        return false
-    end
-
-    local weapon = shoot_getWeapon(unitKey)
-
-    if not weapon then
-        printToColor("[TIRO] Questa unità non ha armi da tiro", player.color, {r=1,g=0.6,b=0})
-        return false
-    end
-
-    if not baseInfo then
-        printToColor("[TIRO] Impossibile leggere le informazioni della base", player.color, {r=1,g=0.6,b=0})
-        return false
-    end
-
-    if IEF_FIRED[unitKey] then
-        warningToColor("Questa unità ha già effettuato il tiro in questo turno", player, "Yellow", 5, true)
-        return false
-    end
-
-    local rangeUnits  = weapon.range_inches and (weapon.range_inches * INCH_TO_TTS)
-                        or weapon.rangeUnits
-                        or (weapon.range and (weapon.range * INCH_TO_TTS))
-                        or 20
-    local angoloGradi = IEF_SHOOTING.angle
-    local pos         = shooter.getPosition()
-
-    -- Tutte le basi dell'unità selezionate (tutti i ranghi)
-    local basiObjs = {}
-    for _, obj in ipairs(selected) do
-        if obj.hasTag and obj.hasTag(shooterSlot == 1 and "Army1" or "Army2") then
-            table.insert(basiObjs, obj)
+        if req.is_error then
+            deployment_setBusy(slot, false)
+            printToAll("[DEPLOY] Errore Army" .. slot .. ": " .. tostring(req.error), {r=1,g=0.3,b=0.3})
+            return
         end
-    end
 
-    if #basiObjs == 0 then
-        printToColor("[TIRO] Nessuna base valida selezionata", player.color, {r=1,g=0.3,b=0.3})
-        return false
-    end
-
-    local unitType   = shooterUnit and shooterUnit.tipo or "FP"
-    local unitTypesDict = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
-    local utData = unitTypesDict and unitTypesDict[unitType] or {}
-
-    -- Determina il rango di ogni base (proiezione lungo il fronte reale)
-    local fwdRango   = basiObjs[1].getTransformForward()
-    local fwdXZRango = Vector(fwdRango.x, 0, fwdRango.z):normalized()
-
-    local proiezioni = {}
-    local maxProjRango = nil
-    for _, baseObj in ipairs(basiObjs) do
-        local p = baseObj.getPosition()
-        local proj = p.x * fwdXZRango.x + p.z * fwdXZRango.z
-        proiezioni[baseObj] = proj
-        if maxProjRango == nil or proj > maxProjRango then
-            maxProjRango = proj
+        local ok, armyData = pcall(JSON.decode, req.text)
+        if not ok or type(armyData) ~= "table" then
+            deployment_setBusy(slot, false)
+            printToAll("[DEPLOY] Parsing Army" .. slot .. " fallito", {r=1,g=0.3,b=0.3})
+            return
         end
-    end
 
-    local rankStep = (tonumber(utData.base_depth_cm) or 3) * CM_TO_TTS
-    local rankTolerance = rankStep * 0.6
-
-    local maxRanghi = 2   -- primo e secondo rango (regolamento Fase 4)
-
-    -- Solo le basi di primo rango (fronte, proiezione massima = più avanti
-    -- nella direzione verso cui l'unità guarda) contano da qui in poi
-    local basiFronte = {}
-    for _, baseObj in ipairs(basiObjs) do
-        local offset = maxProjRango - proiezioni[baseObj]
-        local rangoIndex = math.floor((offset + rankTolerance) / rankStep)
-        if rangoIndex < maxRanghi then
-            table.insert(basiFronte, baseObj)
+        -- Verifica formato
+        if type(armyData.unita) ~= "table" then
+            deployment_setBusy(slot, false)
+            printToAll("[DEPLOY] Army" .. slot .. ": campo 'unita' mancante", {r=1,g=0.3,b=0.3})
+            return
         end
-    end
+        if type(armyData.elementi) ~= "table" then
+            deployment_setBusy(slot, false)
+            printToAll("[DEPLOY] Army" .. slot .. ": campo 'elementi' mancante — usare formato 2.0-IEF", {r=1,g=0.3,b=0.3})
+            return
+        end
 
-    if #basiFronte == 0 then
-        basiFronte = basiObjs  -- fallback di sicurezza, non dovrebbe accadere
-    end
-
-    -- Direzione iniziale dal fronte per il sort
-    local fwdRef0 = basiFronte[1].getTransformForward()
-    local fwdXZ0  = Vector(fwdRef0.x, 0, fwdRef0.z):normalized()
-    local right0  = Vector(-fwdXZ0.z, 0, fwdXZ0.x)
-
-    -- Ordina le basi del fronte per posizione lungo asse right
-    table.sort(basiFronte, function(a, b)
-        local pa = a.getPosition()
-        local pb = b.getPosition()
-        local da = pa.x * right0.x + pa.z * right0.z
-        local db = pb.x * right0.x + pb.z * right0.z
-        return da < db
+        deployment_applyArmyPlayer(slot, playerName, playerColor)
+        deployment_spawnArmy(slot, armyData)
+        deployment_markArmyLoaded(slot, true)
+        deployment_setBusy(slot, false)
+        
+        printToAll("[DEPLOY] Army" .. slot .. " (" .. (armyData.nome or armyData.tag or "?") .. ") caricata", {r=0.4,g=0.9,b=0.4})
+        if updateCenterPanel then updateCenterPanel() end
     end)
 
-    local primaBase  = basiFronte[1]
-    local ultimaBase = basiFronte[#basiFronte]
-    local pos1       = primaBase.getPosition()
-    local pos2       = ultimaBase.getPosition()
+    return true
+end
 
-    -- Ricalcola direzioni dalla posizione/rotazione reale delle basi di fronte
-    local dirUnita, right, fwdXZ
+-- ============================================================
+-- FUNZIONE: deployment_spawnArmy()
+-- ============================================================
+function deployment_spawnArmy(slot, armyData)
 
-    do
-        local sumX, sumZ = 0, 0
-        for _, b in ipairs(basiFronte) do
-            local f = b.getTransformForward()
-            sumX = sumX + f.x
-            sumZ = sumZ + f.z
-        end
-        fwdXZ = Vector(sumX, 0, sumZ):normalized()
-    end
+    local armyTag  = "Army" .. slot
+    local counters = {}
 
-    if #basiFronte == 1 then
-        right    = Vector(-fwdXZ.z, 0, fwdXZ.x)
-        dirUnita = right
-    else
-        dirUnita = Vector(pos2.x - pos1.x, 0, pos2.z - pos1.z):normalized()
-        right    = dirUnita
-    end
-
-    local halfWidth  = ((utData.base_width_cm or 4) / 2) * CM_TO_TTS
-    local halfDepth  = ((tonumber(utData.base_depth_cm) or 3) / 2) * CM_TO_TTS
-    local y = 1.30
-
-    local startLeft = Vector(
-        pos1.x - right.x * halfWidth + fwdXZ.x * halfDepth,
-        y,
-        pos1.z - right.z * halfWidth + fwdXZ.z * halfDepth
-    )
-    local startRight = Vector(
-        pos2.x + right.x * halfWidth + fwdXZ.x * halfDepth,
-        y,
-        pos2.z + right.z * halfWidth + fwdXZ.z * halfDepth
-    )
-
-    local angolo   = math.rad(angoloGradi)
-    local segmenti = 30
-
-    local function ruota(v, ang)
-        return Vector(
-            v.x * math.cos(ang) - v.z * math.sin(ang),
-            0,
-            v.x * math.sin(ang) + v.z * math.cos(ang)
-        )
-    end
-
-    -- Lato sinistro: da startLeft con angolo -45° fisso dalla direzione fwdXZ
-    local dirSx  = ruota(fwdXZ, -angolo)
-    local endSx  = Vector(
-        startLeft.x  + dirSx.x * rangeUnits,
-        startLeft.y,
-        startLeft.z  + dirSx.z * rangeUnits
-    )
-
-    -- Lato destro: da startRight con angolo +45° fisso dalla direzione fwdXZ
-    local dirDx  = ruota(fwdXZ, angolo)
-    local endDx  = Vector(
-        startRight.x + dirDx.x * rangeUnits,
-        startRight.y,
-        startRight.z + dirDx.z * rangeUnits
-    )
-
-    -- Arco finale: da endSx a endDx
-    local puntiArco = {}
-
-    for i = 0, segmenti do
-        local t   = i / segmenti
-        local ang = -angolo + (2 * angolo * t)
-        local dir = ruota(fwdXZ, ang)
-
-        local cx = startLeft.x + (startRight.x - startLeft.x) * t
-        local cz = startLeft.z + (startRight.z - startLeft.z) * t
-
-        table.insert(puntiArco, shooter.positionToLocal(Vector(
-            cx + dir.x * rangeUnits,
-            startLeft.y,
-            cz + dir.z * rangeUnits
-        )))
-    end
-
-    local puntiSinistro = {}
-    local puntiDestro   = {}
-
-    for i = 0, segmenti do
-        local t = i / segmenti
-        local pS = Vector(
-            startLeft.x  + (endSx.x - startLeft.x)  * t,
-            startLeft.y,
-            startLeft.z  + (endSx.z - startLeft.z)  * t
-        )
-        local pD = Vector(
-            startRight.x + (endDx.x - startRight.x) * t,
-            startRight.y,
-            startRight.z + (endDx.z - startRight.z) * t
-        )
-        table.insert(puntiSinistro, shooter.positionToLocal(pS))
-        table.insert(puntiDestro,   shooter.positionToLocal(pD))
-    end
-
-    local nemici = shoot_getNemici(shooter, shooterSlot)
-
-    -- target = una base nemica "rappresentativa" della UNITA' bersaglio scelta
-    local target, _ = shoot_trovaBersaglio(basiFronte, nemici, rangeUnits, angoloGradi)
-
-    local conoLines = {
-        {points = puntiSinistro, color = {1, 0.8, 0.1}, thickness = 0.1},
-        {points = puntiDestro,   color = {1, 0.8, 0.1}, thickness = 0.1},
-        {points = puntiArco,     color = {1, 0.8, 0.1}, thickness = 0.1},
+    DEPLOYMENT.armies[slot] = {
+        tag         = armyData.tag,
+        name        = armyData.nome or armyData.tag,
+        displayName = armyData.nome or armyData.tag,
     }
 
-    if target then
+    local unitOffsetX = slot == 1 and -87 or 87
+    local unitOffsetZ = -45.00
+    local prevModel   = nil
 
-        -- Risolve TUTTE le basi dell'unita' bersaglio (non solo "target")
-        local targetInfo  = main_parseNickname(target.getName())
-        local targetSlot  = shooterSlot == 1 and 2 or 1
-        local targetUnit  = targetInfo and main_findUnit(targetSlot, targetInfo.unitType, targetInfo.unitNumber)
+    local prevMaxX  = 0
+    local prevMaxZ  = 0
+    local prevDepth = 0
 
-        local basiNemiche = {}
-        if targetUnit and targetUnit.basi then
-            for _, b in ipairs(targetUnit.basi) do
-                local o = getObjectFromGUID(b.guid)
-                if o then table.insert(basiNemiche, o) end
+    -- Conta basi totali per callback finale
+    local totaleBasi  = 0
+    local basiSpawnate = 0
+    local subUnitCounter = 0
+
+    for _, unitData in ipairs(armyData.unita) do
+        totaleBasi = totaleBasi + #(unitData.basi or {})
+    end
+
+    local function onBaseSpawnata()
+        basiSpawnate = basiSpawnate + 1
+        if basiSpawnate >= totaleBasi then
+            local function onProgressingBar (s, d, a)
+                deployment_fillProgress(s, d, a)
             end
+
+            Wait.time(function()
+                    warning("Attendere che il caricamento sia completo...", "Yellow")
+                    deployment_AttachMinisToBase(slot)
+                    onProgressingBar(slot, 0, 100)
+                    Wait.time(function()
+                            warning("Attendere che il caricamento sia completo...", "Yellow")
+                            callHandler("deployment_scanTable")
+
+                            -- Crea i pulsanti 3D (Formazione + Muovi) sulle basi capitane di questo esercito
+                            local capitaneViste = {}
+                            for _, obj in ipairs(getAllObjects()) do
+                                local objSlot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
+                                if objSlot == slot and main_parseNickname(obj.getName()) then
+                                    local unitKey = main_getUnitKey(obj)
+                                    if unitKey and not capitaneViste[unitKey] then
+                                        capitaneViste[unitKey] = true
+                                        local basiUnita = {}
+                                        for _, o in ipairs(getAllObjects()) do
+                                            if main_parseNickname(o.getName()) and main_getUnitKey(o) == unitKey then
+                                                table.insert(basiUnita, o)
+                                            end
+                                        end
+                                        main_riposizionaPulsanteFormazione(unitKey, basiUnita)
+                                    end
+                                end
+                            end
+
+                            Wait.time(function()
+                                  callHandler("initUI")
+                                  callHandler("updateCenterPanel")
+                            end, 1)
+                            
+                    end, 4)
+            end, 3)
         end
-        if #basiNemiche == 0 then
-            table.insert(basiNemiche, target)  -- fallback di sicurezza
-        end
+    end
 
-        local rangeInches = rangeUnits / INCH_TO_TTS
-        local basiPronte = 0
+    for _, unitData in ipairs(armyData.unita) do
 
-        -- Passo 1: basi tiratrici (fronte) pronte (arancione scuro) — determina numDadi
-        for _, baseObj in ipairs(basiFronte) do
-            local posA = baseObj.getPosition()
+        local base = 0
+        local rango = tonumber(unitData.basi_per_rango)
+        local tipo = unitData.tipo or ""
 
-            local bersaglioTrovato = nil
-            for _, baseNemica in ipairs(basiNemiche) do
-                local targetPos = baseNemica.getPosition()
+        -- local gap = 0
 
-                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
-                    bersaglioTrovato = baseNemica
-                    break
+        -- if tipo ~= "" then
+        --     if tipo == "FP" then 
+        --         gap = FP_GAP 
+        --     else 
+        --         if tipo == "FM" then 
+        --             gap = FM_GAP 
+        --         else 
+        --             if tipo == "CP" then 
+        --                 gap = CP_GAP 
+        --             else 
+        --                 if tipo == "FL" then 
+        --                    gap = FL_GAP 
+        --                 else 
+        --                    gap = 0    
+        --                 end
+        --             end                
+        --         end
+        --     end
+        -- end
+        
+            counters[unitData.model] = (counters[unitData.model] or 0) + 1
+            local unitNumber = counters[unitData.model]
+
+            for _, baseData in ipairs(unitData.basi or {}) do
+                
+                base = base + 1
+                if prevModel == unitData.model then
+                    if rango then
+                        if base <= rango then
+                            -- stessa sotto-unità, nessuna modifica
+                        else
+                            -- if slot == 1 then    
+                            --     unitOffsetZ = unitOffsetZ + gap
+                            -- else
+                            --     unitOffsetZ = unitOffsetZ + gap
+                            -- end
+                            base = 1
+                            subUnitCounter = subUnitCounter + 1
+                        end
+                    end
+                else
+                    if slot == 1 then
+                        unitOffsetX = unitOffsetX + (prevMaxX + 4) * CM_TO_TTS + GAP_DIVERSO
+                    else
+                        unitOffsetX = unitOffsetX - (prevMaxX + 4) * CM_TO_TTS - GAP_DIVERSO
+                    end
+
+                    unitOffsetZ = 0
+                    prevModel = unitData.model
+                    basi = 1
+                    subUnitCounter = 1   -- <-- NUOVO: reset quando cambia model (nuovo reparto tipo diverso)
                 end
+                local unitNumber = (counters[unitData.model] - 1) + subUnitCounter
+                deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.elementi, unitOffsetX, unitOffsetZ, onBaseSpawnata)
             end
 
-            if bersaglioTrovato then
-                basiPronte = basiPronte + 1
-                baseObj.highlightOn({1, 0.549, 0})
-            end
+        -- salva valori per prossima iterazione
+        prevMaxX  = 0
+        prevMaxZ  = 0
+
+        for _, b in ipairs(unitData.basi or {}) do
+            if (b.posizione.x or 0) > prevMaxX then prevMaxX = b.posizione.x end
+            if (b.posizione.z or 0) > prevMaxZ then prevMaxZ = b.posizione.z end
         end
 
-        -- Passo 2: basi nemiche raggiungibili dal fronte (blu) — indipendente da chi le trova
-        for _, baseNemica in ipairs(basiNemiche) do
-            local targetPos = baseNemica.getPosition()
+        --local utDict  = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
+        --prevDepth = utDict and utDict[tipo] and utDict[tipo].base_depth_cm or 3
+    end
+end
+-- ============================================================
+-- FUNZIONE: deployment_spawnBase()
+-- ============================================================
+function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, elementi, unitOffsetX, unitOffsetZ, onSpawnata)
+       
+    local modelKey     = unitData.model
+    local templateData = elementi and elementi[modelKey]
 
-            for _, baseObj in ipairs(basiFronte) do
-                local posA = baseObj.getPosition()
+    if not templateData then
+        printToAll("[DEPLOY] Modello non trovato: " .. tostring(modelKey), {r=1,g=0.6,b=0})
+        if onSpawnata then onSpawnata() end
+        return
+    end
 
-                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
-                    baseNemica.highlightOn({0.2, 0.6, 1})
-                    break
-                end
+    local nickname =    deployment_buildBaseNickname(unitData, baseData, unitNumber)
+    local pos =         deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
+    local rot      =    deployment_buildBaseRotation(slot)
+    local params   =    deployment_buildSpawnParams(nickname, unitData, templateData, pos, rot)
+
+    if not params then
+        if onSpawnata then onSpawnata() end
+        return
+    end
+
+    spawnObjectJSON({
+        json = JSON.encode(params),
+        callback_function = function(obj)
+            if not obj then
+                if onSpawnata then onSpawnata() end
+                return
             end
+            deployment_onBaseSpawned(obj, slot, armyTag, nickname, unitData, baseData, templateData, pos, rot, onSpawnata)
+        end
+    })
+end
+-- ============================================================
+-- FUNZIONE: deployment_buildBaseNickname(unitData, baseData, unitNumber)
+-- Alcuni model hanno un suffisso extra dopo il tipo unità (es.
+-- "VIK_Huscarl_FP_MIX") — lo tolgo troncando subito dopo il
+-- segmento del tipo, invece di usare il model per intero.
+-- ============================================================
+function deployment_buildBaseNickname(unitData, baseData, unitNumber)
+    return unitData.model .. "_" .. unitNumber .. "." .. baseData.seq
+end
+-- ============================================================
+-- FUNZIONE: deployment_buildBasePosition()
+-- Army1 spawna a Z negativo (zona sopra), Army2 a Z positivo.
+-- Offset da posizione nel JSON (coordinate relative in cm * 0.7423)
+-- ============================================================
+function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
+
+    local VERDE_LZ  = 50
+    local SPAWN_GAP = 2
+    local Y         = 0.98
+     local sourcePos = baseData.posizione or { x = 0, z = 0 }
+
+    local zOffset   = slot == 1 and -(VERDE_LZ + SPAWN_GAP) or (VERDE_LZ + SPAWN_GAP)
+    local zSign = slot == 1 and -1 or 1
+    local col = math.floor((sourcePos.x or 0) / 4)
+    local horizGap = 0.01
+
+    local x1 = ((unitOffsetX or 0) + (sourcePos.x or 0) * CM_TO_TTS + col * horizGap)
+    local x2 = ((unitOffsetX or 0) - (sourcePos.x or 0) * CM_TO_TTS - col * horizGap)
+
+    local z1 = zOffset - (sourcePos.z or 0) * CM_TO_TTS + (unitOffsetZ or 0) * zSign
+    local z2 = zOffset + (unitOffsetZ or 0) + (sourcePos.z or 0) * CM_TO_TTS
+   
+    local x = slot == 1 and x1 or x2
+    local z = slot == 1 and z1 or z2
+    local y = Y
+    
+    return {x = x, y = y, z=z}
+end
+-- ============================================================
+-- FUNZIONE: deployment_buildBaseRotation()
+-- Army1 guarda verso Z positivo (verso il centro tavolo).
+-- Army2 è ruotata di 180°.
+-- ============================================================
+function deployment_buildBaseRotation(slot)
+    return { x = 0, y = slot == 1 and 0 or 180, z = 0 }
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_buildSpawnParams()
+-- Costruisce il JSON per spawnObjectJSON dalla customMesh.
+-- Risolve diffuseURL se è un nome terreno (es. "erba_verde").
+-- ============================================================
+function deployment_buildSpawnParams(nickname, unitData, templateData, pos, rot)
+
+    if templateData.customAssetbundle then
+        local ab = templateData.customAssetbundle
+        return {
+            Name        = "Custom_Assetbundle",
+            Nickname    = nickname,
+            Description = unitData.nome_display or "",
+            Transform   = {
+                posX   = pos.x, posY   = pos.y, posZ   = pos.z,
+                rotX   = rot.x, rotY   = rot.y, rotZ   = rot.z,
+                scaleX = ab.scaleX or 1, scaleY = ab.scaleY or 1, scaleZ = ab.scaleZ or 1
+            },
+            CustomAssetbundle = {
+                AssetbundleURL          = ab.assetBundleURL or "",
+                AssetbundleSecondaryURL = ab.assetBundleSecondaryURL or "",
+                MaterialIndex = ab.material or 3,
+                TypeIndex     = ab.type     or 0
+            }
+        }
+    end
+
+    local mesh = templateData.customMesh
+    if not mesh then
+        print("[DEPLOY] ATTENZIONE: template senza customMesh né customAssetbundle per " .. nickname)
+        return nil
+    end
+
+    -- Deep copy per non modificare il template
+    local meshCopy = {}
+    for k, v in pairs(mesh) do meshCopy[k] = v end
+
+    -- Risolvi diffuseURL se è un nome terreno
+    if type(meshCopy.diffuseURL) == "string" and DEPLOYMENT_TERRAINS[meshCopy.diffuseURL] then
+        meshCopy.diffuseURL = DEPLOYMENT_TERRAINS[meshCopy.diffuseURL]
+    end
+
+    return {
+        Name        = "Custom_Model",
+        Nickname    = nickname,
+        Description = unitData.nome_display or "",
+        Transform   = {
+            posX   = pos.x, posY   = pos.y, posZ   = pos.z,
+            rotX   = rot.x, rotY   = rot.y, rotZ   = rot.z,
+            scaleX = 1,     scaleY = 1,     scaleZ = 1
+        },
+        CustomMesh = {
+            MeshURL      = meshCopy.meshURL    or "",
+            DiffuseURL   = meshCopy.diffuseURL or "",
+            ColliderURL  = meshCopy.colliderURL or "",
+            Convex       = true,
+            MaterialIndex = meshCopy.material  or 3,
+            TypeIndex    = meshCopy.type       or 0,
+            CastShadows  = true
+        }
+    }
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_onBaseSpawned()
+-- Callback dopo spawn base: applica tag, metadata, scale, figure.
+-- ============================================================
+function deployment_onBaseSpawned(obj, slot, armyTag, nickname, unitData, baseData, templateData, pos, rot, onSpawnata)
+   
+    Wait.frames(function()
+        if not obj then return end
+
+        local collected = {}
+
+        obj.setName(nickname)
+        obj.setDescription(unitData.nome_display or "")
+        obj.setLock(true)
+        obj.auto_raise = true
+        obj.addTag(armyTag)
+
+        -- Applica scaleZ dal template (base più sottile per FP, FM, ecc.)
+        local mesh = templateData.customMesh
+        if mesh and mesh.scaleZ then
+            local s = obj.getScale()
+            obj.setScale({ s.x, s.y, mesh.scaleZ })
         end
 
-        IEF_SHOOT_STATE.shooter      = shooter
-        IEF_SHOOT_STATE.target       = target
-        IEF_SHOOT_STATE.shooterUnit  = shooterUnit
-        IEF_SHOOT_STATE.shooterSlot  = shooterSlot
-        IEF_SHOOT_STATE.basiObjs     = basiFronte
-        IEF_SHOOT_STATE.rangeUnits   = rangeUnits
-        IEF_SHOOT_STATE.targetUnit   = targetUnit
-        IEF_SHOOT_STATE.targetSlot   = targetSlot
-        IEF_SHOOT_STATE.basiNemiche  = basiNemiche
+        -- Metadata
+        deployment_applyBaseMetadata(obj, slot, armyTag, nickname, unitData, baseData)
 
-        local distInch  = main_distanceInches(shooter, target)
-        local rangeInch = rangeUnits / INCH_TO_TTS
-
-        local warnings = {}
-        warnings[1] = string.format("Bersaglio del tiro: %s", main_decodeExtendedUnitLabel(target.getName()))
-        warnings[2] = string.format("Distanza: %.2f inch Gittata: %.1f inch", distInch, rangeInch)
-        warnings[3] = string.format("Basi che tirano: %d/%d", basiPronte, #basiFronte)
-        
-        warningListToColor(warnings, player, "Yellow", 5)
-
-        UI.setAttribute("confirm_panel_shoot", "active", "true")
-        UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
-
-        if phase.title == PHASE.SHOOT then
-            UI.setAttribute("btnActionShoot", "active", "true") 
-      else
-      end
-        
-        IEF_SHOOTING.activeLines = nil
-        
-     else
-        -- Nessun nemico in gittata: niente popup di conferma, solo
-        -- l'avviso. Pulisce un eventuale bersaglio precedente, mostra
-        -- il cono per qualche secondo e poi lo toglie.
-        shoot_ResetLines(player)
-        shoot_Reset()
-        warningToColor(string.format("Nessun bersaglio entro gittata di %.0f\"", rangeUnits / INCH_TO_TTS), player, "Yellow", 5, true)
-
-        shooter.setVectorLines(conoLines)
-        IEF_SHOOTING.activeShooter = shooter
-        callHandler("aggiornaLinee")
+        -- Figure figlie
+        deployment_spawnChildrenRecursive(obj, pos, rot, armyTag, templateData.children, nickname, slot)
 
         Wait.time(function()
-            if IEF_SHOOTING.activeShooter == shooter and not IEF_SHOOT_STATE.target then
-                shooter.setVectorLines({})
-                IEF_SHOOTING.activeShooter = nil
+            if obj then obj.setLock(false) end
+        end, 3)
+
+        if onSpawnata then onSpawnata() end
+
+    end, 2)
+end
+-- ============================================================
+-- FUNZIONE: deployment_applyBaseMetadata()
+-- Scrive i dati base in GMNotes (JSON) per recupero runtime.
+-- ============================================================
+function deployment_applyBaseMetadata(obj, slot, armyTag, nickname, unitData, baseData)
+    local metadata = {
+        ruleset         = "IEF",
+        kind            = "UNIT_BASE",
+        armySlot        = slot,
+        armyTag         = armyTag,
+        nickname        = nickname,
+        unitType        = unitData.tipo,
+        unitName        = unitData.nome_display,
+        model           = unitData.model,
+        morale          = unitData.morale,
+        armi            = unitData.armi or {},
+        capabilities    = unitData.capabilities or {},
+        baseSeq         = baseData.seq,
+        mista           = unitData.mista == true,   -- unità mista (es. Lancia+Arco): dall'Army Builder
+    }
+    obj.setGMNotes(JSON.encode(metadata))
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_applyBaseVisibility()
+-- Nasconde la base al giocatore nemico.
+-- ============================================================
+function deployment_applyBaseVisibility(slot)
+    print("deployment_applyBaseVisibility ", slot)
+    local enemyColor = slot == 1 and colorArmy2 or colorArmy1
+    local listaOggetti = getObjectsWithAllTags({"army" .. slot})
+
+     for _, value in ipairs(listaOggetti) do
+        print(value.getName(), " - ", value.guid)
+        value.setInvisibleTo({enemyColor})
+     end
+
+     print("Army".. slot, " nascosta per il player di colore:", enemyColor)
+
+end
+-- ============================================================
+-- FUNZIONE: deployment_applyArmyPlayer()
+-- ============================================================
+function deployment_applyArmyPlayer(slot, playerName, playerColor)
+    DEPLOYMENT.armies[slot] = DEPLOYMENT.armies[slot] or {}
+    DEPLOYMENT.armies[slot].player = playerName
+    DEPLOYMENT.armies[slot].color  = playerColor
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_spawnChildrenRecursive()
+-- Spawna le figure figlie (e loro figli) attaccandole alla base.
+-- ============================================================
+function deployment_spawnChildrenRecursive(baseObj, basePos, baseRot, armyTag, children, nicknameBase, slot)
+    if not children or #children == 0 then return end
+    
+    if nomeUnit[slot] == nil then nomeUnit[slot] = {} end
+    table.insert(nomeUnit[slot], nicknameBase)
+    basiModel[nicknameBase] = baseObj
+    
+    local collected = {}
+    local function spawnLevel(nodeChildren, prefix)
+        for i, childData in ipairs(nodeChildren) do
+            local mesh = childData.customMesh
+            if mesh and mesh.meshURL and mesh.meshURL ~= "" or childData.customAssetbundle then
+                local childNickname = prefix .. "_" .. i
+                if childData.customMesh or childData.customAssetbundle then
+                    local params = deployment_buildFigureParams(childNickname, childData, basePos, baseRot)
+                    spawnObjectJSON({
+                        json = JSON.encode(params),
+                        callback_function = function(obj)
+                            if obj then
+                                obj.addTag(armyTag)
+                                table.insert(collected, obj)
+                                minisModel[nicknameBase] = collected
+                                -- Figli ricorsivi
+                                if childData.children and #childData.children > 0 then
+                                    spawnLevel(childData.children, childNickname)
+                                end
+                            end
+                        end
+                    })
+                end    
             end
-        end, 5)
+        end
+    end
+
+    spawnLevel(children, nicknameBase)
+end
+function deployment_AttachMinisToBase(slot)
+      for _, value in ipairs(nomeUnit[slot]) do
+        local base = basiModel[value]
+        local minis = minisModel[value]
+        if minis ~= nil then
+            for _, minisObj in ipairs(minis) do
+                if minisObj ~= nil then
+                    -- Sostituito addAttachment con jointTo
+                    pcall(function() base.addAttachment(minisObj) end)
+                end
+            end
+        end
+    end
+end
+-- ============================================================
+-- FUNZIONE: deployment_buildFigureParams()
+-- Costruisce i parametri spawn per una figura figlia.
+-- ============================================================
+function deployment_buildFigureParams(nickname, childData, basePos, baseRot)
+    local mesh = childData.customMesh
+    local ab   = childData.customAssetbundle
+
+    if ab then
+        -- AssetBundle
+        local rotY = (baseRot.y + (ab.rotY or 0)) % 360
+        return {
+            Name      = "Custom_Assetbundle",
+            Nickname  = nickname,
+            Transform = {
+                posX = basePos.x + (ab.offsetX or 0),
+                posY = basePos.y + 0.1 + (ab.offsetY or 0),
+                posZ = basePos.z + (ab.offsetZ or 0),
+                rotX = 0, rotY = rotY, rotZ = 0,
+                scaleX = ab.scaleX or 1,
+                scaleY = ab.scaleY or 1,
+                scaleZ = ab.scaleZ or 1
+            },
+            CustomAssetbundle = {
+                AssetbundleURL          = ab.assetBundleURL or "",
+                AssetbundleSecondaryURL = ab.assetBundleSecondaryURL or "",
+                MaterialIndex           = ab.material or 3,
+                TypeIndex               = ab.type or 0
+            }
+        }
+    elseif mesh then
+        -- CustomMesh esistente
+        local rotY   = (baseRot.y + (mesh.rotY or 0)) % 360
+        local diffuse = mesh.diffuseURL
+        if type(diffuse) == "string" and DEPLOYMENT_TERRAINS[diffuse] then
+            diffuse = DEPLOYMENT_TERRAINS[diffuse]
+        end
+        return {
+            Name      = "Custom_Model",
+            Nickname  = nickname,
+            Transform = {
+                posX = basePos.x + (mesh.offsetX or 0),
+                posY = basePos.y + 0.1 + (mesh.offsetY or 0),
+                posZ = basePos.z + (mesh.offsetZ or 0),
+                rotX = 0, rotY = rotY, rotZ = 0,
+                scaleX = mesh.scaleX or 1,
+                scaleY = mesh.scaleY or 1,
+                scaleZ = mesh.scaleZ or 1
+            },
+            CustomMesh = {
+                MeshURL       = mesh.meshURL    or "",
+                DiffuseURL    = diffuse         or "",
+                ColliderURL   = mesh.colliderURL or "",
+                Convex        = true,
+                MaterialIndex = mesh.material   or 3,
+                TypeIndex     = mesh.type       or 0,
+                CastShadows   = true
+            }
+        }
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_validateDeploy()
+-- Verifica che le basi siano nella zona corretta per lo slot.
+-- ============================================================
+function deployment_validateDeploy(player)
+    
+    local slot = main_getArmyByColor(player)
+    if not slot then
+        printToAll("[DEPLOY] Player non associato ad un esercito", {r=1,g=0.3,b=0.3})
         return false
     end
 
-    shooter.setVectorLines(conoLines)
-    IEF_SHOOTING.activeShooter = shooter
-    callHandler("aggiornaLinee")
+    local LAT_TTS     = 6  * INCH_TO_TTS  -- 11.31 TTS
+    local X_MAX       = 66.806 - LAT_TTS  -- 55.50 (con 6 pollici di margine laterale)
+    local Z_NEAR      = 44.536 - (12 * INCH_TO_TTS)  -- 44.536 - 22.62 = 21.92
+    local Z_FAR       = 44.536
 
-    return true
-end
--- ============================================================
--- FUNZIONE: shoot_getWeapon(unitKey)
--- Data una unitKey, legge le armi dell'unità (da GMNotes, via
--- main_getUnitMeta — stesso path usato da charge_stopfireDoRoll)
--- e restituisce la prima arma da tiro valida trovata nei dati
--- regolamento (range_inches > 0). Ritorna nil se l'unità non ha
--- basi sul tavolo, non ha armi, o nessuna è da tiro.
--- ============================================================
-function shoot_getWeapon(unitKey)
-    if not unitKey then return nil end
+    local fuori     = {}
+    local sbagliata = {}
+    local basi_err  = {}
 
-    local bases = main_getUnitBases(unitKey)
-    if #bases == 0 then return nil end
+    for _, obj in ipairs(getAllObjects()) do
+        if deployment_getObjectArmySlot(obj) == slot then
+            local p    = obj.getPosition()
+            local z_ok = math.abs(p.z) >= Z_NEAR and math.abs(p.z) <= Z_FAR
+            local x_ok = math.abs(p.x) <= X_MAX
+            local side = slot == 1 and p.z < 0 or p.z > 0
 
-    local meta = main_getUnitMeta(bases[1])
-    local armi = meta and meta.armi
-    if not armi or #armi == 0 then return nil end
-
-    local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
-    if not weaponsDict then return nil end
-
-    for _, arma in ipairs(armi) do
-        local w = weaponsDict[arma]
-        if w and w.range_inches and w.range_inches > 0 then
-            w._arma_key = arma
-            return w
+            if not z_ok or not x_ok then
+                table.insert(fuori, obj.getName())
+                table.insert(basi_err, obj)
+            elseif not side then
+                table.insert(sbagliata, obj.getName())
+                table.insert(basi_err, obj)
+            end
         end
     end
 
+    for _, obj in ipairs(basi_err) do
+        if obj then obj.highlightOn({ r=1, g=0.1, b=0.1 }, 15) end
+    end
+
+    if #fuori + #sbagliata > 0 then
+         warningToColor("Posizionare tutte le unità nell'area di DEPLOY", player, "Yellow", 5, true)
+         return false
+    end
+
+    printToAll("[DEPLOY] Army" .. slot .. " — posizionamento OK!", {r=0.4,g=0.9,b=0.4})
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_scanTable()
+-- Legge tutte le basi sul tavolo e popola DEPLOYMENT.scanned.
+-- ============================================================
+function deployment_scanTable()
+
+    local groups = { [1] = {}, [2] = {} }
+
+    for _, obj in ipairs(getAllObjects()) do
+        local slot = deployment_getObjectArmySlot(obj)
+        if slot then
+            local info = main_parseNickname(obj.getName())
+            if info then
+                local key   = info.unitType .. "_" .. info.unitNumber .. " x"
+                local group = groups[slot][key]
+
+                if not group then
+                    group = {
+                        tipo      = info.unitType,
+                        unita_num = info.unitNumber,
+                        fazione   = tostring(slot),
+                        basi      = {}
+                    }
+
+                    -- SEMPRE leggi armi dai GMNotes per ogni base
+                    local raw = obj.getGMNotes()
+                    if raw and raw ~= "" then
+                        local ok, meta = pcall(JSON.decode, raw)
+                        if ok and meta and not group.armi then
+                            group.morale = meta.morale
+                            group.armi   = meta.armi
+                            group.model  = meta.model
+                        end
+                    end
+                    
+                    groups[slot][key] = group
+                end
+
+                table.insert(group.basi, {
+                    nickname = obj.getName(),
+                    guid     = obj.getGUID(),
+                    seq      = info.baseSeq
+                })
+                obj.highlightOff()
+            end
+        end
+    end
+
+    DEPLOYMENT.scanned[1] = deployment_groupsToList(groups[1])
+    DEPLOYMENT.scanned[2] = deployment_groupsToList(groups[2])
+    return DEPLOYMENT.scanned[1], DEPLOYMENT.scanned[2]
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_groupsToList()
+-- ============================================================
+function deployment_groupsToList(groups)
+    local list = {}
+    for _, unit in pairs(groups) do
+        table.sort(unit.basi, function(a, b) return (a.seq or 0) < (b.seq or 0) end)
+        table.insert(list, unit)
+    end
+    table.sort(list, function(a, b)
+        if a.tipo ~= b.tipo then return a.tipo < b.tipo end
+        return (a.unita_num or 0) < (b.unita_num or 0)
+    end)
+    return list
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_revealAllSpawned()
+-- ============================================================
+function deployment_revealAllSpawned()
+    for _, obj in ipairs(getAllObjects()) do
+        if deployment_getObjectArmySlot(obj) then
+            obj.setInvisibleTo({})
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_resetRuntimeOnly()
+-- ============================================================
+function deployment_resetRuntimeOnly()
+    DEPLOYMENT.armies     = { [1] = nil,   [2] = nil   }
+    DEPLOYMENT.armyLoaded = { [1] = false, [2] = false }
+    DEPLOYMENT.armyBusy   = { [1] = false, [2] = false }
+    DEPLOYMENT.scanned    = { [1] = {},    [2] = {}    }
+    DEPLOYMENT.errors     = {}
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_clearSpawnedModels()
+-- ============================================================
+function deployment_clearSpawnedModels()
+    local removed = 0
+    for _, obj in ipairs(getAllObjects()) do
+        if obj.hasTag and (obj.hasTag("Army1") or obj.hasTag("Army2")) then
+            obj.destruct()
+            removed = removed + 1
+        end
+    end
+    printToAll("[DEPLOY] Rimossi " .. removed .. " oggetti", {r=0.4,g=0.9,b=0.4})
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_getObjectArmySlot()
+-- ============================================================
+function deployment_getObjectArmySlot(obj)
+    if not obj then return nil end
+    if obj.hasTag and obj.hasTag("Army1") then return 1 end
+    if obj.hasTag and obj.hasTag("Army2") then return 2 end
     return nil
 end
+
 -- ============================================================
--- FUNZIONE: shoot_coneOf(rects, angoloGradi)
--- Cono di tiro dell'unità (regolamento: "angolo di tiro di
--- massimo 45° dall'angolo della base più esterna"): parte dalla
--- linea del fronte, fra gli angoli esterni sinistro e destro, e
--- si allarga di angoloGradi per lato. rects = basi tiratrici
--- (main_baseRectOfType).
+-- FUNZIONE: deployment_findUnit()
 -- ============================================================
-function shoot_coneOf(rects, angoloGradi)
-    local r0 = rects[1]
-    local c = { fx = r0.fx, fz = r0.fz, rx = r0.rx, rz = r0.rz,
-                s0 = -math.huge, tL = math.huge, tR = -math.huge,
-                tan = math.tan(math.rad(angoloGradi or 45)) }
-    for _, r in ipairs(rects) do
-        for _, k in ipairs(r.corners) do
-            local s = k.x * c.fx + k.z * c.fz
-            local t = k.x * c.rx + k.z * c.rz
-            if s > c.s0 then c.s0 = s end
-            if t < c.tL then c.tL = t end
-            if t > c.tR then c.tR = t end
+function deployment_findUnit(slot, tipo, unita_num)
+    local esercito = DEPLOYMENT.scanned and DEPLOYMENT.scanned[slot]
+    if not esercito then return nil end
+    for _, u in ipairs(esercito) do
+        if u.tipo == tipo and u.unita_num == unita_num then return u end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_isValidSlot()
+-- ============================================================
+function deployment_isValidSlot(slot)
+    return slot == 1 or slot == 2
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_isArmyLoaded()
+-- ============================================================
+function deployment_isArmyLoaded(slot)
+    return DEPLOYMENT.armyLoaded[slot] == true
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_markArmyLoaded()
+-- ============================================================
+function deployment_markArmyLoaded(slot, value)
+    DEPLOYMENT.armyLoaded[slot] = value ~= false
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_isBusy()
+-- ============================================================
+function deployment_isBusy(slot)
+    return DEPLOYMENT.armyBusy[slot] == true
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_setBusy()
+-- ============================================================
+function deployment_setBusy(slot, value)
+    DEPLOYMENT.armyBusy[slot] = value == true
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_addError()
+-- ============================================================
+function deployment_addError(msg)
+    DEPLOYMENT.errors = DEPLOYMENT.errors or {}
+    table.insert(DEPLOYMENT.errors, tostring(msg))
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_getArmyTag()
+-- ============================================================
+function deployment_getArmyTag(slot)
+    return "Army" .. tostring(slot)
+end
+
+-- ============================================================
+-- FUNZIONE: deployment_createArmy1HiddenZones()
+--=============================================================
+function deployment_createArmy1HiddenZones()
+    local esistenti = getObjectsWithAllTags({"Army1"})
+    for _, obj in ipairs(esistenti) do
+        if obj.getName() == "FogOfWarTrigger_Army1" then
+            return  -- esiste già, non ricreare
         end
     end
-    return c
+    DEPLOYMENT.army1Hz = spawnObjectJSON({ json = DEPLOYMENT.fogArm1 })
 end
 -- ============================================================
--- FUNZIONE: shoot_pointInCone(c, x, z)
--- ============================================================
-function shoot_pointInCone(c, x, z)
-    local s = x * c.fx + z * c.fz - c.s0
-    if s < -0.001 then return false end
-    if s < 0 then s = 0 end
-    local t = x * c.rx + z * c.rz
-    return t >= c.tL - s * c.tan and t <= c.tR + s * c.tan
-end
--- ============================================================
--- FUNZIONE: shoot_rectInCone(c, rect)
--- Vero se almeno un angolo (o il centro) della base è nel cono.
--- ============================================================
-function shoot_rectInCone(c, rect)
-    if shoot_pointInCone(c, rect.x, rect.z) then return true end
-    for _, k in ipairs(rect.corners) do
-        if shoot_pointInCone(c, k.x, k.z) then return true end
-    end
-    return false
-end
--- ============================================================
--- FUNZIONE: shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
--- Regolamento: "si deve sempre tirare al bersaglio più vicino".
--- Candidate = unità nemiche (non Generali, non in mischia) con
--- almeno una base nel cono e in gittata (distanza bordo-bordo
--- dalle basi tiratrici). Si sceglie la più vicina che almeno una
--- base tiratrice vede (LOS). Ritorna la base nemica più vicina
--- vista dell'unità scelta, o nil.
--- ============================================================
-function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
-    if not basiObjs or #basiObjs == 0 then return nil, nil end
-    local info0 = main_parseNickname(basiObjs[1].getName())
-    local tipo0 = info0 and info0.unitType
-
-    local mieRect = {}
-    for _, b in ipairs(basiObjs) do
-        table.insert(mieRect, main_baseRectOfType(b, tipo0))
-    end
-    local cono = shoot_coneOf(mieRect, angoloGradi)
-    local inMischia = main_unitsInMelee()
-
-    local unita = {}
-    for _, nemico in ipairs(nemici) do
-        local info = main_parseNickname(nemico.getName())
-        if info and info.unitType ~= "GEN" then
-            local key = main_getUnitKey(nemico)
-            if not main_isGeneralKey(key) and not inMischia[key] then
-                local rect = main_baseRectOfType(nemico, info.unitType)
-                if shoot_rectInCone(cono, rect) then
-                    local dMin = math.huge
-                    for _, mr in ipairs(mieRect) do
-                        local d = main_rectsDistance(mr, rect)
-                        if d < dMin then dMin = d end
-                    end
-                    if dMin <= rangeUnits then
-                        local u = unita[key]
-                        if not u then
-                            u = { minDist = math.huge, basi = {} }
-                            unita[key] = u
-                        end
-                        table.insert(u.basi, { obj = nemico, dist = dMin })
-                        if dMin < u.minDist then u.minDist = dMin end
-                    end
-                end
-            end
+-- FUNZIONE: deployment_createArmy2HiddenZones()
+--=============================================================
+function deployment_createArmy2HiddenZones()
+    local esistenti = getObjectsWithAllTags({"Army2"})
+    for _, obj in ipairs(esistenti) do
+        if obj.getName() == "FogOfWarTrigger_Army2" then
+            return  -- esiste già, non ricreare
         end
     end
-
-    local lista = {}
-    for _, u in pairs(unita) do table.insert(lista, u) end
-    table.sort(lista, function(a, b) return a.minDist < b.minDist end)
-
-    for _, u in ipairs(lista) do
-        table.sort(u.basi, function(a, b) return a.dist < b.dist end)
-        for _, bn in ipairs(u.basi) do
-            for _, tiratrice in ipairs(basiObjs) do
-                if shoot_checkLOS(tiratrice, tiratrice.getPosition(), bn.obj.getPosition(), bn.obj) then
-                    return bn.obj, nil
-                end
-            end
+    DEPLOYMENT.army2Hz = spawnObjectJSON({ json = DEPLOYMENT.fogArmy2})
+end
+-- ============================================================
+-- FUNZIONE: deployment_destroyArmy1HiddenZones()
+--=============================================================
+function deployment_destroyArmy1HiddenZones()
+    -- Non fidarti del riferimento runtime: cerca sempre l'oggetto sul tavolo
+    local oggetti = getObjectsWithAllTags({"Army1"})   -- o il tag specifico che hai dato al trigger
+    for _, obj in ipairs(oggetti) do
+        if obj.getName() == "FogOfWarTrigger_Army1" then   -- filtro extra per non colpire altro con tag "Army1"
+            obj.destruct()
         end
     end
-    return nil, nil
+    DEPLOYMENT.army1Hz = nil
 end
 -- ============================================================
--- FUNZIONE: shoot_checkLOS(shooter, fromPos, toPos, targetObj)
--- Raggio dal centro (getBounds, Y affidabile) della base
--- tiratrice al centro della base nemica (targetObj, se passato),
--- lungo al massimo fino al bersaglio (max_distance). Blocca la
--- prima unità amica incontrata (le basi della stessa unità
--- tiratrice e i Generali no: il secondo rango tira sopra il
--- primo); il primo nemico incontrato libera la vista.
--- ============================================================
-function shoot_checkLOS(shooter, fromPos, toPos, targetObj)
-    local function centroY(obj, pos)
-        local bb = obj and obj.getBounds()
-        if bb and bb.center then return math.max(pos.y, bb.center.y) end
-        return pos.y
-    end
-    local fromY = centroY(shooter, fromPos)
-    local toY   = targetObj and centroY(targetObj, toPos) or (toPos.y + (fromY - fromPos.y))
-    local from = Vector(fromPos.x, fromY, fromPos.z)
-    local to   = Vector(toPos.x,   toY,   toPos.z)
-    local dir  = to - from
-    if dir:magnitude() < 0.0001 then return true end
-
-    local enemyTag  = shooter.hasTag("Army1") and "Army2" or "Army1"
-    local friendTag = shooter.hasTag("Army1") and "Army1" or "Army2"
-    local myKey     = main_getUnitKey(shooter)
-
-    local hits = Physics.cast({
-        origin    = from,
-        direction = dir:normalized(),
-        max_distance = dir:magnitude(),
-        type      = 1,
-    }) or {}
-
-    table.sort(hits, function(a, b) return (a.distance or 0) < (b.distance or 0) end)
-
-    for _, hit in ipairs(hits) do
-        local o = hit.hit_object
-        if o and o ~= shooter then
-            local key = main_getUnitKey(o)
-            if o.hasTag(friendTag) then
-                if key ~= myKey and not main_isGeneralKey(key) then
-                    return false
-                end
-            elseif o.hasTag(enemyTag) then
-                return true
-            end
+-- FUNZIONE: deployment_destroyArmy2HiddenZones()
+--=============================================================
+function deployment_destroyArmy2HiddenZones()
+    -- Non fidarti del riferimento runtime: cerca sempre l'oggetto sul tavolo
+    local oggetti = getObjectsWithAllTags({"Army2"})   -- o il tag specifico che hai dato al trigger
+    for _, obj in ipairs(oggetti) do
+        if obj.getName() == "FogOfWarTrigger_Army2" then   -- filtro extra per non colpire altro con tag "Army2"
+            obj.destruct()
         end
     end
-    return true
+    DEPLOYMENT.army2Hz = nil
 end
 -- ============================================================
--- FUNZIONE: shoot_getNemici(shooter, shooterSlot)
--- ============================================================
-function shoot_getNemici(shooter, shooterSlot)
-    local nemici   = {}
-    local enemyTag = shooterSlot == 1 and "Army2" or "Army1"
-    for _, obj in ipairs(getAllObjects()) do
-        if obj ~= shooter and obj.hasTag and obj.hasTag(enemyTag) then
-            table.insert(nemici, obj)
+-- FUNZIONE: deployment_destroyArmy2HiddenZones()
+--=============================================================
+function deployment_fillProgress(slot, da, a)
+
+    slot = slot or 1
+    da = da or 0
+    a = a or 100
+    local s = tostring(slot)
+
+    UI.setAttribute("loadingPanel_" .. s, "active", "true")
+
+    local pct = da
+    local function step()
+        pct = pct + 1
+        UI.setAttribute("loadingBar_" .. s, "percentage", pct)
+        if pct < a then
+            Wait.time(step, 0.04)   -- intervallo FISSO, non più "pct"
+        elseif a >= 100 then        -- chiude solo se il tratto arriva davvero a 100
+            Wait.time(function()
+                UI.setAttribute("loadingPanel_" .. s, "active", "false")
+            end, 2)
         end
     end
-    return nemici
-end
--- ============================================================
--- FUNZIONE: shoot_ResetLines(player, value, id)
--- ============================================================
-function shoot_ResetLines(player, value, id)
-
-    if IEF_SHOOTING.activeShooter then
-        IEF_SHOOTING.activeShooter.setVectorLines({})
-    end
-
-    IEF_SHOOTING.activeLines = nil
-
-    if IEF_SHOOT_STATE.basiNemiche then
-        for _, b in ipairs(IEF_SHOOT_STATE.basiNemiche) do
-            b.highlightOff()
-        end
-    elseif IEF_SHOOT_STATE.target then
-        IEF_SHOOT_STATE.target.highlightOff()
-    end
-
-    if IEF_SHOOT_STATE.basiObjs then
-        for _, b in ipairs(IEF_SHOOT_STATE.basiObjs) do
-            b.highlightOff()
-        end
-    end
-
-    UI.setAttribute("confirm_panel_shoot", "active", "false")
-    UI.setAttribute("playerGameMessage", "text", "")
-    IEF_WARNING_ACTIVE = false
-    callHandler("aggiornaLinee")
-end
--- ============================================================
--- FUNZIONE: shoot_shootConfirm(player)
--- ============================================================
-function shoot_Confirm(player)
-
-    local state = IEF_SHOOT_STATE
-    if not state.shooter or not state.target then
-        printToColor("[TIRO] Nessun tiro in attesa", player.color, {r=1,g=0.6,b=0})
-        return
-    end
-
-    if not state.shooterUnit then
-        printToColor("[TIRO] Dati tiratore mancanti", player.color, {r=1,g=0.3,b=0.3})
-        return
-    end
-
-    if not state.targetUnit then
-        printToColor("[TIRO] Dati bersaglio mancanti", player.color, {r=1,g=0.3,b=0.3})
-        return
-    end
-
-    local slot = state.shooterSlot
-    if shoot_rollRec(slot) then
-        warningToColor("Completa prima il tiro in corso", player, "Yellow", 5, true)
-        return
-    end
-
-    local shooterKey = main_getUnitKey(state.shooter)
-    local targetKey  = main_getUnitKey(state.target)
-    local weapon = shoot_getWeapon(shooterKey)
-    local basiPronte = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits)
-    local scheda, numDadi, soglia = shoot_diceScheda("TIRO", shooterKey, targetKey, weapon, basiPronte, false)
-
-    local ctx = {
-        shooterKey   = shooterKey,
-        targetKey    = targetKey,
-        targetSlot   = state.targetSlot,
-        shooterLabel = state.shooterUnit.tipo .. "_" .. state.shooterUnit.unita_num,
-        targetLabel  = state.targetUnit.tipo .. "_" .. state.targetUnit.unita_num,
-        dadi         = numDadi,
-        soglia       = soglia,
-        scheda       = scheda,
-    }
-
-    IEF_FIRED[shooterKey] = true
-
-    shoot_ResetLines(player)
-    shoot_Reset()
-
-    if not engine_subOpen("SHOOT_ROLL", slot, ctx, nil) then return end
-
-    if numDadi <= 0 then
-        ctx.motivo = "Nessuna base in gittata con LOS"
-        engine_subStep("SHOOT_ROLL", slot, "ESCI")
-        return
-    end
-
-    engine_diceCameraZoom(player, slot)
-    engine_dicePanelOpen(slot, scheda)
-end
--- ============================================================
--- FUNZIONE: shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
--- ============================================================
-function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
-    if not basiObjs or #basiObjs == 0 then return 0 end
-    if not basiNemiche or #basiNemiche == 0 then return 0 end
-
-    local rangeInches = rangeUnits / INCH_TO_TTS
-    local count = 0
-    for _, baseObj in ipairs(basiObjs) do
-        local posA = baseObj.getPosition()
-        for _, baseNemica in ipairs(basiNemiche) do
-            local targetPos = baseNemica.getPosition()
-            if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
-                count = count + 1
-                break
-            end
-        end
-    end
-    return count
-end
--- ============================================================
--- FUNZIONE: shoot_shootCancel()
--- ============================================================
-function shoot_Cancel(player)
-    if IEF_SHOOT_STATE.target then
-        IEF_SHOOT_STATE.target.highlightOff()
-    end
-    shoot_Reset()
-    printToColor("[TIRO] Annullato", player.color, {r=0.7,g=0.7,b=0.7})
-end
--- ============================================================
--- FUNZIONE: shoot_shootReset()
--- ============================================================
-function shoot_Reset()
-    IEF_SHOOT_STATE = {
-        shooter=nil, 
-        target=nil,
-        shooterUnit=nil, 
-        targetUnit=nil,
-        shooterSlot=nil, 
-        targetSlot=nil,
-        basiObjs=nil,
-        rangeUnits=nil
-    }
-end
--- ============================================================
--- FUNZIONE: shoot_findNearestEnemy(shooter, shooterSlot, range)
--- ============================================================
-function shoot_findNearestEnemy(shooter, shooterSlot, rangeUnits)
-
-    local enemyTag  = shooterSlot == 1 and "Army2" or "Army1"
-    local pos       = shooter.getPosition()
-    local fwd       = shooter.getTransformForward()
-    local dir       = Vector(fwd.x, 0, fwd.z):normalized()
-    local halfAngle = math.rad(IEF_SHOOTING.angle)
-    local nearest   = nil
-    local minDist   = 999999
-
-    for _, obj in ipairs(getAllObjects()) do
-        if obj ~= shooter and obj.hasTag and obj.hasTag(enemyTag) then
-            local objPos = obj.getPosition()
-            if objPos then
-                local toObj = Vector(objPos.x - pos.x, 0, objPos.z - pos.z)
-                local d     = toObj:magnitude()
-                if d > 0 and d <= rangeUnits then
-                    local toObjNorm = toObj:normalized()
-                    local dot       = dir.x * toObjNorm.x + dir.z * toObjNorm.z
-                    local angle     = math.acos(math.max(-1, math.min(1, dot)))
-                    if angle <= halfAngle and d < minDist then
-                        minDist = d
-                        nearest = obj
-                    end
-                end
-            end
-        end
-    end
-
-    return nearest, minDist
-end
--- ============================================================
--- FUNZIONE: shoot_resolveHits(targetObj, targetSlot, hits)
--- Perdite del tiro MARCATE (rimosse a fine fase, after_shoot) e
--- test di morale della tabella (evento LOSS): IMMEDIATO subito,
--- FINE_FASE in IEF_MORALE_END_QUEUE (dopo tutti i tiri).
--- ============================================================
-function shoot_resolveHits(targetObj, targetSlot, hits)
-    local unitKey = targetObj and main_getUnitKey(targetObj)
-    if not unitKey then
-        printToAll("[TIRO] Errore: unitKey bersaglio non trovata", {r=1,g=0.3,b=0.3})
-        return
-    end
-
-    local perse = main_markLosses(unitKey, hits)
-    if perse == 0 then return end
-
-    if not main_isAliveAfterMarks(unitKey) then
-        printToAll("[TIRO] " .. main_decodeExtendedUnitLabel(unitKey) .. " distrutta", {r=1,g=0.3,b=0.3})
-        return
-    end
-    if main_getCohesion(unitKey) == COHESION.ROT then return end
-
-    local subito = {}
-    for _, item in ipairs(main_lossTests(unitKey, targetSlot)) do
-        if item.quando == "FINE_FASE" then
-            table.insert(IEF_MORALE_END_QUEUE, item)
-        else
-            table.insert(subito, item)
-        end
-    end
-    if #subito > 0 then
-        main_runMoraleQueue(subito)
-    end
-end
--- ============================================================
--- FUNZIONE: shoot_rollPending(slot)
--- true se ARMY{slot} ha un tiro confermato da lanciare.
--- ============================================================
-function shoot_rollPending(slot)
-    local rec = shoot_rollRec(slot)
-    return rec ~= nil and rec.step == "TIRO"
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- ============================================================
--- FUNZIONE: shoot_numDiceBreakdown(shooterKey, basiPronte, raffica)
--- Numero di dadi del tiro e voci del calcolo per il pannello
--- dadi: { { "voce", "valore" }, ... }.
--- ============================================================
-function shoot_numDiceBreakdown(shooterKey, basiPronte, raffica)
-    local bases = main_getUnitBases(shooterKey)
-    local meta = bases[1] and main_getUnitMeta(bases[1])
-    local tipo = meta and meta.unitType
-
-    local voci = { { "Basi pronte al tiro", tostring(basiPronte) } }
-    local n = basiPronte
-    if tipo == "FL" then
-        n = math.floor(basiPronte / 2)
-        table.insert(voci, { "FL: 1D6 ogni 2 basi", tostring(n) })
-    elseif tipo == "ART" then
-        n = basiPronte * 2
-        table.insert(voci, { "ART: 2D6 per base", tostring(n) })
-    elseif raffica then
-        n = math.floor(basiPronte / 2) * 3 + ((basiPronte % 2 > 0) and 2 or 0)
-        table.insert(voci, { "RAFFICA: 3D6 ogni 2 basi", tostring(n) })
-    end
-
-    if main_getCohesion(shooterKey) == COHESION.DIS then
-        n = math.floor(n / 2)
-        table.insert(voci, { "Disordinata: meta' dei dadi", tostring(n) })
-    end
-    return n, voci
-end
-
--- ============================================================
--- FUNZIONE: shoot_numDice(shooterKey, basiPronte, raffica)
--- ============================================================
-function shoot_numDice(shooterKey, basiPronte, raffica)
-    return (shoot_numDiceBreakdown(shooterKey, basiPronte, raffica))
-end
-
--- ============================================================
--- FUNZIONE: shoot_hitBreakdown(weapon, targetKey)
--- Soglia per colpire: hit_threshold dell'arma meno i
--- modificatori di weapons.json (senza scudo, vs_<tipi>).
--- Ritorna: soglia, voci { { "voce", "+1" }, ... }, sogliaBase
--- ============================================================
-function shoot_hitBreakdown(weapon, targetKey)
-    local base = weapon.hit_threshold or DEFAULT_HIT_THRESHOLD
-    local soglia = base
-    local mods = weapon.modifiers or {}
-    local nomeArma = weapon.label or weapon._arma_key or "Arma"
-    local voci = {}
-
-    local bases = main_getUnitBases(targetKey)
-    local meta = bases[1] and main_getUnitMeta(bases[1])
-    local tipo = meta and meta.unitType
-
-    local haScudo = false
-    for _, a in ipairs(meta and meta.armi or {}) do
-        if a == "SCUDO" then haScudo = true end
-    end
-    if not haScudo and mods.vs_bersaglio_senza_scudo then
-        soglia = soglia - mods.vs_bersaglio_senza_scudo
-        table.insert(voci, { "Bersaglio senza scudo", string.format("%+d", mods.vs_bersaglio_senza_scudo) })
-    end
-
-    for chiave, valore in pairs(mods) do
-        local lista = chiave:match("^vs_(.+)$")
-        if lista and lista ~= "bersaglio_senza_scudo" and lista ~= "unita_in_copertura" then
-            for t in lista:gmatch("[^_]+") do
-                if t == tipo then
-                    soglia = soglia - valore
-                    table.insert(voci, { string.format("%s contro %s", nomeArma, (lista:gsub("_", ", "))), string.format("%+d", valore) })
-                    break
-                end
-            end
-        end
-    end
-    return soglia, voci, base
-end
-
--- ============================================================
--- FUNZIONE: shoot_hitThreshold(weapon, targetKey)
--- ============================================================
-function shoot_hitThreshold(weapon, targetKey)
-    return (shoot_hitBreakdown(weapon, targetKey))
-end
-
--- ============================================================
--- FUNZIONE: shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raffica)
--- Scheda del pannello dadi per un tiro (Tiro e Tiro d'Arresto).
--- Ritorna: scheda, numDadi, soglia
--- ============================================================
-function shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raffica)
-    local numDadi, vociDadi = shoot_numDiceBreakdown(shooterKey, basiPronte, raffica)
-    local soglia, vociSoglia, base = DEFAULT_HIT_THRESHOLD, {}, DEFAULT_HIT_THRESHOLD
-    if weapon then
-        soglia, vociSoglia, base = shoot_hitBreakdown(weapon, targetKey)
-    end
-
-    local righe = {}
-    for _, v in ipairs(vociDadi) do table.insert(righe, v) end
-    table.insert(righe, { "Totale dadi", numDadi .. "D6" })
-    table.insert(righe, { string.format("%s: colpisce con %d+",
-        weapon and (weapon.label or weapon._arma_key) or "Tiro", base), "" })
-    if #vociSoglia == 0 then
-        table.insert(righe, { "Nessun modificatore", "" })
-    end
-    for _, v in ipairs(vociSoglia) do table.insert(righe, v) end
-
-    local serve
-    if soglia <= 1 then
-        serve = "Ogni dado colpisce"
-    elseif soglia > 6 then
-        serve = "Nessun dado puo' colpire"
-    else
-        serve = string.format("Serve %d+ su ogni dado", soglia)
-    end
-
-    local scheda = {
-        titolo      = titolo,
-        sottotitolo = string.format("%s contro %s",
-            main_decodeExtendedUnitLabel(shooterKey), main_decodeExtendedUnitLabel(targetKey)),
-        righe       = righe,
-        serve       = serve,
-        soglia      = soglia,
-    }
-    return scheda, numDadi, soglia
+    step()
 end

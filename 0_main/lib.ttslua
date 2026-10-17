@@ -880,6 +880,14 @@ function main_formationCanStart(unitKey, manovraFermi, tipo, player)
         if player then printToColor("[FORMAZIONE] " .. msg, player.color, {r=1,g=0.6,b=0}) end
         return false
     end
+    -- In rotta: "potrà contrarre il fronte" (anche durante la mossa,
+    -- senza costo); nessun'altra manovra di formazione.
+    if main_getCohesion(unitKey) == COHESION.ROT then
+        if manovraFermi ~= "espandi_contrai_1_2_basi_fermi" then
+            return no("Unità in rotta: può solo contrarre il fronte")
+        end
+        return true
+    end
     if IEF_REFORM_USED[unitKey] then return no("Manovra già usata questo turno") end
     if main_unitHasMoved(unitKey) then return no("L'unità ha già mosso: niente cambi di formazione") end
     if not main_canManeuver(manovraFermi, tipo) then return no("Questa unità non può fare questa manovra") end
@@ -893,6 +901,7 @@ end
 -- mossa resta intera (il cambio non costa pollici).
 -- ============================================================
 function main_formationAfter(unitKey, manovraMuovi, tipo)
+    if main_getCohesion(unitKey) == COHESION.ROT then return end   -- contrazione in rotta: gratuita
     IEF_REFORM_USED[unitKey] = true
     if TURN.phase ~= "MOVE" or IEF_FORM_TEST_MODE then return end
     if not main_canManeuver(manovraMuovi, tipo) then
@@ -1185,10 +1194,12 @@ function main_formationRedraw(unitKey)
         return IEF_FORM_TEST_MODE or (not reformUsed and not main_unitHasMoved(unitKey))
     end
 
-    local reformOk = canDo("espandi_contrai_1_2_basi_fermi") and turnOk()
-    local fronte180Ok = canDo("cambio_fronte_180_fermi") and turnOk()
+    local inRotta = inMovePhase and main_getCohesion(unitKey) == COHESION.ROT
+    local reformOk = (canDo("espandi_contrai_1_2_basi_fermi") and turnOk()) or inRotta
+    local espandiOk = reformOk and not inRotta
+    local fronte180Ok = canDo("cambio_fronte_180_fermi") and turnOk() and not inRotta
     local isRettangolare = (#basiObjs % fronteAttuale == 0)
-    local fronte90Ok = canDo("cambio_fronte_90_fermi") and isRettangolare and turnOk()
+    local fronte90Ok = canDo("cambio_fronte_90_fermi") and isRettangolare and turnOk() and not inRotta
     local sistemaOk = turnOk()
 
     local COLOR_ON  = "rgba(0.45,0.45,0.45,1)"
@@ -1207,8 +1218,8 @@ function main_formationRedraw(unitKey)
         end
         setBtn("btn_" .. unitKey .. "_FrontMinus2", reformOk)
         setBtn("btn_" .. unitKey .. "_FrontMinus1", reformOk)
-        setBtn("btn_" .. unitKey .. "_FrontPlus1",  reformOk)
-        setBtn("btn_" .. unitKey .. "_FrontPlus2",  reformOk)
+        setBtn("btn_" .. unitKey .. "_FrontPlus1",  espandiOk)
+        setBtn("btn_" .. unitKey .. "_FrontPlus2",  espandiOk)
         setBtn("btn_" .. unitKey .. "_Cambio90Sx",  fronte90Ok)
         setBtn("btn_" .. unitKey .. "_Cambio90Dx",  fronte90Ok)
         setBtn("btn_" .. unitKey .. "_Cambio180",   fronte180Ok)
@@ -1342,6 +1353,10 @@ function main_espandiContraiCore(unitKey, deltaFronte)
     if not main_formationCanStart(unitKey, "espandi_contrai_1_2_basi_fermi", baseInfo.unitType, player) then
         return false
     end
+    if deltaFronte > 0 and TURN.phase == "MOVE" and main_getCohesion(unitKey) == COHESION.ROT then
+        if player then printToColor("[FORMAZIONE] Unità in rotta: può solo contrarre il fronte", player.color, {r=1,g=0.6,b=0}) end
+        return false
+    end
 
     local fronteAttuale = main_detectFormation(basiObjs)
     local newFront = fronteAttuale + deltaFronte
@@ -1473,7 +1488,20 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
 
     if #basiObjs == 0 then return end
 
-    local vietato = main_moveForbiddenReason(unitKey)
+    -- Unità in ROTTA: solo la prosecuzione della rotta (obbligatoria,
+    -- senza raggio di comando), una volta, se non è andata in rotta
+    -- in questo turno.
+    local inRotta = ENGINE.phase == PHASE.MOVE and not main_isGeneralKey(unitKey)
+                    and main_getCohesion(unitKey) == COHESION.ROT
+    if inRotta and not main_routContinueItem(unitKey) then
+        local msg = main_isRoutedThisTurn(unitKey)
+            and "Unita' andata in rotta in questo turno: ha gia' fatto la fuga"
+            or  "Prosecuzione della rotta gia' eseguita"
+        warningToColor(msg, Player[player_color], "Yellow", 5, true)
+        return
+    end
+
+    local vietato = (not inRotta) and main_moveForbiddenReason(unitKey)
     if vietato then
         warningToColor(vietato, Player[player_color], "Yellow", 5, true)
         return
@@ -1481,7 +1509,7 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
 
     -- Regolamento: per muovere l'unità deve essere nel raggio di
     -- comando di un Generale (Generali esclusi)
-    if ENGINE.phase == PHASE.MOVE and not main_isGeneralKey(unitKey) then
+    if ENGINE.phase == PHASE.MOVE and not main_isGeneralKey(unitKey) and not inRotta then
         local inRaggio = false
         for _, b in ipairs(basiObjs) do
             if main_isInCommandRange(b, slot) then inRaggio = true break end
@@ -1521,6 +1549,8 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
         startBudget      = IEF_MOVE_BUDGET[unitKey],
         startPivotBudget = IEF_PIVOT_BUDGET[unitKey],
         history      = {},
+        rotta        = inRotta or nil,
+        amicheRotta  = inRotta and {} or nil,
     }
 
     move_redraw(unitKey)
@@ -2152,10 +2182,11 @@ end
 -- FUNZIONE: move(obj, unit, pos, rot, w, h)
 -- ============================================================
 function move(obj, unit, pos, rot, w, h, color, textColor)
+    local inRotta = unit and main_getCohesion(unit) == COHESION.ROT
     obj.createButton({
         click_function = "main_movementOpenFromButton",
         function_owner = Global,
-        label = "MOVIMENTO",
+        label = inRotta and "ROTTA" or "MOVIMENTO",
         position = pos,
         rotation = rot,
         width = w + 50, 

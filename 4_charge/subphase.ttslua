@@ -183,6 +183,9 @@ function charge_reactionChoose(ctx, slot, player, rec, value)
     end
 
     charge_refreshDefenseRowText(slot, elemento)
+    if value ~= REACTION_TYPE.FER then
+        charge_setOtherReactionsFerma(elemento, slot)
+    end
     engine_subClose("REACTION", slot, nil)
 
     if value == REACTION_TYPE.TIR then
@@ -205,7 +208,7 @@ function charge_moveChoose(ctx, slot, player, rec, value)
     if value == "EVADI" then
         charge_executeEvade(slot, elemento)
     elseif value == "CARICA" then
-        charge_executeChargeMove(player, ctx.unitKey)
+        charge_executeChargeMove(player, ctx.unitKey, elemento)
     end
 end
 -- ============================================================

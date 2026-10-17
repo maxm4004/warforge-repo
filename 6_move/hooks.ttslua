@@ -9,6 +9,7 @@ function before_move(phaseName, phase)
     IEF_PIVOT_BUDGET = {}
     IEF_REFORM_USED  = {}
     main_generalMoveStartAll()
+    main_routEnqueueContinuations()
 end
 -- ============================================================
 -- FUNZIONE: after_move(phaseName, phase)

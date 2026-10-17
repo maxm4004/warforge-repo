@@ -355,17 +355,98 @@ IEF_ROUT_NEXT_ID = IEF_ROUT_NEXT_ID or 0
 -- FUNZIONE: main_routEnqueue(unitKey, slot)
 -- Mette l'unità nell'elenco rotte del suo esercito (una volta sola).
 -- ============================================================
-function main_routEnqueue(unitKey, slot)
+function main_routEnqueue(unitKey, slot, continua)
     IEF_ROUT_PENDING[slot] = IEF_ROUT_PENDING[slot] or {}
     for _, item in ipairs(IEF_ROUT_PENDING[slot]) do
         if item.key == unitKey then return item.id end
     end
     IEF_ROUT_NEXT_ID = (IEF_ROUT_NEXT_ID or 0) + 1
-    table.insert(IEF_ROUT_PENDING[slot], { id = IEF_ROUT_NEXT_ID, key = unitKey })
-    printToAll(string.format("[ROTTA] %s in rotta: movimento di rotta da eseguire",
+    table.insert(IEF_ROUT_PENDING[slot], { id = IEF_ROUT_NEXT_ID, key = unitKey, continua = continua or nil })
+    printToAll(string.format(continua and "[ROTTA] %s in rotta: prosecuzione della rotta da eseguire (pulsante ROTTA)"
+                                       or "[ROTTA] %s in rotta: movimento di rotta da eseguire",
         main_decodeExtendedUnitLabel(unitKey)), {r=1,g=0.3,b=0.3})
     main_moraleRefreshUI()
     return IEF_ROUT_NEXT_ID
+end
+
+-- ============================================================
+-- FUNZIONE: main_routEnqueueContinuations()
+-- Inizio fase MOVE. Regolamento: "Nei turni successivi al primo
+-- movimento di rotta l'unità continuerà a muoversi verso il
+-- proprio lato del tavolo". Entrano nell'elenco le unità in
+-- ROTTA che non ci sono andate in questo turno (chi ci è andato
+-- ha già fatto la fuga obbligatoria e non muove più).
+-- ============================================================
+function main_routEnqueueContinuations()
+    for slot = 1, 2 do
+        for key, _ in pairs(main_unitsOfSlot(slot)) do
+            if not main_isGeneralKey(key) and main_getCohesion(key) == COHESION.ROT
+               and not main_isRoutedThisTurn(key) then
+                main_routEnqueue(key, slot, true)
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_routContinueItem(unitKey)
+-- Riga di prosecuzione dell'unità, o nil. Ritorna item, slot, idx.
+-- ============================================================
+function main_routContinueItem(unitKey)
+    for slot = 1, 2 do
+        for i, item in ipairs(IEF_ROUT_PENDING[slot] or {}) do
+            if item.key == unitKey and item.continua then return item, slot, i end
+        end
+    end
+    return nil
+end
+
+-- ============================================================
+-- FUNZIONE: main_routContinueDone(unitKey)
+-- Fine della prosecuzione: amiche attraversate disordinate
+-- (tranne interpenetrazione consentita e quelle davanti a cui si
+-- ferma), riga tolta dall'elenco.
+-- ============================================================
+function main_routContinueDone(unitKey, state)
+    local item, slot, idx = main_routContinueItem(unitKey)
+    if not item then return end
+
+    local info = main_parseNickname((main_getUnitBases(unitKey)[1] or { getName = function() return "" end }).getName())
+    local tipo = info and info.unitType
+    local fine = main_routSettle(unitKey)
+
+    if fine.arretra > 0 then
+        local basi = main_getUnitBases(unitKey)
+        local f = basi[1].getTransformForward()
+        local back = Vector(-f.x, 0, -f.z):normalized()
+        local d = fine.arretra * INCH_TO_TTS
+        for _, obj in ipairs(basi) do
+            local p = obj.getPosition()
+            main_setPositionOnGround(obj, p.x + back.x * d, p.z + back.z * d)
+        end
+        main_syncAttachedGeneral(unitKey)
+    end
+
+    local function push(it, quando)
+        if quando == "FINE_FASE" then
+            table.insert(IEF_MORALE_END_QUEUE, it)
+        else
+            main_runMoraleQueue({ it })
+        end
+    end
+    for key, tipoAmica in pairs((state and state.amicheRotta) or {}) do
+        if not fine.davanti[key] and not main_canInterpenetrate(tipo, tipoAmica)
+           and main_getCohesion(key) ~= COHESION.ROT then
+            printToAll(string.format("[ROTTA] %s attraversa la %s e la disordina",
+                main_decodeExtendedUnitLabel(unitKey), main_decodeExtendedUnitLabel(key)), {r=1,g=0.6,b=0})
+            main_lowerAndCheckRout(key, slot, push)
+        end
+    end
+
+    table.remove(IEF_ROUT_PENDING[slot], idx)
+    printToAll(string.format("[ROTTA] %s: prosecuzione della rotta eseguita",
+        main_decodeExtendedUnitLabel(unitKey)), {r=1,g=0.3,b=0.3})
+    main_moraleRefreshUI()
 end
 
 -- ============================================================
@@ -409,8 +490,9 @@ end
 -- FUNZIONE: main_routRowText(item, inCorso)
 -- ============================================================
 function main_routRowText(item, inCorso)
-    return string.format("La %s: movimento di rotta%s",
+    return string.format("La %s: %s%s",
         main_decodeExtendedUnitLabel(item.key),
+        item.continua and "prosecuzione rotta" or "movimento di rotta",
         inCorso and " - in corso" or "")
 end
 
@@ -426,6 +508,14 @@ function main_routRowClick(player, value, id)
 
     local item = (IEF_ROUT_PENDING[slot] or {})[tonumber(idxStr)]
     if not item then return end
+
+    -- Prosecuzione (fase MOVE): si muove con il pulsante base ROTTA
+    if item.continua then
+        local basi = main_getUnitBases(item.key)
+        if #basi > 0 then main_cameraToUnitPanel(player, basi, 30, ArmyYaw["ButtonBase"][slot], 15) end
+        warningToColor("Usa il pulsante ROTTA sulla base dell'unità", player, "Yellow", 5, true)
+        return
+    end
 
     local aperta = engine_subPrivate(slot)
     if aperta then
@@ -526,10 +616,15 @@ end
 -- Bottone "Rotta": movimento di rotta, poi chiusura.
 -- ============================================================
 function main_routMoveGo(ctx, slot, player, rec)
-    if #main_getUnitBases(ctx.key) > 0 then
-        main_routMove(ctx.key)
+    if ctx.inCorso then return end
+    if #main_getUnitBases(ctx.key) == 0 then
+        engine_subClose("ROUT_MOVE", slot, { mosso = true })
+        return
     end
-    engine_subClose("ROUT_MOVE", slot, { mosso = true })
+    ctx.inCorso = true
+    main_routMove(ctx.key, function(esito)
+        engine_subClose("ROUT_MOVE", slot, { mosso = true, esito = esito })
+    end)
 end
 
 -- ============================================================
