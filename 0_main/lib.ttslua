@@ -1124,8 +1124,14 @@ function main_formationOpenFromButton(obj, player_color, alt_click)
             table.insert(basiObjs, o)
         end
     end
-    if #basiObjs == 0 then return end
 
+    if #basiObjs == 0 then return end
+    
+    local vietato = main_moveForbiddenReason(unitKey)
+    if vietato then
+        warningToColor(vietato, Player[player_color], "Yellow", 5, true)
+        return
+    end
     main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
 
     IEF_FORM_UNITS[unitKey] = {
@@ -1388,91 +1394,6 @@ function main_cambioFronte180Core(unitKey)
     return true
 end
 -- ============================================================
--- FUNZIONE: main_cambioFronte90Core(unitKey, direction)
--- Scambia fronte<->profondità. Solo formazioni rettangolari pure.
--- ============================================================
-function main_cambioFronte90Core(unitKey, direction)
-    local state = IEF_FORM_UNITS[unitKey]
-    if not state or not state.basiObjs or #state.basiObjs < 2 then return false end
-    local basiObjs = state.basiObjs
-    local player = state.activePlayer
-
-    local fronteAttuale = main_detectFormation(basiObjs)
-    local totalBasi = #basiObjs
-    if totalBasi % fronteAttuale ~= 0 then
-        if player then printToColor("[FORMAZIONE] Cambio fronte 90° solo su formazioni rettangolari", player.color, {r=1,g=0.6,b=0}) end
-        return false
-    end
-
-    local baseInfo = main_parseNickname(basiObjs[1].getName())
-    if not baseInfo then return false end
-
-    if not main_formationCanStart(unitKey, "cambio_fronte_90_fermi", baseInfo.unitType, player) then
-        return false
-    end
-
-    table.sort(basiObjs, function(a, b)
-        local ia = main_parseNickname(a.getName())
-        local ib = main_parseNickname(b.getName())
-        return (ia and ia.baseSeq or 0) < (ib and ib.baseSeq or 0)
-    end)
-
-    local anchor    = basiObjs[1]
-    local fwd       = anchor.getTransformForward()
-    local fwdXZ     = Vector(fwd.x, 0, fwd.z):normalized()
-    local right     = Vector(-fwdXZ.z, 0, fwdXZ.x)
-
-    local unitTypeDataAnchor = main_getUnitType(baseInfo.unitType)
-       local HGAP = 0.25
-    local VGAP = 0.1
-    local width = (unitTypeDataAnchor and unitTypeDataAnchor.base_width_cm or 4) * CM_TO_TTS + HGAP
-    local depth = (unitTypeDataAnchor and unitTypeDataAnchor.base_depth_cm or 3) * CM_TO_TTS + VGAP
-
-    local anchorPos = anchor.getPosition()
-    local anchorRot = anchor.getRotation()
-
-    local vecchiaProfondita = totalBasi / fronteAttuale
-    local nuovoFronte = vecchiaProfondita
-
-    local griglia = {}
-    for i, obj in ipairs(basiObjs) do
-        local idx  = i - 1
-        local rank = math.floor(idx / fronteAttuale)
-        local col  = idx % fronteAttuale
-        griglia[rank] = griglia[rank] or {}
-        griglia[rank][col] = obj
-    end
-
-    for rank = 0, vecchiaProfondita - 1 do
-        for col = 0, fronteAttuale - 1 do
-            local obj = griglia[rank][col]
-            if obj then
-                local newRank, newCol
-                if direction == "left" then
-                    newRank = col
-                    newCol  = rank
-                else
-                    newRank = (fronteAttuale - 1) - col
-                    newCol  = rank
-                end
-                main_setPositionOnGround(obj,
-                    anchorPos.x + right.x*(newCol*width) - fwdXZ.x*(newRank*depth),
-                    anchorPos.z + right.z*(newCol*width) - fwdXZ.z*(newRank*depth),
-                    math.rad(obj.getRotation().y - anchorRot.y))
-                obj.setRotation(anchorRot)
-            end
-        end
-    end
-
-    IEF_FRONT_WIDTH[unitKey] = nuovoFronte
-    main_formationAfter(unitKey, "cambio_fronte_90_e_muovi", baseInfo.unitType)
-
-    main_riposizionaPulsanteFormazione(unitKey, basiObjs)
-    main_formationRedraw(unitKey)
-    return true
-end
-
--- ============================================================
 -- FUNZIONE: main_sistemaFormazioneCore(unitKey)
 -- "Ripara" la formazione al fronte attualmente rilevato.
 -- ============================================================
@@ -1484,7 +1405,6 @@ function main_sistemaFormazioneCore(unitKey, basiObjs)
     main_formationRedraw(unitKey)
     return true
 end
-
 -- ============================================================
 -- Wrapper pulsanti UI 3D — TTS passa (player, value, id);
 -- l'unitKey si estrae dall'id del pulsante (unico per unità).
@@ -1552,6 +1472,12 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
     end
 
     if #basiObjs == 0 then return end
+
+    local vietato = main_moveForbiddenReason(unitKey)
+    if vietato then
+        warningToColor(vietato, Player[player_color], "Yellow", 5, true)
+        return
+    end
 
     -- Regolamento: per muovere l'unità deve essere nel raggio di
     -- comando di un Generale (Generali esclusi)
@@ -2844,4 +2770,311 @@ function main_setPositionOnGround(obj, x, z, deltaRad)
         y = terreno + fondo + IEF_GROUND_EPSILON
     end
     obj.setPosition(Vector(x, y, z))
+end
+-- ============================================================
+-- FUNZIONE: main_cambioFronte90Core(unitKey, direction)
+-- Cambio di fronte di 90° a sinistra ("left") o a destra
+-- ("right"). Solo formazioni rettangolari pure.
+-- La griglia (rango/colonna) si ricava dalle POSIZIONI delle
+-- basi. La colonna sul lato verso cui si gira diventa il nuovo
+-- primo rango; perno sull'angolo anteriore di quel lato.
+-- Ogni base ruota di 90°: fronte nuovo = vecchia profondità.
+-- ============================================================
+function main_cambioFronte90Core(unitKey, direction)
+    local state = IEF_FORM_UNITS[unitKey]
+    if not state or not state.basiObjs or #state.basiObjs < 2 then return false end
+    local basiObjs = state.basiObjs
+    local player = state.activePlayer
+
+    local F = main_detectFormation(basiObjs)          -- basi di fronte
+    local totalBasi = #basiObjs
+    if totalBasi % F ~= 0 then
+        if player then printToColor("[FORMAZIONE] Cambio fronte 90° solo su formazioni rettangolari", player.color, {r=1,g=0.6,b=0}) end
+        return false
+    end
+    local R = totalBasi / F                            -- ranghi
+
+    local baseInfo = main_parseNickname(basiObjs[1].getName())
+    if not baseInfo then return false end
+
+    if not main_formationCanStart(unitKey, "cambio_fronte_90_fermi", baseInfo.unitType, player) then
+        return false
+    end
+
+    local ut = main_getUnitType(baseInfo.unitType)
+    local GAP = 0.03
+    local hw = (ut and ut.base_width_cm or 4) * CM_TO_TTS / 2
+    local hd = (ut and ut.base_depth_cm or 3) * CM_TO_TTS / 2
+    local pw, pd = 2 * hw + GAP, 2 * hd + GAP          -- passo colonne / ranghi
+
+    -- Assi attuali (nativi TTS)
+    local f0 = basiObjs[1].getTransformForward()
+    local r0 = basiObjs[1].getTransformRight()
+    local f = Vector(f0.x, 0, f0.z):normalized()
+    local r = Vector(r0.x, 0, r0.z):normalized()
+
+    -- Coordinate locali e bordi del blocco
+    local sMax, tMin, tMax = -math.huge, math.huge, -math.huge
+    local loc = {}
+    for i, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        local s = p.x * f.x + p.z * f.z
+        local t = p.x * r.x + p.z * r.z
+        loc[i] = { s = s, t = t }
+        if s > sMax then sMax = s end
+        if t < tMin then tMin = t end
+        if t > tMax then tMax = t end
+    end
+
+    -- Nuovi assi e angolo di perno (angolo anteriore del lato)
+    local nf, nr, cornerT
+    if direction == "left" then
+        nf, nr = Vector(-r.x, 0, -r.z), Vector(f.x, 0, f.z)
+        cornerT = tMin - hw
+    else
+        nf, nr = Vector(r.x, 0, r.z), Vector(-f.x, 0, -f.z)
+        cornerT = tMax + hw
+    end
+    local cornerS = sMax + hd
+    local C = { x = f.x * cornerS + r.x * cornerT, z = f.z * cornerS + r.z * cornerT }
+
+    -- Angolo anteriore-sinistro del nuovo blocco (fronte nuovo = R)
+    local larghezza = (R - 1) * pw + 2 * hw
+    local L = C
+    if direction == "left" then
+        L = { x = C.x - nr.x * larghezza, z = C.z - nr.z * larghezza }
+    end
+
+    local yaw = basiObjs[1].getRotation().y + (direction == "left" and -90 or 90)    
+    local deltaRad = math.rad(direction == "left" and -90 or 90)
+
+    for i, obj in ipairs(basiObjs) do
+        local rank = math.floor((sMax - loc[i].s) / pd + 0.5)   -- 0 = primo rango
+        local col  = math.floor((loc[i].t - tMin) / pw + 0.5)   -- 0 = sinistra
+        local newRank, newCol
+        if direction == "left" then
+            newRank, newCol = col, (R - 1) - rank
+        else
+            newRank, newCol = (F - 1) - col, rank
+        end
+        local x = L.x + nr.x * (hw + newCol * pw) - nf.x * (hd + newRank * pd)
+        local z = L.z + nr.z * (hw + newCol * pw) - nf.z * (hd + newRank * pd)
+        main_setPositionOnGround(obj, x, z, deltaRad)
+        local rot = obj.getRotation()
+        obj.setRotation(Vector(rot.x, yaw, rot.z))
+    end
+
+    IEF_FRONT_WIDTH[unitKey] = R
+    main_formationAfter(unitKey, "cambio_fronte_90_e_muovi", baseInfo.unitType)
+
+    main_riposizionaPulsanteFormazione(unitKey, basiObjs)
+    main_formationRedraw(unitKey)
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: main_baseRectOfType(obj, tipo)
+-- Come main_baseRect, ma con il tipo già noto. Aggiunge i 4
+-- vertici (corners) sul piano XZ.
+-- ============================================================
+function main_baseRectOfType(obj, tipo)
+    local ut = main_getUnitType(tipo)
+    local widthCm = (ut and ut.base_width_cm) or 4
+    local depthCm = (ut and ut.base_depth_cm) or 3
+
+    local p = obj.getPosition()
+    local f = obj.getTransformForward()
+    local r = obj.getTransformRight()
+    local fXZ = Vector(f.x, 0, f.z):normalized()
+    local rXZ = Vector(r.x, 0, r.z):normalized()
+
+    local rect = {
+        x = p.x, z = p.z,
+        fx = fXZ.x, fz = fXZ.z,
+        rx = rXZ.x, rz = rXZ.z,
+        hw = widthCm * CM_TO_TTS / 2,
+        hd = depthCm * CM_TO_TTS / 2,
+        obj = obj,
+    }
+    rect.corners = {}
+    for _, sw in ipairs({ -1, 1 }) do
+        for _, sd in ipairs({ -1, 1 }) do
+            table.insert(rect.corners, {
+                x = rect.x + rect.rx * rect.hw * sw + rect.fx * rect.hd * sd,
+                z = rect.z + rect.rz * rect.hw * sw + rect.fz * rect.hd * sd,
+            })
+        end
+    end
+    return rect
+end
+
+-- ============================================================
+-- FUNZIONE: main_pointRectDistance(px, pz, r)
+-- Distanza (unità TTS) da un punto al rettangolo r; 0 se dentro.
+-- ============================================================
+function main_pointRectDistance(px, pz, r)
+    local dx, dz = px - r.x, pz - r.z
+    local ex = math.max(math.abs(dx * r.rx + dz * r.rz) - r.hw, 0)
+    local ef = math.max(math.abs(dx * r.fx + dz * r.fz) - r.hd, 0)
+    return math.sqrt(ex * ex + ef * ef)
+end
+
+-- ============================================================
+-- FUNZIONE: main_rectsDistance(a, b)
+-- Distanza minima bordo-bordo (unità TTS) fra due rettangoli:
+-- il minimo è sempre su un vertice di uno dei due.
+-- ============================================================
+function main_rectsDistance(a, b)
+    local m = math.huge
+    for _, c in ipairs(a.corners) do
+        local d = main_pointRectDistance(c.x, c.z, b)
+        if d < m then m = d end
+    end
+    for _, c in ipairs(b.corners) do
+        local d = main_pointRectDistance(c.x, c.z, a)
+        if d < m then m = d end
+    end
+    return m
+end
+
+-- ============================================================
+-- FUNZIONE: main_canChargeType(tipoCheCarica, tipoBersaglio)
+-- Limitazioni di carica: ART mai; FL solo FL, ART, EL.
+-- ============================================================
+function main_canChargeType(tipoCheCarica, tipoBersaglio)
+    if tipoCheCarica == "ART" or tipoCheCarica == "GEN" then return false end
+    if tipoCheCarica == "FL" and tipoBersaglio ~= "FL"
+       and tipoBersaglio ~= "ART" and tipoBersaglio ~= "EL" then
+        return false
+    end
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitsInMelee()
+-- Insieme delle unità presenti in IEF_MELEE_LIST.
+-- ============================================================
+function main_unitsInMelee()
+    local out = {}
+    for _, e in ipairs(IEF_MELEE_LIST or {}) do
+        out[e.unitArmy1Key] = true
+        out[e.unitArmy2Key] = true
+    end
+    return out
+end
+
+-- ============================================================
+-- FUNZIONE: main_enemyOnFlankOrRear(unitKey)
+-- True se una unità nemica (non Generale, non in ROTTA):
+-- a) è a contatto con una base dell'unità e il centro della sua
+--    base sta dietro la linea del fronte (contatto sul fianco o
+--    sul retro);
+-- b) oppure non è in mischia, può caricare l'unità (ART mai, FL
+--    solo FL/ART/EL), ha almeno 2 basi interamente dietro il
+--    prolungamento della linea del fronte ed è entro la sua
+--    mossa (in grado di caricare un fianco/retro). Nessun
+--    controllo del raggio di comando.
+-- Linea del fronte = proiezione massima dei vertici delle basi
+-- lungo il fronte dell'unità.
+-- ============================================================
+function main_enemyOnFlankOrRear(unitKey)
+    -- Una sola passata sugli oggetti: unità per chiave
+    local unita = {}
+    for _, o in ipairs(getAllObjects()) do
+        local info = main_parseNickname(o.getName())
+        if info then
+            local s = (o.hasTag("Army1") and 1) or (o.hasTag("Army2") and 2) or nil
+            if s then
+                local key = main_getUnitKey(o)
+                local u = unita[key]
+                if not u then
+                    u = { slot = s, tipo = info.unitType, basi = {} }
+                    unita[key] = u
+                end
+                table.insert(u.basi, o)
+            end
+        end
+    end
+
+    local mia = unita[unitKey]
+    if not mia or #mia.basi == 0 then return false end
+
+    local mieRect = {}
+    for _, b in ipairs(mia.basi) do
+        table.insert(mieRect, main_baseRectOfType(b, mia.tipo))
+    end
+    local fx, fz = mieRect[1].fx, mieRect[1].fz
+
+    local fronte = -math.huge
+    for _, r in ipairs(mieRect) do
+        for _, c in ipairs(r.corners) do
+            local s = c.x * fx + c.z * fz
+            if s > fronte then fronte = s end
+        end
+    end
+
+    local tol = IEF_FLANK_CONTACT_INCHES * INCH_TO_TTS
+    local inMischia = main_unitsInMelee()
+
+    for key, u in pairs(unita) do
+        if u.slot ~= mia.slot and u.tipo ~= "GEN" and not main_isGeneralKey(key)
+           and main_getCohesion(key) ~= COHESION.ROT then
+
+            local rects = {}
+            for _, b in ipairs(u.basi) do
+                table.insert(rects, main_baseRectOfType(b, u.tipo))
+            end
+
+            -- a) contatto sul fianco/retro
+            for _, er in ipairs(rects) do
+                if er.x * fx + er.z * fz < fronte then
+                    for _, mr in ipairs(mieRect) do
+                        if main_rectsDistance(mr, er) <= tol then return true end
+                    end
+                end
+            end
+
+            -- b) in grado di caricare un fianco/retro
+            if not inMischia[key] and main_canChargeType(u.tipo, mia.tipo) then
+                local dietro = 0
+                for _, er in ipairs(rects) do
+                    local tutta = true
+                    for _, c in ipairs(er.corners) do
+                        if c.x * fx + c.z * fz > fronte + tol then tutta = false; break end
+                    end
+                    if tutta then dietro = dietro + 1 end
+                end
+
+                if dietro >= 2 then
+                    local ut = main_getUnitType(u.tipo)
+                    local mossa = ((ut and ut.move_inches) or 0) * INCH_TO_TTS + tol
+                    for _, er in ipairs(rects) do
+                        for _, mr in ipairs(mieRect) do
+                            if main_rectsDistance(mr, er) <= mossa then return true end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: main_moveForbiddenReason(unitKey)
+-- Regolamento, fase di manovra: non muove chi ha evaso o
+-- caricato in questo turno (IEF_UNIT_NO_MOVE_NEXT_TURN, scritto
+-- da 4_charge) né chi è in mischia. Ritorna il messaggio o nil.
+-- ============================================================
+function main_moveForbiddenReason(unitKey)
+    if ENGINE.phase ~= PHASE.MOVE or main_isGeneralKey(unitKey) then return nil end
+    if IEF_UNIT_NO_MOVE_NEXT_TURN and IEF_UNIT_NO_MOVE_NEXT_TURN[unitKey] then
+        return "Unita' che ha caricato o evaso in questo turno: non puo' muovere"
+    end
+    for _, e in ipairs(IEF_MELEE_LIST or {}) do
+        if e.unitArmy1Key == unitKey or e.unitArmy2Key == unitKey then
+            return "Unita' in mischia: non puo' muovere"
+        end
+    end
+    return nil
 end

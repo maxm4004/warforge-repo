@@ -304,7 +304,7 @@ function shoot_range_and_target(player, selection)
             for _, baseNemica in ipairs(basiNemiche) do
                 local targetPos = baseNemica.getPosition()
 
-                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos) then
+                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
                     bersaglioTrovato = baseNemica
                     break
                 end
@@ -323,7 +323,7 @@ function shoot_range_and_target(player, selection)
             for _, baseObj in ipairs(basiFronte) do
                 local posA = baseObj.getPosition()
 
-                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos) then
+                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
                     baseNemica.highlightOn({0.2, 0.6, 1})
                     break
                 end
@@ -419,127 +419,158 @@ function shoot_getWeapon(unitKey)
     return nil
 end
 -- ============================================================
+-- FUNZIONE: shoot_coneOf(rects, angoloGradi)
+-- Cono di tiro dell'unità (regolamento: "angolo di tiro di
+-- massimo 45° dall'angolo della base più esterna"): parte dalla
+-- linea del fronte, fra gli angoli esterni sinistro e destro, e
+-- si allarga di angoloGradi per lato. rects = basi tiratrici
+-- (main_baseRectOfType).
+-- ============================================================
+function shoot_coneOf(rects, angoloGradi)
+    local r0 = rects[1]
+    local c = { fx = r0.fx, fz = r0.fz, rx = r0.rx, rz = r0.rz,
+                s0 = -math.huge, tL = math.huge, tR = -math.huge,
+                tan = math.tan(math.rad(angoloGradi or 45)) }
+    for _, r in ipairs(rects) do
+        for _, k in ipairs(r.corners) do
+            local s = k.x * c.fx + k.z * c.fz
+            local t = k.x * c.rx + k.z * c.rz
+            if s > c.s0 then c.s0 = s end
+            if t < c.tL then c.tL = t end
+            if t > c.tR then c.tR = t end
+        end
+    end
+    return c
+end
+-- ============================================================
+-- FUNZIONE: shoot_pointInCone(c, x, z)
+-- ============================================================
+function shoot_pointInCone(c, x, z)
+    local s = x * c.fx + z * c.fz - c.s0
+    if s < -0.001 then return false end
+    if s < 0 then s = 0 end
+    local t = x * c.rx + z * c.rz
+    return t >= c.tL - s * c.tan and t <= c.tR + s * c.tan
+end
+-- ============================================================
+-- FUNZIONE: shoot_rectInCone(c, rect)
+-- Vero se almeno un angolo (o il centro) della base è nel cono.
+-- ============================================================
+function shoot_rectInCone(c, rect)
+    if shoot_pointInCone(c, rect.x, rect.z) then return true end
+    for _, k in ipairs(rect.corners) do
+        if shoot_pointInCone(c, k.x, k.z) then return true end
+    end
+    return false
+end
+-- ============================================================
 -- FUNZIONE: shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
+-- Regolamento: "si deve sempre tirare al bersaglio più vicino".
+-- Candidate = unità nemiche (non Generali, non in mischia) con
+-- almeno una base nel cono e in gittata (distanza bordo-bordo
+-- dalle basi tiratrici). Si sceglie la più vicina che almeno una
+-- base tiratrice vede (LOS). Ritorna la base nemica più vicina
+-- vista dell'unità scelta, o nil.
 -- ============================================================
 function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
+    if not basiObjs or #basiObjs == 0 then return nil, nil end
+    local info0 = main_parseNickname(basiObjs[1].getName())
+    local tipo0 = info0 and info0.unitType
 
-    local rangeInches = rangeUnits / INCH_TO_TTS
-    local unitaCandidate = {}
+    local mieRect = {}
+    for _, b in ipairs(basiObjs) do
+        table.insert(mieRect, main_baseRectOfType(b, tipo0))
+    end
+    local cono = shoot_coneOf(mieRect, angoloGradi)
+    local inMischia = main_unitsInMelee()
 
-    for _, base in ipairs(basiObjs) do
-        local posA = base.getPosition()
-        local fwd  = base.getTransformForward()
-        local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-
-        for _, nemico in ipairs(nemici) do
-            if nemico and nemico ~= base then
-                local posB = nemico.getPosition()
-                local dir  = Vector(posB.x - posA.x, 0, posB.z - posA.z)
-                local centerDist = dir:magnitude()
-
-                if centerDist > 0 and main_distanceInches(base, nemico) <= rangeInches then
-                    local dirNorm = dir:normalized()
-                    local dot     = math.max(-1, math.min(1, fwdXZ.x*dirNorm.x + fwdXZ.z*dirNorm.z))
-                    local ang     = math.deg(math.acos(dot))
-
-                    if ang <= angoloGradi then
-                        local nemicoInfo = main_parseNickname(nemico.getName())
-                        if nemicoInfo then
-                            local nemicoSlot = nemico.hasTag("Army1") and 1 or 2
-
-                            local unitKey = main_getUnitKey(base)
-
-                            local entry = unitaCandidate[unitKey]
-                            if not entry then
-                                entry = { minDist = centerDist, basiNemiche = {} }
-                                unitaCandidate[unitKey] = entry
-                            end
-
-                            if centerDist < entry.minDist then
-                                entry.minDist = centerDist
-                            end
-
-                            local giaPresente = false
-                            for _, bn in ipairs(entry.basiNemiche) do
-                                if bn == nemico then giaPresente = true break end
-                            end
-                            if not giaPresente then
-                                table.insert(entry.basiNemiche, nemico)
-                            end
+    local unita = {}
+    for _, nemico in ipairs(nemici) do
+        local info = main_parseNickname(nemico.getName())
+        if info and info.unitType ~= "GEN" then
+            local key = main_getUnitKey(nemico)
+            if not main_isGeneralKey(key) and not inMischia[key] then
+                local rect = main_baseRectOfType(nemico, info.unitType)
+                if shoot_rectInCone(cono, rect) then
+                    local dMin = math.huge
+                    for _, mr in ipairs(mieRect) do
+                        local d = main_rectsDistance(mr, rect)
+                        if d < dMin then dMin = d end
+                    end
+                    if dMin <= rangeUnits then
+                        local u = unita[key]
+                        if not u then
+                            u = { minDist = math.huge, basi = {} }
+                            unita[key] = u
                         end
+                        table.insert(u.basi, { obj = nemico, dist = dMin })
+                        if dMin < u.minDist then u.minDist = dMin end
                     end
                 end
             end
         end
     end
 
-    local listaCandidate = {}
-    for unitKey, entry in pairs(unitaCandidate) do
-        table.insert(listaCandidate, { unitKey = unitKey, minDist = entry.minDist, basiNemiche = entry.basiNemiche })
-    end
+    local lista = {}
+    for _, u in pairs(unita) do table.insert(lista, u) end
+    table.sort(lista, function(a, b) return a.minDist < b.minDist end)
 
-    table.sort(listaCandidate, function(a, b) return a.minDist < b.minDist end)
-    --print("[TIRO] unita' candidate nel cono: " .. #listaCandidate)
-
-    --for _, c in ipairs(listaCandidate) do
-    --    print("[TIRO]   unita=" .. c.unitKey .. " minDist=" .. c.minDist .. " basi=" .. #c.basiNemiche)
-    --end
-
-    for _, c in ipairs(listaCandidate) do
-
-        for _, baseTiratrice in ipairs(basiObjs) do
-            local posA = baseTiratrice.getPosition()
-
-            for _, baseNemica in ipairs(c.basiNemiche) do
-                if shoot_checkLOS(baseTiratrice, posA, baseNemica.getPosition()) then
-                    --print("[TIRO] bersaglio scelto: " .. c.unitKey .. " (visto da " .. baseTiratrice.getName() .. " -> " .. baseNemica.getName() .. ")")
-                    return baseNemica, nil
+    for _, u in ipairs(lista) do
+        table.sort(u.basi, function(a, b) return a.dist < b.dist end)
+        for _, bn in ipairs(u.basi) do
+            for _, tiratrice in ipairs(basiObjs) do
+                if shoot_checkLOS(tiratrice, tiratrice.getPosition(), bn.obj.getPosition(), bn.obj) then
+                    return bn.obj, nil
                 end
             end
         end
-
-       -- print("[TIRO] unita=" .. c.unitKey .. " scartata: nessuna base tiratrice ha LOS")
     end
-
-    -- print("[TIRO] nessuna unita' nemica raggiungibile in LOS")
     return nil, nil
 end
 -- ============================================================
--- FUNZIONE: shoot_checkLOS(shooter, fromPos, toPos)
+-- FUNZIONE: shoot_checkLOS(shooter, fromPos, toPos, targetObj)
+-- Raggio dal centro (getBounds, Y affidabile) della base
+-- tiratrice al centro della base nemica (targetObj, se passato),
+-- lungo al massimo fino al bersaglio (max_distance). Blocca la
+-- prima unità amica incontrata (le basi della stessa unità
+-- tiratrice e i Generali no: il secondo rango tira sopra il
+-- primo); il primo nemico incontrato libera la vista.
 -- ============================================================
-function shoot_checkLOS(shooter, fromPos, toPos)
-    local dir       = toPos - fromPos
+function shoot_checkLOS(shooter, fromPos, toPos, targetObj)
+    local function centroY(obj, pos)
+        local bb = obj and obj.getBounds()
+        if bb and bb.center then return math.max(pos.y, bb.center.y) end
+        return pos.y
+    end
+    local fromY = centroY(shooter, fromPos)
+    local toY   = targetObj and centroY(targetObj, toPos) or (toPos.y + (fromY - fromPos.y))
+    local from = Vector(fromPos.x, fromY, fromPos.z)
+    local to   = Vector(toPos.x,   toY,   toPos.z)
+    local dir  = to - from
+    if dir:magnitude() < 0.0001 then return true end
+
     local enemyTag  = shooter.hasTag("Army1") and "Army2" or "Army1"
     local friendTag = shooter.hasTag("Army1") and "Army1" or "Army2"
+    local myKey     = main_getUnitKey(shooter)
 
     local hits = Physics.cast({
-        origin    = fromPos,
+        origin    = from,
         direction = dir:normalized(),
-        distance  = dir:magnitude(),
-        type      = 1
-    })
+        max_distance = dir:magnitude(),
+        type      = 1,
+    }) or {}
+
+    table.sort(hits, function(a, b) return (a.distance or 0) < (b.distance or 0) end)
 
     for _, hit in ipairs(hits) do
-        local n = hit.hit_object and hit.hit_object.getName() or "?"
-        --print("[LOS DEBUG]   " .. n .. " distance=" .. tostring(hit.distance) .. " point=" .. tostring(hit.point))
-    end
-
-    table.sort(hits, function(a, b)
-        return (a.distance or 0) < (b.distance or 0)
-    end)
-
-    for _, hit in ipairs(hits) do
-        local n = hit.hit_object and hit.hit_object.getName() or "?"
-       -- print("[LOS DEBUG]   " .. n .. " distance=" .. tostring(hit.distance))
-    end
-
-    for _, hit in ipairs(hits) do
-        if hit.hit_object then
-            if hit.hit_object.hasTag(friendTag) then
-                --print("[LOS DEBUG] BLOCCATO da amico: " .. hit.hit_object.getName())
-                return false
-            elseif hit.hit_object.hasTag(enemyTag) then
-                --print("[LOS DEBUG] OK, nemico trovato per primo: " .. hit.hit_object.getName())
+        local o = hit.hit_object
+        if o and o ~= shooter then
+            local key = main_getUnitKey(o)
+            if o.hasTag(friendTag) then
+                if key ~= myKey and not main_isGeneralKey(key) then
+                    return false
+                end
+            elseif o.hasTag(enemyTag) then
                 return true
             end
         end
@@ -662,7 +693,7 @@ function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
         local posA = baseObj.getPosition()
         for _, baseNemica in ipairs(basiNemiche) do
             local targetPos = baseNemica.getPosition()
-            if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos) then
+            if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
                 count = count + 1
                 break
             end

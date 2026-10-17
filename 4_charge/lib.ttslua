@@ -1116,7 +1116,7 @@ function charge_attackRowClick(player, value, id)
 
     local giaMossoIoStesso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2) or elemento.step == CHARGE_STEP.CLO
     if giaMossoIoStesso then
-        warningToColor(string.format("%s è in carica contro %s", main_decodeExtendedUnitLabel(myKey), main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 5, true)
+        warningToColor(charge_attackDoneText(slot, elemento), player, "Yellow", 5, true)
         return
     end
 
@@ -1348,32 +1348,48 @@ function charge_refreshDefenseRowText(slot, elemento)
     end, 1)
 end
 -- ============================================================
+-- FUNZIONE: charge_attackVerb(slot, elemento)
+-- Verbo della riga Attacco secondo la risposta del lato slot.
+-- ============================================================
+function charge_attackVerb(slot, elemento)
+    local r = charge_elementoResponse(elemento, slot)
+    if r == REACTION_TYPE.EVA then return "evade la" end
+    if r == REACTION_TYPE.COC then return "contro carica la" end
+    return "carica la"
+end
+-- ============================================================
+-- FUNZIONE: charge_attackDoneText(slot, elemento)
+-- Messaggio al click su una riga Attacco già eseguita.
+-- ============================================================
+function charge_attackDoneText(slot, elemento)
+    local me  = main_decodeExtendedUnitLabel(charge_elementoUnitKey(elemento, slot))
+    local lui = main_decodeExtendedUnitLabel(charge_elementoOtherKey(elemento, slot))
+    local r = charge_elementoResponse(elemento, slot)
+    if r == REACTION_TYPE.EVA then
+        return string.format("La %s ha già evaso la %s", me, lui)
+    end
+    local mosso = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
+    if mosso then
+        return string.format("La %s ha già caricato la %s", me, lui)
+    end
+    return string.format("Carica fra la %s e la %s già risolta", me, lui)
+end
+-- ============================================================
 -- FUNZIONE: charge_refreshAttackRowText(slot, elemento)
--- Aggiorna il testo di UNA riga Attacco esistente (lo step è
--- cambiato) via UI.setAttribute diretto — la riga esiste già,
--- non serve ricostruire tutta la UI per un cambio di testo.
+-- Aggiorna il testo di UNA riga Attacco esistente via
+-- UI.setAttribute (la riga esiste già).
 -- ============================================================
 function charge_refreshAttackRowText(slot, elemento)
     local myKey = charge_elementoUnitKey(elemento, slot)
     local otherKey = charge_elementoOtherKey(elemento, slot)
-    local rowId = string.format("charge_attack_row_%d_%s", slot, otherKey)  
+    local rowId = string.format("charge_attack_row_%d_%s", slot, otherKey)
 
-  local risposta = "carica la"
-
-     if elemento.step == REACTION_TYPE.EVA then 
-             risposta = "evade la" 
-    elseif  elemento.step == REACTION_TYPE.COC then 
-             risposta = "contro carica la" 
-    end
-
-    UI.setAttribute(rowId, "text", string.format("La %s %s %s", 
-    main_decodeExtendedUnitLabel(myKey), 
-    elemento.step, 
-    main_decodeExtendedUnitLabel(otherKey)
-    ))
+    UI.setAttribute(rowId, "text", string.format("La %s %s %s",
+        main_decodeExtendedUnitLabel(myKey),
+        charge_attackVerb(slot, elemento),
+        main_decodeExtendedUnitLabel(otherKey)))
     UI.setAttribute(rowId, "textColor", "white")
 end
-
 -- ============================================================
 -- FUNZIONE: charge_executeEvade(slot, elemento)
 -- ============================================================
@@ -1839,6 +1855,7 @@ function charge_executeChargeMove(player, unitKey)
         elemento.outcome = CHARGE_OUTCOME.EVI
 
         if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+        IEF_UNIT_NO_MOVE_NEXT_TURN[unitKey] = true
         if elemento.movedArmy1 and elemento.movedArmy2 then
             elemento.step = CHARGE_STEP.CLO
         end
@@ -1895,6 +1912,7 @@ function charge_executeChargeMove(player, unitKey)
     elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
     
     if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+    IEF_UNIT_NO_MOVE_NEXT_TURN[unitKey] = true
     if isCounterCharge then
         if elemento.movedArmy1 and elemento.movedArmy2 then
             elemento.step = CHARGE_STEP.CLO
