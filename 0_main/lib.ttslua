@@ -838,6 +838,69 @@ function main_canManeuver(manovra, tipoUnita)
     end
     return m[tipoUnita] == true
 end
+
+-- ============================================================
+-- FUNZIONE: main_unitFullMove(unitKey)
+-- Mossa piena dell'unità in pollici (unit_types.move_inches).
+-- ============================================================
+function main_unitFullMove(unitKey)
+    local info = nil
+    for _, o in ipairs(getAllObjects()) do
+        if main_getUnitKey(o) == unitKey then
+            info = main_parseNickname(o.getName())
+            if info then break end
+        end
+    end
+    local tipo = main_isGeneralKey(unitKey) and "GEN" or (info and info.unitType)
+    local ut = tipo and main_getUnitType(tipo)
+    return (ut and ut.move_inches) or 0
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitHasMoved(unitKey)
+-- True se nella fase MOVE l'unità ha già speso movimento o
+-- perni (budget sotto il valore pieno).
+-- ============================================================
+function main_unitHasMoved(unitKey)
+    local mossa = IEF_MOVE_BUDGET[unitKey]
+    local perni = IEF_PIVOT_BUDGET[unitKey]
+    if perni ~= nil and perni < 3 then return true end
+    if mossa ~= nil and mossa < main_unitFullMove(unitKey) - 0.001 then return true end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: main_formationCanStart(unitKey, manovraFermi, tipo, player)
+-- Regolamento (tabella movimenti): cambio di formazione/fronte
+-- una sola volta, solo prima di muovere e solo se il tipo può.
+-- ============================================================
+function main_formationCanStart(unitKey, manovraFermi, tipo, player)
+    if TURN.phase ~= "MOVE" or IEF_FORM_TEST_MODE then return true end
+    local function no(msg)
+        if player then printToColor("[FORMAZIONE] " .. msg, player.color, {r=1,g=0.6,b=0}) end
+        return false
+    end
+    if IEF_REFORM_USED[unitKey] then return no("Manovra già usata questo turno") end
+    if main_unitHasMoved(unitKey) then return no("L'unità ha già mosso: niente cambi di formazione") end
+    if not main_canManeuver(manovraFermi, tipo) then return no("Questa unità non può fare questa manovra") end
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: main_formationAfter(unitKey, manovraMuovi, tipo)
+-- Dopo il cambio: se il tipo NON può "e poi muovere" la
+-- manovra consuma tutta la mossa (budget a 0); altrimenti la
+-- mossa resta intera (il cambio non costa pollici).
+-- ============================================================
+function main_formationAfter(unitKey, manovraMuovi, tipo)
+    IEF_REFORM_USED[unitKey] = true
+    if TURN.phase ~= "MOVE" or IEF_FORM_TEST_MODE then return end
+    if not main_canManeuver(manovraMuovi, tipo) then
+        IEF_MOVE_BUDGET[unitKey]  = 0
+        IEF_PIVOT_BUDGET[unitKey] = 0
+        if IEF_MOVE_UNITS and IEF_MOVE_UNITS[unitKey] then move_close(unitKey) end
+    end
+end
 -- ============================================================
 -- FUNZIONE: main_getMeleeThreshold()
 -- ============================================================   
@@ -1113,7 +1176,7 @@ function main_formationRedraw(unitKey)
     end
     local function turnOk()
         if not inMovePhase then return true end
-        return IEF_FORM_TEST_MODE or not reformUsed
+        return IEF_FORM_TEST_MODE or (not reformUsed and not main_unitHasMoved(unitKey))
     end
 
     local reformOk = canDo("espandi_contrai_1_2_basi_fermi") and turnOk()
@@ -1270,15 +1333,8 @@ function main_espandiContraiCore(unitKey, deltaFronte)
     local baseInfo = main_parseNickname(basiObjs[1].getName())
     if not baseInfo then return false end
 
-    if TURN.phase == "MOVE" and not IEF_FORM_TEST_MODE then
-        if IEF_REFORM_USED[unitKey] then
-            if player then printToColor("[FORMAZIONE] Manovra già usata questo turno", player.color, {r=1,g=0.6,b=0}) end
-            return false
-        end
-        if not main_canManeuver("espandi_contrai_1_2_basi_fermi", baseInfo.unitType) then
-            if player then printToColor("[FORMAZIONE] Questa unità non può espandere/contrarre il fronte", player.color, {r=1,g=0.6,b=0}) end
-            return false
-        end
+    if not main_formationCanStart(unitKey, "espandi_contrai_1_2_basi_fermi", baseInfo.unitType, player) then
+        return false
     end
 
     local fronteAttuale = main_detectFormation(basiObjs)
@@ -1289,7 +1345,7 @@ function main_espandiContraiCore(unitKey, deltaFronte)
     main_ricostruisciFormazione(basiObjs, newFront)
 
     IEF_FRONT_WIDTH[unitKey] = newFront
-    IEF_REFORM_USED[unitKey] = true
+    main_formationAfter(unitKey, "espandi_contrai_1_2_basi_e_muovi", baseInfo.unitType)
 
     main_riposizionaPulsanteFormazione(unitKey, basiObjs)
     main_formationRedraw(unitKey)
@@ -1305,10 +1361,10 @@ function main_cambioFronte180Core(unitKey)
     local basiObjs = state.basiObjs
     local player = state.activePlayer
 
-    if TURN.phase == "MOVE" and not IEF_FORM_TEST_MODE then
-        if IEF_REFORM_USED[unitKey] then return false end
-        local baseInfo = main_parseNickname(basiObjs[1].getName())
-        if not baseInfo or not main_canManeuver("cambio_fronte_180_fermi", baseInfo.unitType) then return false end
+    local baseInfo = main_parseNickname(basiObjs[1].getName())
+    if not baseInfo then return false end
+    if not main_formationCanStart(unitKey, "cambio_fronte_180_fermi", baseInfo.unitType, player) then
+        return false
     end
 
     local sumX, sumY, sumZ = 0, 0, 0
@@ -1326,7 +1382,7 @@ function main_cambioFronte180Core(unitKey)
         obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
     end
 
-    IEF_REFORM_USED[unitKey] = true
+    main_formationAfter(unitKey, "cambio_fronte_180_e_muovi", baseInfo.unitType)
     main_riposizionaPulsanteFormazione(unitKey, basiObjs)
     main_formationRedraw(unitKey)
     return true
@@ -1351,9 +1407,8 @@ function main_cambioFronte90Core(unitKey, direction)
     local baseInfo = main_parseNickname(basiObjs[1].getName())
     if not baseInfo then return false end
 
-    if TURN.phase == "MOVE" and not IEF_FORM_TEST_MODE then
-        if IEF_REFORM_USED[unitKey] then return false end
-        if not main_canManeuver("cambio_fronte_90_fermi", baseInfo.unitType) then return false end
+    if not main_formationCanStart(unitKey, "cambio_fronte_90_fermi", baseInfo.unitType, player) then
+        return false
     end
 
     table.sort(basiObjs, function(a, b)
@@ -1410,7 +1465,7 @@ function main_cambioFronte90Core(unitKey, direction)
     end
 
     IEF_FRONT_WIDTH[unitKey] = nuovoFronte
-    IEF_REFORM_USED[unitKey] = true
+    main_formationAfter(unitKey, "cambio_fronte_90_e_muovi", baseInfo.unitType)
 
     main_riposizionaPulsanteFormazione(unitKey, basiObjs)
     main_formationRedraw(unitKey)

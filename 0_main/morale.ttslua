@@ -110,10 +110,10 @@ end
 -- Testo della riga del pannello morale.
 -- ============================================================
 function main_moraleRowText(req, inCorso)
-    return string.format("La %s: test di morale, %s%s",
+    return string.format("La %s: %s%s",
         main_decodeExtendedUnitLabel(req.key),
         main_moraleMotivoText(req.motivo or req.situazione),
-        inCorso and " - in corso" or "")
+        inCorso and " [in corso]" or "")
 end
 
 -- ============================================================

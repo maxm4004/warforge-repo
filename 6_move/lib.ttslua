@@ -142,12 +142,19 @@ function move_redraw(unitKey)
             panel3D.UI.setAttribute(id, "color", ok and COLOR_ON or COLOR_OFF)
         end
 
-        local avantiOk = canDo("avanti")
+        -- "Perno e restare fermi" (senza "perno e movimento
+        -- restante"): o perni o avanti, non entrambi.
+        local perniUsati = 3 - pivotResiduo
+        local avanzato = (main_unitFullMove(unitKey) - moveResiduo) > perniUsati + 0.001
+        local soloPerno = not canDo("perno_max3_e_muovi") and not IEF_MOVE_TEST_MODE
+
+        local avantiOk = canDo("avanti") and not (soloPerno and perniUsati > 0)
         setBtn("btn_" .. unitKey .. "_Move1",   avantiOk and moveResiduo >= 1)
         setBtn("btn_" .. unitKey .. "_Move2",   avantiOk and moveResiduo >= 2)
         setBtn("btn_" .. unitKey .. "_MoveMax", avantiOk)
 
         local pivotOk = canDo("perno_max3_fermi") and pivotResiduo >= 1 and moveResiduo >= 1
+                        and not (soloPerno and avanzato)
         setBtn("btn_" .. unitKey .. "_PivotSx", pivotOk)
         setBtn("btn_" .. unitKey .. "_PivotDx", pivotOk)
     end, 5)

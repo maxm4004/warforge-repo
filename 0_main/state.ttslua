@@ -1,5 +1,5 @@
-IEF_FORM_TEST_MODE = true
-IEF_MOVE_TEST_MODE = true
+IEF_FORM_TEST_MODE = false
+IEF_MOVE_TEST_MODE = false
 
 -- Colori esercito (alias leggibili)
 colorArmy1 = colorArmy1 or COLOR.NOARMY

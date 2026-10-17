@@ -150,7 +150,8 @@ function main_moraleTestFocus(ctx, slot, player, rec)
     main_moraleCamera(player)
     local req = main_moraleFindRequest(slot, ctx.reqId)
     if req then
-        engine_dicePanelOpen(slot, main_moraleDiceScheda(req))
+        local mod, dettaglio = main_moraleTestMod(ctx, req)
+        engine_dicePanelOpen(slot, main_moraleDiceScheda(req, mod, dettaglio))
     end
     engine_subRedraw()
 end
@@ -167,13 +168,10 @@ function main_moraleTestRoll(ctx, slot, player, rec)
         return
     end
 
-    local mod = req.mod
-    if mod == nil then
-        mod = main_moraleCurrentModifier(req.key)
-    end
+    local mod, dettaglio = main_moraleTestMod(ctx, req)
 
     if not engine_dicePanelIsOpen(slot) then
-        engine_dicePanelOpen(slot, main_moraleDiceScheda(req))
+        engine_dicePanelOpen(slot, main_moraleDiceScheda(req, mod, dettaglio))
     end
 
     IEF_MORALE_TEST_ROLLING[slot] = true
