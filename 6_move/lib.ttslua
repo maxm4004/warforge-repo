@@ -281,9 +281,10 @@ function move_perno_apply(unitKey, direction)
     local angoloGradi = (direction == "left") and -ROTATION_SNAP_DEGREES or ROTATION_SNAP_DEGREES
     local angoloSigned = math.rad(angoloGradi)
 
-    -- Quanti pollici di arco consuma questo perno fisso, per
-    -- verificare/scalare il budget residuo (dipende dal raggio).
-    local distanzaInch = math.abs(angoloSigned) * radius / INCH_TO_TTS
+    -- Regolamento: ogni perno costa 1" di movimento, massimo 3
+    -- perni per mossa (IEF_PIVOT_BUDGET parte da 3). L'angolo resta
+    -- quello dello snap di TTS.
+    local distanzaInch = 1
 
     if not IEF_MOVE_TEST_MODE then
         if distanzaInch > moveResiduo or distanzaInch > pivotResiduo then
