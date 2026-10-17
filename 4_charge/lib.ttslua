@@ -1251,8 +1251,9 @@ function charge_applyPivot(basiObjs, pivotBase, angoloSigned)
             local rel = Vector(p.x - pivotPos.x, 0, p.z - pivotPos.z)
             local rx = rel.x * math.cos(angoloSigned) - rel.z * math.sin(angoloSigned)
             local rz = rel.x * math.sin(angoloSigned) + rel.z * math.cos(angoloSigned)
-            local newPos = Vector(pivotPos.x + rx, p.y, pivotPos.z + rz)
-            obj.setPosition(newPos)
+            main_setPositionOnGround(obj, pivotPos.x + rx, pivotPos.z + rz, angoloSigned)
+        else
+            main_setPositionOnGround(obj, pivotPos.x, pivotPos.z, angoloSigned)
         end
 
         local rot = obj.getRotation()
@@ -1396,7 +1397,7 @@ function charge_executeEvade(evadingSlot, elemento)
         local deltaUnits = moveInches * INCH_TO_TTS
         for _, obj in ipairs(defenderBases) do
             local p = obj.getPosition()
-            obj.setPosition(Vector(p.x + fleeXZ.x*deltaUnits, p.y, p.z + fleeXZ.z*deltaUnits))
+            main_setPositionOnGround(obj, p.x + fleeXZ.x*deltaUnits, p.z + fleeXZ.z*deltaUnits)
         end
 
         main_generalFlipAndMove(evadingKey, fleeXZ.x, fleeXZ.z, deltaUnits)
@@ -1927,7 +1928,7 @@ function charge_moveTowardPoint(basiObjs, originBase, targetPos, distanzaInch)
 
     for _, obj in ipairs(basiObjs) do
         local p = obj.getPosition()
-        obj.setPosition(Vector(p.x + dirNorm.x*deltaUnits, p.y, p.z + dirNorm.z*deltaUnits))
+        main_setPositionOnGround(obj, p.x + dirNorm.x*deltaUnits, p.z + dirNorm.z*deltaUnits)
     end
 
     main_syncGeneralsOfBases(basiObjs)

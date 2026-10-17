@@ -5,9 +5,6 @@ function before_shoot(phaseName, phase)
     if TURN.phase ~= phaseName then main_resetTurnForPhase() end
     TURN.phase = phaseName
 
-    UI.setAttribute("morale_queue_list_army1", "active", "true")
-    UI.setAttribute("morale_queue_list_army2", "active", "true")
-
     IEF_MORALE_ROLL_PENDING[1] = {}
     IEF_MORALE_ROLL_PENDING[2] = {}
 

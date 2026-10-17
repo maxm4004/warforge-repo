@@ -1247,13 +1247,12 @@ function main_ricostruisciFormazione(basiObjs, fronte)
             col = (posizioneNelResto == 0) and 0 or (fronte - 1)
         end
 
-        local newPos = Vector(
+        local refRot = refObj.getRotation()
+        main_setPositionOnGround(obj,
             startPos.x + right.x*(col*width) - fwdXZ.x*(rank*depth),
-            obj.getPosition().y,
-            startPos.z + right.z*(col*width) - fwdXZ.z*(rank*depth)
-        )
-        obj.setPosition(newPos)
-        obj.setRotation(refObj.getRotation())
+            startPos.z + right.z*(col*width) - fwdXZ.z*(rank*depth),
+            math.rad(obj.getRotation().y - refRot.y))
+        obj.setRotation(refRot)
     end
 
     return true
@@ -1322,7 +1321,7 @@ function main_cambioFronte180Core(unitKey)
 
     for _, obj in ipairs(basiObjs) do
         local p = obj.getPosition()
-        obj.setPosition(Vector(2*center.x - p.x, p.y, 2*center.z - p.z))
+        main_setPositionOnGround(obj, 2*center.x - p.x, 2*center.z - p.z)
         local rot = obj.getRotation()
         obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
     end
@@ -1332,7 +1331,6 @@ function main_cambioFronte180Core(unitKey)
     main_formationRedraw(unitKey)
     return true
 end
-
 -- ============================================================
 -- FUNZIONE: main_cambioFronte90Core(unitKey, direction)
 -- Scambia fronte<->profondità. Solo formazioni rettangolari pure.
@@ -1402,12 +1400,10 @@ function main_cambioFronte90Core(unitKey, direction)
                     newRank = (fronteAttuale - 1) - col
                     newCol  = rank
                 end
-                local newPos = Vector(
+                main_setPositionOnGround(obj,
                     anchorPos.x + right.x*(newCol*width) - fwdXZ.x*(newRank*depth),
-                    obj.getPosition().y,
-                    anchorPos.z + right.z*(newCol*width) - fwdXZ.z*(newRank*depth)
-                )
-                obj.setPosition(newPos)
+                    anchorPos.z + right.z*(newCol*width) - fwdXZ.z*(newRank*depth),
+                    math.rad(obj.getRotation().y - anchorRot.y))
                 obj.setRotation(anchorRot)
             end
         end

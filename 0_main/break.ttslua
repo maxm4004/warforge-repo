@@ -470,7 +470,7 @@ function main_getRoutListPanelXml(slot)
     end
 
     return string.format(
-        '<Panel id="rout_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="150" offsetXY="-10 -330" visibility="%s" active="%s">' ..
+        '<Panel id="rout_list_army%d" rectAlignment="MiddleRight" color="rgba(0,0,0,0.35)" width="400" height="150" offsetXY="-10 -150" visibility="%s" active="%s">' ..
         '<Text id="rout_list_title_army%d" text="ELENCO ROTTE %s" font="warforge_font" fontSize="12" color="White" position="0 55 0" alignment="UpperCenter" width="300" height="22"/>' ..
         '<TableLayout width="400" height="110" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="400" position="0 -10 0">' ..
         '%s' ..

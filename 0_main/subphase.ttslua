@@ -68,12 +68,13 @@ function main_moraleTestEnter(ctx, slot, rec)
     end
 end
 -- ============================================================
--- FUNZIONE: main_moraleDiceScheda(req)
+-- FUNZIONE: main_moraleDiceScheda(req, modCalc, dettCalc)
 -- Scheda del pannello dadi per un test di morale: classe e
 -- soglia, ogni modificatore con il suo valore, totale e
--- risultato da ottenere sui 2D6.
+-- risultato da ottenere sui 2D6. modCalc/dettCalc: modificatore
+-- già calcolato (main_moraleTestMod), per non ricalcolarlo.
 -- ============================================================
-function main_moraleDiceScheda(req)
+function main_moraleDiceScheda(req, modCalc, dettCalc)
     local bases = main_getUnitBases(req.key)
     local meta = bases[1] and main_getUnitMeta(bases[1])
     local classe = meta and meta.morale
@@ -81,7 +82,9 @@ function main_moraleDiceScheda(req)
     local soglia = moraleData and moraleData.threshold
 
     local mod, dettaglio = req.mod, nil
-    if mod == nil then
+    if modCalc ~= nil then
+        mod, dettaglio = modCalc, dettCalc
+    elseif mod == nil then
         mod, dettaglio = main_moraleCurrentModifier(req.key)
     end
     mod = mod or 0
@@ -121,6 +124,22 @@ function main_moraleDiceScheda(req)
         righe       = righe,
         serve       = serve,
     }
+end
+-- ============================================================
+-- FUNZIONE: main_moraleTestMod(ctx, req)
+-- Modificatore del test calcolato UNA volta per test e tenuto in
+-- ctx (mod, dettaglio): il calcolo (nemico su fianco/retro in
+-- particolare) è pesante e prima si ripeteva al Roll.
+-- ============================================================
+function main_moraleTestMod(ctx, req)
+    if ctx.mod == nil then
+        if req.mod ~= nil then
+            ctx.mod = req.mod
+        else
+            ctx.mod, ctx.dettaglio = main_moraleCurrentModifier(req.key)
+        end
+    end
+    return ctx.mod, ctx.dettaglio
 end
 -- ============================================================
 -- FUNZIONE: main_moraleTestFocus(ctx, slot, player, rec)

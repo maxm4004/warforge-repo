@@ -139,13 +139,13 @@ function main_syncAttachedGeneral(hostKey)
                 local f, r = ref.getTransformForward(), ref.getTransformRight()
                 local fXZ = Vector(f.x, 0, f.z):normalized()
                 local rXZ = Vector(r.x, 0, r.z):normalized()
-                local pg = gen.getPosition()
-                gen.setPosition(Vector(
-                    pr.x + rXZ.x * a.lx + fXZ.x * a.lz,
-                    pg.y,
-                    pr.z + rXZ.z * a.lx + fXZ.z * a.lz))
                 local rg = gen.getRotation()
-                gen.setRotation(Vector(rg.x, ref.getRotation().y + a.dyaw, rg.z))
+                local nuovaYaw = ref.getRotation().y + a.dyaw
+                main_setPositionOnGround(gen,
+                    pr.x + rXZ.x * a.lx + fXZ.x * a.lz,
+                    pr.z + rXZ.z * a.lx + fXZ.z * a.lz,
+                    math.rad(rg.y - nuovaYaw))
+                gen.setRotation(Vector(rg.x, nuovaYaw, rg.z))
             end
         end
     end
@@ -193,7 +193,7 @@ function main_generalFlipAndMove(hostKey, dirX, dirZ, deltaTTS)
                 local rg = gen.getRotation()
                 gen.setRotation(Vector(rg.x, rg.y + 180, rg.z))
                 local pg = gen.getPosition()
-                gen.setPosition(Vector(pg.x + dirX * deltaTTS, pg.y, pg.z + dirZ * deltaTTS))
+                main_setPositionOnGround(gen, pg.x + dirX * deltaTTS, pg.z + dirZ * deltaTTS)
             end
         end
     end
@@ -403,8 +403,7 @@ function main_generalMoveButton(obj, player_color, alt_click)
     end
 
     if alt_click then
-        local p = obj.getPosition()
-        obj.setPosition(Vector(s.x, p.y, s.z))
+        main_setPositionOnGround(obj, s.x, s.z)
     elseif IEF_GENERAL_MOVE_CIRCLE[genKey] then
         IEF_GENERAL_MOVE_CIRCLE[genKey] = nil
     else
@@ -479,7 +478,7 @@ function main_generalOnDrop(player_color, obj)
     local d = main_generalMoveDistance(genKey, p)
     if d > max then
         local f = (max * INCH_TO_TTS) / (d * INCH_TO_TTS)
-        obj.setPosition(Vector(s.x + (p.x - s.x) * f, p.y, s.z + (p.z - s.z) * f))
+        main_setPositionOnGround(obj, s.x + (p.x - s.x) * f, s.z + (p.z - s.z) * f)
         warningToColor(string.format("Il Generale muove al massimo %d\": riportato a %d\"", max, max),
             Player[player_color], "Yellow", 4, false)
     end

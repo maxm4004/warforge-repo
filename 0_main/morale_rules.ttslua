@@ -477,10 +477,10 @@ function main_routMove(unitKey)
         local rot = obj.getRotation()
         obj.setRotation(Vector(rot.x, rot.y + 180, rot.z))
         local p = obj.getPosition()
-        obj.setPosition(Vector(p.x + fleeXZ.x * delta, p.y, p.z + fleeXZ.z * delta))
+        main_setPositionOnGround(obj, p.x + fleeXZ.x * delta, p.z + fleeXZ.z * delta)
     end
 
-        main_generalFlipAndMove(unitKey, fleeXZ.x, fleeXZ.z, delta)
+    main_generalFlipAndMove(unitKey, fleeXZ.x, fleeXZ.z, delta)
 
     printToAll(string.format("[ROTTA] %s fugge di %s\"", main_decodeExtendedUnitLabel(unitKey), tostring(moveInches)), {r=1,g=0.3,b=0.3})
 end
