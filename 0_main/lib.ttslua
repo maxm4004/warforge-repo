@@ -2995,6 +2995,79 @@ function main_unitsInMelee()
 end
 
 -- ============================================================
+-- FUNZIONE: main_isMista(unitKey)
+-- Unità mista (es. Bondi o Leidang: Lancia + Arco): flag "mista"
+-- in GMNotes, dall'Army Builder (3_deploy).
+-- ============================================================
+function main_isMista(unitKey)
+    local b = main_getUnitBases(unitKey)[1]
+    local meta = b and main_getUnitMeta(b)
+    return meta ~= nil and meta.mista == true
+end
+
+-- ============================================================
+-- FUNZIONE: main_chargeCorridorHits(rects, tipo, bersaglioRects, tol)
+-- Vero se l'unità (rects, tipo) può raggiungere una delle basi
+-- bersaglio con una carica: in linea retta lungo il proprio fronte
+-- per la sua mossa, dopo un perno di massimo 2" a inizio mossa
+-- (regolamento, "Movimento di carica"). Il corridoio è largo
+-- quanto il fronte; il perno si campiona fra -2" e +2" d'arco.
+-- ============================================================
+IEF_CHARGE_PIVOT_INCHES = 2
+
+function main_chargeCorridorHits(rects, tipo, bersaglioRects, tol)
+    if #rects == 0 or #bersaglioRects == 0 then return false end
+    local ut = main_getUnitType(tipo)
+    local mossa = ((ut and ut.move_inches) or 0) * INCH_TO_TTS
+    if mossa <= 0 then return false end
+
+    local r0 = rects[1]
+    local fx, fz, rx, rz = r0.fx, r0.fz, r0.rx, r0.rz
+
+    -- linea del fronte: angoli più avanzati, estensione laterale
+    local sMax, tMin, tMax = -math.huge, math.huge, -math.huge
+    for _, r in ipairs(rects) do
+        for _, c in ipairs(r.corners) do
+            local s = c.x * fx + c.z * fz
+            local t = c.x * rx + c.z * rz
+            if s > sMax then sMax = s end
+            if t < tMin then tMin = t end
+            if t > tMax then tMax = t end
+        end
+    end
+    local larghezza = math.max(tMax - tMin, 0.01)
+    local tMid = (tMin + tMax) / 2
+    local cx = fx * sMax + rx * tMid
+    local cz = fz * sMax + rz * tMid
+
+    local angMax = (IEF_CHARGE_PIVOT_INCHES * INCH_TO_TTS) / larghezza
+    for i = -4, 4 do
+        local a = angMax * i / 4
+        local ca, sa = math.cos(a), math.sin(a)
+        local nfx, nfz = fx * ca - fz * sa, fx * sa + fz * ca
+        local nrx, nrz = rx * ca - rz * sa, rx * sa + rz * ca
+        local corr = {
+            x = cx + nfx * (mossa / 2), z = cz + nfz * (mossa / 2),
+            fx = nfx, fz = nfz, rx = nrx, rz = nrz,
+            hw = larghezza / 2, hd = mossa / 2,
+        }
+        corr.corners = {}
+        for _, sw in ipairs({ -1, 1 }) do
+            for _, sd in ipairs({ -1, 1 }) do
+                table.insert(corr.corners, {
+                    x = corr.x + corr.rx * corr.hw * sw + corr.fx * corr.hd * sd,
+                    z = corr.z + corr.rz * corr.hw * sw + corr.fz * corr.hd * sd,
+                })
+            end
+        end
+        for _, br in ipairs(bersaglioRects) do
+            if main_rectsDistance(corr, br) <= tol then return true end
+        end
+    end
+    return false
+end
+
+-- ============================================================
 -- FUNZIONE: main_enemyOnFlankOrRear(unitKey)
 -- True se una unità nemica (non Generale, non in ROTTA):
 -- a) è a contatto con una base dell'unità e il centro della sua
@@ -3076,14 +3149,8 @@ function main_enemyOnFlankOrRear(unitKey)
                     if tutta then dietro = dietro + 1 end
                 end
 
-                if dietro >= 2 then
-                    local ut = main_getUnitType(u.tipo)
-                    local mossa = ((ut and ut.move_inches) or 0) * INCH_TO_TTS + tol
-                    for _, er in ipairs(rects) do
-                        for _, mr in ipairs(mieRect) do
-                            if main_rectsDistance(mr, er) <= mossa then return true end
-                        end
-                    end
+                if dietro >= 2 and main_chargeCorridorHits(rects, u.tipo, mieRect, tol) then
+                    return true
                 end
             end
         end

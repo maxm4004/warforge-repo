@@ -116,19 +116,32 @@ function charge_unitReaction(slot, unitKey)
     return nil
 end
 -- ============================================================
--- FUNZIONE: charge_setOtherReactionsFerma(elemento, slot)
--- Un'unità che subisce più cariche reagisce una volta sola:
--- scelta la reazione su elemento, le altre cariche subite
--- ancora senza risposta diventano Ferma.
+-- FUNZIONE: charge_setOtherReactions(elemento, slot, reazione)
+-- Un'unità che subisce più cariche reagisce con una sola azione
+-- (risposta dell'autore):
+-- - Contro-carica: vale contro tutti i caricanti. L'unità muove
+--   una volta sola (nella carica dove l'ha scelta); nelle altre è
+--   segnata come già mossa, così il caricante arriva a contatto
+--   con tutta la sua distanza, ma la mischia conta entrambi "in
+--   carica".
+-- - Tiro d'Arresto: contro un solo caricante, le altre Ferma.
+-- - Evasione: vale per tutti (le altre restano Ferma ma sono
+--   trattate come evitate, charge_evasionOf).
+-- - Ferma: tutte Ferma.
 -- ============================================================
-function charge_setOtherReactionsFerma(elemento, slot)
+function charge_setOtherReactions(elemento, slot, reazione)
     local myKey = charge_elementoUnitKey(elemento, slot)
     local otherSlot = charge_elementoOtherSlot(slot)
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
         if e ~= elemento and charge_elementoUnitKey(e, slot) == myKey
            and charge_elementoRequest(e, otherSlot) and not charge_elementoIsReciprocal(e)
            and charge_elementoResponse(e, slot) == nil then
-            charge_elementoSetResponse(e, slot, REACTION_TYPE.FER)
+            if reazione == REACTION_TYPE.COC then
+                charge_elementoSetResponse(e, slot, REACTION_TYPE.COC)
+                if slot == 1 then e.movedArmy1 = true else e.movedArmy2 = true end
+            else
+                charge_elementoSetResponse(e, slot, REACTION_TYPE.FER)
+            end
             charge_refreshDefenseRowText(slot, e)
         end
     end
@@ -969,7 +982,17 @@ end
 -- vuota se obbligato è impostato — in quel caso c'è una sola
 -- scelta, non opzionale).
 -- ============================================================
-function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
+function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo, mista, inMischia)
+    -- Unità già in mischia: non può contro-caricare (risposta dell'autore)
+    if inMischia then
+        local obb, opz = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo, mista, false)
+        local filtrate = {}
+        for _, r in ipairs(opz) do
+            if r ~= REACTION_TYPE.COC then table.insert(filtrate, r) end
+        end
+        if obb == REACTION_TYPE.COC then obb = nil end
+        return obb, filtrate
+    end
     
     if myTipo == "KN" then
         return REACTION_TYPE.COC, {}
@@ -986,7 +1009,8 @@ function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
             return nil, { REACTION_TYPE.EVA, REACTION_TYPE.FER }
         end
         return REACTION_TYPE.EVA, {}
-    elseif (myTipo == "FP" or myTipo == "FM") and charge_hasArmaDaTiro(myArmi) then
+    elseif (myTipo == "FP" or myTipo == "FM") and charge_hasArmaDaTiro(myArmi) and not mista then
+        -- le unità miste (es. Lancia + Arco) non fanno Tiro d'Arresto
         return nil, { REACTION_TYPE.TIR, REACTION_TYPE.FER }
     end
     return nil, {}
@@ -1204,7 +1228,8 @@ function charge_defenseRowClick(player, value, id)
     local attackerMeta = attackerBases[1] and charge_getUnitMeta(attackerBases[1])
     local attackerTipo = attackerMeta and attackerMeta.unitType
 
-    local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo)
+    local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo,
+        myMeta and myMeta.mista == true, main_unitsInMelee()[myKey] == true)
 
     if not obbligato and #opzioni == 0 then
         printToColor(string.format("[CARICA] %s non ha nessuna risposta disponibile", myKey), player.color, {r=0.7,g=0.7,b=0.7})
@@ -1890,6 +1915,9 @@ function charge_stopfireMoveToRange(elemento, defenderSlot)
     local myOriginBase = charge_closestBaseToPoint(chargingBases, otherBase.getPosition())
     if not myOriginBase then return end
     charge_moveTowardPoint(chargingBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
+    -- Ha già fatto parte del movimento di carica: in manovra non muove
+    -- (anche se poi fallisce il morale dopo il tiro)
+    IEF_UNIT_NO_MOVE_NEXT_TURN[chargingKey] = true
 end
 -- ============================================================
 -- FUNZIONE: charge_autoResolveResponses()
@@ -1922,14 +1950,16 @@ function charge_autoResolveResponses()
                         myMeta and myMeta.unitType,
                         myMeta and myMeta.armi or {},
                         myMeta and myMeta.capabilities or {},
-                        otherMeta and otherMeta.unitType)
+                        otherMeta and otherMeta.unitType,
+                        myMeta and myMeta.mista == true,
+                        main_unitsInMelee()[myKey] == true)
 
                     local risposta = obbligato
                     if not risposta and #opzioni == 0 then
                         risposta = REACTION_TYPE.FER
                     end
                     if charge_unitReaction(slot, myKey) then
-                        risposta = REACTION_TYPE.FER   -- una sola reazione per unità
+                        risposta = nil   -- già applicata da charge_setOtherReactions
                     end
 
                     if risposta then
@@ -1948,9 +1978,7 @@ function charge_autoResolveResponses()
                             end
                         end
 
-                        if risposta ~= REACTION_TYPE.FER then
-                            charge_setOtherReactionsFerma(e, slot)
-                        end
+                        charge_setOtherReactions(e, slot, risposta)
 
                         printToAll(string.format("[CARICA] %s: %s (automatica)",
                             main_decodeExtendedUnitLabel(myKey), risposta), {r=0.8,g=0.8,b=0.8})

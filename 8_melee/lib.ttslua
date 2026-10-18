@@ -45,8 +45,11 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
             det.fianco and " - caricata sul fianco: non combatte" or "") })
         table.insert(righe, { testo = string.format("Basi in contatto %d - ranghi posteriori %d - overlap %d",
             det.contatto, det.posteriori, det.overlap) })
-        table.insert(righe, { testo = det.dimezzati
-            and string.format("Dadi: %d (disordinata: %d dimezzati)", info.dadi, det.dadiGrezzi)
+        local motivi = {}
+        if det.mista then table.insert(motivi, "mista") end
+        if det.dimezzati then table.insert(motivi, "disordinata") end
+        table.insert(righe, { testo = (#motivi > 0)
+            and string.format("Dadi: %d (%s: %d dimezzati)", info.dadi, table.concat(motivi, " e "), det.dadiGrezzi)
             or  string.format("Dadi: %d", info.dadi) })
         local marcate = #(IEF_MELEE_MARKED[unitKey] or {})
         if marcate > 0 then
@@ -693,9 +696,18 @@ function melee_computeGroup(gruppo)
         local totale = 0
         for _, n in pairs(grezzi) do totale = totale + n end
         det.dadiGrezzi = totale
+        local ridotti = false
+        if main_isMista(key) then
+            det.mista = true
+            totale = math.floor(totale / 2)
+            ridotti = true
+        end
         if main_getCohesion(key) == COHESION.DIS then
             det.dimezzati = true
             totale = math.floor(totale / 2)
+            ridotti = true
+        end
+        if ridotti then
             grezzi = melee_distribuisci(totale, grezzi)
         end
 

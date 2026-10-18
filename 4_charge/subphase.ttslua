@@ -183,9 +183,7 @@ function charge_reactionChoose(ctx, slot, player, rec, value)
     end
 
     charge_refreshDefenseRowText(slot, elemento)
-    if value ~= REACTION_TYPE.FER then
-        charge_setOtherReactionsFerma(elemento, slot)
-    end
+    charge_setOtherReactions(elemento, slot, value)
     engine_subClose("REACTION", slot, nil)
 
     if value == REACTION_TYPE.TIR then

@@ -845,6 +845,11 @@ function shoot_numDiceBreakdown(shooterKey, basiPronte, raffica)
         table.insert(voci, { "RAFFICA: 3D6 ogni 2 basi", tostring(n) })
     end
 
+    if meta and meta.mista == true then
+        n = math.floor(n / 2)
+        table.insert(voci, { "Unita' mista: meta' dei dadi", tostring(n) })
+    end
+
     if main_getCohesion(shooterKey) == COHESION.DIS then
         n = math.floor(n / 2)
         table.insert(voci, { "Disordinata: meta' dei dadi", tostring(n) })
