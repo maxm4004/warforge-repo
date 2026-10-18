@@ -112,7 +112,7 @@ function deployment_spawnArmy(slot, armyData)
     -- Conta basi totali per callback finale
     local totaleBasi  = 0
     local basiSpawnate = 0
-    local subUnitCounter = 0
+    local prevEntry = nil
 
     for _, unitData in ipairs(armyData.unita) do
         totaleBasi = totaleBasi + #(unitData.basi or {})
@@ -190,25 +190,20 @@ function deployment_spawnArmy(slot, armyData)
         --     end
         -- end
         
-            counters[unitData.model] = (counters[unitData.model] or 0) + 1
-            local unitNumber = counters[unitData.model]
+            -- Numero dell'unità: contatore PER TIPO in tutto l'esercito
+            -- (VIK_BONDI_FP_1, VIK_BONDI_FP_2, VIK_HUSCARL_FP_3...), così
+            -- tipo + numero identifica un'unità sola. Una voce dell'Army
+            -- Builder con più basi di basi_per_rango forma più unità.
+            local unitNumber = nil
 
             for _, baseData in ipairs(unitData.basi or {}) do
                 
                 base = base + 1
-                if prevModel == unitData.model then
-                    if rango then
-                        if base <= rango then
-                            -- stessa sotto-unità, nessuna modifica
-                        else
-                            -- if slot == 1 then    
-                            --     unitOffsetZ = unitOffsetZ + gap
-                            -- else
-                            --     unitOffsetZ = unitOffsetZ + gap
-                            -- end
-                            base = 1
-                            subUnitCounter = subUnitCounter + 1
-                        end
+                if prevEntry == unitData then
+                    if rango and base > rango then
+                        base = 1
+                        counters[tipo] = (counters[tipo] or 0) + 1
+                        unitNumber = counters[tipo]
                     end
                 else
                     if slot == 1 then
@@ -218,11 +213,12 @@ function deployment_spawnArmy(slot, armyData)
                     end
 
                     unitOffsetZ = 0
+                    prevEntry = unitData
                     prevModel = unitData.model
                     basi = 1
-                    subUnitCounter = 1   -- <-- NUOVO: reset quando cambia model (nuovo reparto tipo diverso)
+                    counters[tipo] = (counters[tipo] or 0) + 1
+                    unitNumber = counters[tipo]
                 end
-                local unitNumber = (counters[unitData.model] - 1) + subUnitCounter
                 deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.elementi, unitOffsetX, unitOffsetZ, onBaseSpawnata)
             end
 
@@ -281,7 +277,16 @@ end
 -- segmento del tipo, invece di usare il model per intero.
 -- ============================================================
 function deployment_buildBaseNickname(unitData, baseData, unitNumber)
-    return unitData.model .. "_" .. unitNumber .. "." .. baseData.seq
+    -- unitKey = nome + tipo + numero (es. VIK_BONDI + FP + 1 -> VIK_BONDI_FP_1);
+    -- se il nome finisce già con il tipo (VIK_GEN + GEN, VIK_HUSCARL_FP + FP)
+    -- il tipo non si ripete.
+    local model = unitData.model or ""
+    local tipo  = unitData.tipo or ""
+    local nome  = model
+    if tipo ~= "" and model:sub(-(#tipo + 1)) ~= ("_" .. tipo) then
+        nome = model .. "_" .. tipo
+    end
+    return nome .. "_" .. unitNumber .. "." .. baseData.seq
 end
 -- ============================================================
 -- FUNZIONE: deployment_buildBasePosition()
@@ -440,7 +445,7 @@ function deployment_applyBaseMetadata(obj, slot, armyTag, nickname, unitData, ba
         armi            = unitData.armi or {},
         capabilities    = unitData.capabilities or {},
         baseSeq         = baseData.seq,
-        mista           = unitData.mista == true,   -- unità mista (es. Lancia+Arco): dall'Army Builder
+        armamento       = unitData.armamento or "NORMALE",   -- MISTO = ranghi con armi diverse (Army Builder)
     }
     obj.setGMNotes(JSON.encode(metadata))
 end

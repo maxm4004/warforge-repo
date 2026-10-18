@@ -1063,9 +1063,7 @@ function main_detectFormationSelected(player)
     for _, obj in ipairs(selected) do
         local info = main_parseNickname(obj.getName())
         if info then
-            local objSlot = obj.hasTag("Army1") and 1 or (obj.hasTag("Army2") and 2 or nil)
-            local objKey  = objSlot and (objSlot .. "_" .. info.unitType .. "_" .. info.unitNumber)
-            if objKey == unitKey then
+            if main_getUnitKey(obj) == unitKey then
                 table.insert(basiObjs, obj)
             end
         end
@@ -2995,14 +2993,21 @@ function main_unitsInMelee()
 end
 
 -- ============================================================
+-- FUNZIONE: main_isMistaMeta(meta)
+-- Unità mista (ranghi con armi diverse, es. Bondi o Leidang:
+-- lancieri + arcieri): attributo armamento = "MISTO" in GMNotes,
+-- dall'Army Builder (3_deploy). Assente = "NORMALE".
+-- ============================================================
+function main_isMistaMeta(meta)
+    return meta ~= nil and meta.armamento == "MISTO"
+end
+
+-- ============================================================
 -- FUNZIONE: main_isMista(unitKey)
--- Unità mista (es. Bondi o Leidang: Lancia + Arco): flag "mista"
--- in GMNotes, dall'Army Builder (3_deploy).
 -- ============================================================
 function main_isMista(unitKey)
     local b = main_getUnitBases(unitKey)[1]
-    local meta = b and main_getUnitMeta(b)
-    return meta ~= nil and meta.mista == true
+    return main_isMistaMeta(b and main_getUnitMeta(b))
 end
 
 -- ============================================================

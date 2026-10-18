@@ -845,7 +845,7 @@ function shoot_numDiceBreakdown(shooterKey, basiPronte, raffica)
         table.insert(voci, { "RAFFICA: 3D6 ogni 2 basi", tostring(n) })
     end
 
-    if meta and meta.mista == true then
+    if main_isMistaMeta(meta) then
         n = math.floor(n / 2)
         table.insert(voci, { "Unita' mista: meta' dei dadi", tostring(n) })
     end

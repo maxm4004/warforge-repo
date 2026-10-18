@@ -1229,7 +1229,7 @@ function charge_defenseRowClick(player, value, id)
     local attackerTipo = attackerMeta and attackerMeta.unitType
 
     local obbligato, opzioni = charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo,
-        myMeta and myMeta.mista == true, main_unitsInMelee()[myKey] == true)
+        main_isMistaMeta(myMeta), main_unitsInMelee()[myKey] == true)
 
     if not obbligato and #opzioni == 0 then
         printToColor(string.format("[CARICA] %s non ha nessuna risposta disponibile", myKey), player.color, {r=0.7,g=0.7,b=0.7})
@@ -1951,7 +1951,7 @@ function charge_autoResolveResponses()
                         myMeta and myMeta.armi or {},
                         myMeta and myMeta.capabilities or {},
                         otherMeta and otherMeta.unitType,
-                        myMeta and myMeta.mista == true,
+                        main_isMistaMeta(myMeta),
                         main_unitsInMelee()[myKey] == true)
 
                     local risposta = obbligato
