@@ -101,7 +101,7 @@ function deployment_spawnArmy(slot, armyData)
         displayName = armyData.nome or armyData.tag,
     }
 
-    local unitOffsetX = slot == 1 and -87 or 87
+    local unitOffsetX = slot == 1 and -50 or 50
     local unitOffsetZ = -45.00
     local prevModel   = nil
 
@@ -297,7 +297,7 @@ function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
 
     local VERDE_LZ  = 50
     local SPAWN_GAP = 2
-    local Y         = 0.98
+    local Y         = 1.18
      local sourcePos = baseData.posizione or { x = 0, z = 0 }
 
     local zOffset   = slot == 1 and -(VERDE_LZ + SPAWN_GAP) or (VERDE_LZ + SPAWN_GAP)
@@ -538,16 +538,30 @@ function deployment_buildFigureParams(nickname, childData, basePos, baseRot)
     local mesh = childData.customMesh
     local ab   = childData.customAssetbundle
 
+    -- Offset delle figure in coordinate LOCALI della base (come li
+    -- restituisce debug_getChildOffsets): ruotati con la rotazione
+    -- della base, così valgono per entrambi gli eserciti (slot 2 ha
+    -- la base girata di 180°). Y: altezza relativa alla base, senza
+    -- aggiunte fisse.
+    local a = math.rad((baseRot and baseRot.y) or 0)
+    local function posFigura(src)
+        local ox, oz = (src.offsetX or 0), (src.offsetZ or 0)
+        return basePos.x + ox * math.cos(a) + oz * math.sin(a),
+               basePos.y + (src.offsetY or 0),
+               basePos.z - ox * math.sin(a) + oz * math.cos(a)
+    end
+
     if ab then
         -- AssetBundle
         local rotY = (baseRot.y + (ab.rotY or 0)) % 360
+        local px, py, pz = posFigura(ab)
         return {
             Name      = "Custom_Assetbundle",
             Nickname  = nickname,
             Transform = {
-                posX = basePos.x + (ab.offsetX or 0),
-                posY = basePos.y + 0.1 + (ab.offsetY or 0),
-                posZ = basePos.z + (ab.offsetZ or 0),
+                posX = px,
+                posY = py,
+                posZ = pz,
                 rotX = 0, rotY = rotY, rotZ = 0,
                 scaleX = ab.scaleX or 1,
                 scaleY = ab.scaleY or 1,
@@ -567,13 +581,14 @@ function deployment_buildFigureParams(nickname, childData, basePos, baseRot)
         if type(diffuse) == "string" and DEPLOYMENT_TERRAINS[diffuse] then
             diffuse = DEPLOYMENT_TERRAINS[diffuse]
         end
+        local px, py, pz = posFigura(mesh)
         return {
             Name      = "Custom_Model",
             Nickname  = nickname,
             Transform = {
-                posX = basePos.x + (mesh.offsetX or 0),
-                posY = basePos.y + 0.1 + (mesh.offsetY or 0),
-                posZ = basePos.z + (mesh.offsetZ or 0),
+                posX = px,
+                posY = py,
+                posZ = pz,
                 rotX = 0, rotY = rotY, rotZ = 0,
                 scaleX = mesh.scaleX or 1,
                 scaleY = mesh.scaleY or 1,
