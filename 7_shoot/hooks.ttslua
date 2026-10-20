@@ -7,9 +7,9 @@ function before_shoot(phaseName, phase)
 
     IEF_MORALE_ROLL_PENDING[1] = {}
     IEF_MORALE_ROLL_PENDING[2] = {}
-
     IEF_MORALE_END_QUEUE = {}
 
+    main_setWinnerIcon(DICE_CONTEST.initiative.id, true)
     TURN.completed = { Army1 = false, Army2 = false }
 end
 -- ============================================================

@@ -10,6 +10,7 @@ function before_move(phaseName, phase)
     IEF_REFORM_USED  = {}
     main_generalMoveStartAll()
     main_routEnqueueContinuations()
+    main_setWinnerIcon(DICE_CONTEST.initiative.id, true)
 end
 -- ============================================================
 -- FUNZIONE: after_move(phaseName, phase)

@@ -117,13 +117,13 @@ function getRulesetUiXml()
     offsetXY="195 -180" color="rgba(0,0,0,0)" active="false">
         <Image outline="#000000" outlineSize="0.6" image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/crown.png" preserveAspect="1"/>
     </Panel>
-    -->
     <Panel id="iconMoveArmy1" rectAlignment="UpperCenter" width="40" height="20" offsetXY="-35 -206" color="rgba(0,0,0,0)" active="false">
         <Image outline="#000000" outlineSize="0.6" image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/arr11.png" preserveAspect="1"/>
     </Panel>
     <Panel id="iconMoveArmy2" rectAlignment="UpperCenter" width="40" height="20" offsetXY="35 -206" color="rgba(0,0,0,0)" active="false">
         <Image outline="#000000" outlineSize="0.6" image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/arr22.png" preserveAspect="1"/>
     </Panel>
+    -->
     <Panel id="panelFieldDice"
         rectAlignment="UpperCenter"
         width="450" height="100"

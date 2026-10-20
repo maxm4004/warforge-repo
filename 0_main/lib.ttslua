@@ -2047,6 +2047,7 @@ function main_createBaseButtons(obj, phase, unit)
     }
 
     local azioniGenerali = {
+        [PHASE.DEPLOY_SPAWN]     = {range, info},
         [PHASE.CHARGE_DECLARE]   = {range, info},
         [PHASE.CHARGE_REACT]     = {range, info},
         [PHASE.CHARGE_AUTO]      = {range, info},
@@ -2056,7 +2057,7 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.RECOVERY]         = {range, info}
     }
 
-    local pos = {x = 1.3, y = 0.1, z = -1.2}
+    local pos = {x = 1.3, y = -0.15, z = -1.2}
     local rot = {x = 0, y = 180, z = 0}
     local w  = 400
     local h = 250
@@ -2066,6 +2067,21 @@ function main_createBaseButtons(obj, phase, unit)
     local textColor = "White"
     
     local isGenerale = not unit or string.find(unit, "GEN") ~= nil
+    local is4x15 = not unit or string.find(unit, "FP") ~= nil
+    local is4x20 = not unit or string.find(unit, "FM") ~= nil or string.find(unit, "FL") ~= nil
+    local is4x30 = not unit or string.find(unit, "CP") ~= nil
+   
+    if isGenerale then 
+        if ENGINE.phase == PHASE.MOVE then
+           pos.x = 1.3; pos.z = -1.1; pos.y = 0.1;
+        else 
+           pos.x = 0.4; pos.z = -1.1; pos.y = 0.1;
+        end
+    end    
+        
+    if is4x15 then pos.z = -1.1 end
+    if is4x20 then pos.z = -1.1 end
+    if is4x30 then pos.z = -1.6 end
 
     local funzioni
     if isGenerale then

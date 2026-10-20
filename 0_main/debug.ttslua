@@ -1,6 +1,7 @@
 -- ============================================================
 -- FUNZIONE DI TEST: debug_getChildOffsets()
 -- /execute debug_getChildOffsets("Green")
+-- /execute debug_getChildOffsets("Red")
 -- ============================================================
 function debug_getChildOffsets(color)
 

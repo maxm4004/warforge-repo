@@ -9,6 +9,7 @@ function before_melee(phaseName, phase)
     
     melee_importFromCharges()
     melee_pruneList()
+    main_setWinnerIcon(DICE_CONTEST.initiative.id, true)
 
     callHandler("buildUI")
     callHandler("updateCenterPanel")

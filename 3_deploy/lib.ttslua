@@ -101,8 +101,13 @@ function deployment_spawnArmy(slot, armyData)
         displayName = armyData.nome or armyData.tag,
     }
 
-    local unitOffsetX = slot == 1 and -50 or 50
+    local startX      = slot == 1 and -50 or 50
+    local unitOffsetX = startX
     local unitOffsetZ = -45.00
+    -- Fila di spawn: oltre |x| = DEPLOY_SPAWN_X_LIMIT si va a capo su
+    -- una nuova fila, più lontana dal tavolo.
+    local rowZ     = 0
+    local rowDepth = 0
     local prevModel   = nil
 
     local prevMaxX  = 0
@@ -121,14 +126,14 @@ function deployment_spawnArmy(slot, armyData)
     local function onBaseSpawnata()
         basiSpawnate = basiSpawnate + 1
         if basiSpawnate >= totaleBasi then
-            local function onProgressingBar (s, d, a)
-                deployment_fillProgress(s, d, a)
-            end
+            -- local function onProgressingBar (s, d, a)
+            --     deployment_fillProgress(s, d, a)
+            -- end
 
             Wait.time(function()
                     warning("Attendere che il caricamento sia completo...", "Yellow")
                     deployment_AttachMinisToBase(slot)
-                    onProgressingBar(slot, 0, 100)
+                    --onProgressingBar(slot, 0, 100)
                     Wait.time(function()
                             warning("Attendere che il caricamento sia completo...", "Yellow")
                             callHandler("deployment_scanTable")
@@ -148,6 +153,7 @@ function deployment_spawnArmy(slot, armyData)
                                             end
                                         end
                                         main_riposizionaPulsanteFormazione(unitKey, basiUnita)
+                                        main_sistemaFormazione(obj)
                                     end
                                 end
                             end
@@ -167,6 +173,16 @@ function deployment_spawnArmy(slot, armyData)
         local base = 0
         local rango = tonumber(unitData.basi_per_rango)
         local tipo = unitData.tipo or ""
+
+        -- Ingombro della voce (cm): larghezza e profondità del blocco
+        local entryMaxX, entryMaxZ = 0, 0
+        for _, b in ipairs(unitData.basi or {}) do
+            local bp = b.posizione or {}
+            if (bp.x or 0) > entryMaxX then entryMaxX = bp.x end
+            if (bp.z or 0) > entryMaxZ then entryMaxZ = bp.z end
+        end
+        local utEntry = main_getUnitType(tipo)
+        local depthCm = (utEntry and (utEntry.base_depth_cm or utEntry.base_width_cm)) or 3
 
         -- local gap = 0
 
@@ -212,7 +228,22 @@ function deployment_spawnArmy(slot, armyData)
                         unitOffsetX = unitOffsetX - (prevMaxX + 4) * CM_TO_TTS - GAP_DIVERSO
                     end
 
-                    unitOffsetZ = 0
+                    -- Bordo esterno del blocco (centro base + mezza base)
+                    local bordo = (entryMaxX + 2) * CM_TO_TTS
+                    local fuori = (slot == 1 and unitOffsetX + bordo > DEPLOY_SPAWN_X_LIMIT)
+                               or (slot ~= 1 and unitOffsetX - bordo < -DEPLOY_SPAWN_X_LIMIT)
+                    if fuori and rowDepth > 0 then
+                        -- nuova fila: si riparte da startX, dietro la fila precedente
+                        rowZ = rowZ + rowDepth + GAP_DIVERSO
+                        rowDepth = 0
+                        if slot == 1 then
+                            unitOffsetX = startX + 4 * CM_TO_TTS + GAP_DIVERSO
+                        else
+                            unitOffsetX = startX - 4 * CM_TO_TTS - GAP_DIVERSO
+                        end
+                    end
+
+                    unitOffsetZ = rowZ
                     prevEntry = unitData
                     prevModel = unitData.model
                     basi = 1
@@ -221,6 +252,10 @@ function deployment_spawnArmy(slot, armyData)
                 end
                 deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.elementi, unitOffsetX, unitOffsetZ, onBaseSpawnata)
             end
+
+        -- profondità della fila corrente (la voce più profonda)
+        local profondita = (entryMaxZ + depthCm) * CM_TO_TTS
+        if profondita > rowDepth then rowDepth = profondita end
 
         -- salva valori per prossima iterazione
         prevMaxX  = 0

@@ -51,8 +51,7 @@ IEF_MSG_GEN = 0
 function warningToColor(warning, player, textColor, second, inConsole)
 
     local color = textColor == "Yellow" and "#FFD833" or textColor
-    messages = warning
-
+    
     if player then
         IEF_MSG_GEN = IEF_MSG_GEN + 1
         local gen = IEF_MSG_GEN
@@ -118,14 +117,19 @@ end
 -- ============================================================
 -- FUNZIONE: warning()
 -- ============================================================
-function warning(warning, color)
-        IEF_MSG_GEN = IEF_MSG_GEN + 1
-        local gen = IEF_MSG_GEN
- 
-        UI.setAttribute("playerGameMessage", "Color", color)
-        UI.setAttribute("playerGameMessage", "text", warning)
-        UI.setAttribute("playerGameMessage", "active", "true")
-   
+
+
+function warning(warning, textColor)
+
+    local color = textColor == "Yellow" and "#FFD833" or textColor
+
+    IEF_MSG_GEN = IEF_MSG_GEN + 1
+    local gen = IEF_MSG_GEN
+
+    UI.setAttribute("playerGameMessage", "Color", color)
+    UI.setAttribute("playerGameMessage", "text", warning)
+    UI.setAttribute("playerGameMessage", "active", "true")
+
     Wait.time(function()
         engine_hideGameMessage(gen)
     end, 5)
@@ -138,7 +142,6 @@ function clear()
         printToAll("")
     end
 end
-
 -- ============================================================
 -- FUNZIONE: getVersion()
 -- ============================================================

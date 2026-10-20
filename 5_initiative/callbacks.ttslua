@@ -43,7 +43,7 @@ function assign_initiative_btn_all(player, value, id, buttonConfig)
             main_setWinnerIcon(main_SlotByColor(clicker.color), false)      
             main_setWinnerIcon(main_SlotByColor(clicked.color), true)      
         end
-
+        
         warning("Iniziativa assegnata a "..clicked.name, "Yellow")
     end
 end

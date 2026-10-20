@@ -71,6 +71,7 @@ function deployment_reset()
 end
 
     GAP_DIVERSO = 5 * CM_TO_TTS
+    DEPLOY_SPAWN_X_LIMIT = 60
 
 DEPLOYMENT.fogArm1 = [[
 {
