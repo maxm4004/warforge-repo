@@ -36,7 +36,7 @@ function charge_react_btn_army1(player, value, id, buttonConfig)
 
     if main_moraleBlocksPhase(player, 1) then return false end
 
-    if charge_reactQueueHasPending() then
+    if charge_reactQueueHasPending(1) then
         warningToColor("Ci sono ancora reazioni da scegliere", player, "Yellow", 5, true)
         return false
     end
@@ -51,7 +51,7 @@ function charge_react_btn_army2(player, value, id, buttonConfig)
 
     if main_moraleBlocksPhase(player, 2) then return false end
 
-    if charge_reactQueueHasPending() then
+    if charge_reactQueueHasPending(2) then
         warningToColor("Ci sono ancora reazioni da scegliere", player, "Yellow", 5, true)
         return false
     end

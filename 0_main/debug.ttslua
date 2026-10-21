@@ -507,7 +507,7 @@ function debug_chargeReactions()
 end
 -- ============================================================
 -- FUNZIONE DI TEST: debug_reset()
--- /execute debug_reset()
+-- /execute debug_reset(PHASE.CHARGE_DECLARE)
 -- Resta nella fase corrente. Azzera:
 --  - coesione: tutte le unità tornano SALDE (tinta bianca)
 --  - coda cariche (e le reazioni in attesa di scelta)

@@ -86,8 +86,11 @@ function move_redraw(unitKey)
     local moveResiduo  = IEF_MOVE_BUDGET[unitKey]  or 0
     local pivotResiduo = IEF_PIVOT_BUDGET[unitKey] or 0
 
-    if moveResiduo <= 0 and not IEF_MOVE_TEST_MODE then
+    if moveResiduo <= 0.001 and not IEF_MOVE_TEST_MODE then
         if state.rotta then main_routContinueDone(unitKey, state) end
+        if state.activePlayer then
+            warningToColor("Movimento esaurito: l'unita' ha completato la mossa", state.activePlayer, "Yellow", 5, true)
+        end
         move_close(unitKey)
         return
     end
@@ -150,11 +153,15 @@ function move_redraw(unitKey)
         local soloPerno = not canDo("perno_max3_e_muovi") and not IEF_MOVE_TEST_MODE and not state.rotta
 
         local avantiOk = canDo("avanti") and not (soloPerno and perniUsati > 0)
-        setBtn("btn_" .. unitKey .. "_Move1",   avantiOk and moveResiduo >= 1)
-        setBtn("btn_" .. unitKey .. "_Move2",   avantiOk and moveResiduo >= 2)
+        -- Avanti 1": attivo con qualsiasi residuo (se < 1" muove il
+        -- residuo, move_avanti_apply limita al budget). Tolleranza
+        -- sui decimali dei budget (rotta, carica).
+        setBtn("btn_" .. unitKey .. "_Move1",   avantiOk and moveResiduo > 0.001)
+        setBtn("btn_" .. unitKey .. "_Move2",   avantiOk and moveResiduo >= 2 - 0.001)
         setBtn("btn_" .. unitKey .. "_MoveMax", avantiOk)
 
-        local pivotOk = canDo("perno_max3_fermi") and pivotResiduo >= 1 and moveResiduo >= 1
+        local pivotOk = canDo("perno_max3_fermi") and pivotResiduo >= 1 - 0.001 and moveResiduo >= 1 - 0.001
+                        and #basiObjs >= 2
                         and not (soloPerno and avanzato)
         setBtn("btn_" .. unitKey .. "_PivotSx", pivotOk)
         setBtn("btn_" .. unitKey .. "_PivotDx", pivotOk)

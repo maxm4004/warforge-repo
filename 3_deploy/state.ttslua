@@ -71,7 +71,8 @@ function deployment_reset()
 end
 
     GAP_DIVERSO = 5 * CM_TO_TTS
-    DEPLOY_SPAWN_X_LIMIT = 60
+    DEPLOY_SPAWN_Z_LIMIT = 64   -- |z| massimo del centro base allo spawn
+    DEPLOY_SPAWN_Z_BASE  = 52   -- |z| della prima fila (VERDE_LZ + SPAWN_GAP)
 
 DEPLOYMENT.fogArm1 = [[
 {

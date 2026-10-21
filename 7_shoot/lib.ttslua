@@ -115,158 +115,52 @@ function shoot_range_and_target(player, selection)
     local unitTypesDict = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
     local utData = unitTypesDict and unitTypesDict[unitType] or {}
 
-    -- Determina il rango di ogni base (proiezione lungo il fronte reale)
-    local fwdRango   = basiObjs[1].getTransformForward()
-    local fwdXZRango = Vector(fwdRango.x, 0, fwdRango.z):normalized()
-
-    local proiezioni = {}
-    local maxProjRango = nil
-    for _, baseObj in ipairs(basiObjs) do
-        local p = baseObj.getPosition()
-        local proj = p.x * fwdXZRango.x + p.z * fwdXZRango.z
-        proiezioni[baseObj] = proj
-        if maxProjRango == nil or proj > maxProjRango then
-            maxProjRango = proj
-        end
-    end
-
-    local rankStep = (tonumber(utData.base_depth_cm) or 3) * CM_TO_TTS
-    local rankTolerance = rankStep * 0.6
-
-    local maxRanghi = 2   -- primo e secondo rango (regolamento Fase 4)
-
-    -- Solo le basi di primo rango (fronte, proiezione massima = più avanti
-    -- nella direzione verso cui l'unità guarda) contano da qui in poi
-    local basiFronte = {}
-    for _, baseObj in ipairs(basiObjs) do
-        local offset = maxProjRango - proiezioni[baseObj]
-        local rangoIndex = math.floor((offset + rankTolerance) / rankStep)
-        if rangoIndex < maxRanghi then
-            table.insert(basiFronte, baseObj)
-        end
-    end
-
-    if #basiFronte == 0 then
-        basiFronte = basiObjs  -- fallback di sicurezza, non dovrebbe accadere
-    end
-
-    -- Direzione iniziale dal fronte per il sort
-    local fwdRef0 = basiFronte[1].getTransformForward()
-    local fwdXZ0  = Vector(fwdRef0.x, 0, fwdRef0.z):normalized()
-    local right0  = Vector(-fwdXZ0.z, 0, fwdXZ0.x)
-
-    -- Ordina le basi del fronte per posizione lungo asse right
-    table.sort(basiFronte, function(a, b)
-        local pa = a.getPosition()
-        local pb = b.getPosition()
-        local da = pa.x * right0.x + pa.z * right0.z
-        local db = pb.x * right0.x + pb.z * right0.z
-        return da < db
-    end)
-
-    local primaBase  = basiFronte[1]
-    local ultimaBase = basiFronte[#basiFronte]
-    local pos1       = primaBase.getPosition()
-    local pos2       = ultimaBase.getPosition()
-
-    -- Ricalcola direzioni dalla posizione/rotazione reale delle basi di fronte
-    local dirUnita, right, fwdXZ
-
-    do
-        local sumX, sumZ = 0, 0
-        for _, b in ipairs(basiFronte) do
-            local f = b.getTransformForward()
-            sumX = sumX + f.x
-            sumZ = sumZ + f.z
-        end
-        fwdXZ = Vector(sumX, 0, sumZ):normalized()
-    end
-
-    if #basiFronte == 1 then
-        right    = Vector(-fwdXZ.z, 0, fwdXZ.x)
-        dirUnita = right
-    else
-        dirUnita = Vector(pos2.x - pos1.x, 0, pos2.z - pos1.z):normalized()
-        right    = dirUnita
-    end
+    -- Basi tiratrici: primo e secondo rango (regolamento Fase 4)
+    local basiFronte = shoot_basiTiratrici(basiObjs, unitType)
 
     local halfWidth  = ((utData.base_width_cm or 4) / 2) * CM_TO_TTS
     local halfDepth  = ((tonumber(utData.base_depth_cm) or 3) / 2) * CM_TO_TTS
     local y = 1.30
 
-    local startLeft = Vector(
-        pos1.x - right.x * halfWidth + fwdXZ.x * halfDepth,
-        y,
-        pos1.z - right.z * halfWidth + fwdXZ.z * halfDepth
-    )
-    local startRight = Vector(
-        pos2.x + right.x * halfWidth + fwdXZ.x * halfDepth,
-        y,
-        pos2.z + right.z * halfWidth + fwdXZ.z * halfDepth
-    )
+    -- Cono disegnato con la STESSA geometria usata per cercare il
+    -- bersaglio (shoot_coneOf sui rettangoli delle basi tiratrici):
+    -- linea del fronte = vertice più avanzato, lati dagli angoli
+    -- esterni. Vale per qualsiasi formazione (linea, colonna, ecc.).
+    local mieRect = {}
+    for _, b in ipairs(basiFronte) do
+        table.insert(mieRect, main_baseRectOfType(b, unitType))
+    end
+    local cono = shoot_coneOf(mieRect, angoloGradi)
+    -- Coordinate MONDO: il cono si disegna sulle linee globali
+    -- (main_aggiornaLinee), non sulla base, così non dipende da
+    -- posizione/rotazione/scala dell'oggetto su cui era agganciato.
+    local function puntoCono(sv, tv)
+        return { cono.fx * sv + cono.rx * tv, y, cono.fz * sv + cono.rz * tv }
+    end
 
-    local angolo   = math.rad(math.min(angoloGradi, 90))
+    local angolo   = math.rad(math.min(angoloGradi, 89))
     local segmenti = 30
+    local cosA, sinA = math.cos(angolo), math.sin(angolo)
 
-    local function ruota(v, ang)
-        return Vector(
-            v.x * math.cos(ang) - v.z * math.sin(ang),
-            0,
-            v.x * math.sin(ang) + v.z * math.cos(ang)
-        )
-    end
-
-    -- Lato sinistro: da startLeft con angolo -45° fisso dalla direzione fwdXZ
-    local dirSx  = ruota(fwdXZ, -angolo)
-    local endSx  = Vector(
-        startLeft.x  + dirSx.x * rangeUnits,
-        startLeft.y,
-        startLeft.z  + dirSx.z * rangeUnits
-    )
-
-    -- Lato destro: da startRight con angolo +45° fisso dalla direzione fwdXZ
-    local dirDx  = ruota(fwdXZ, angolo)
-    local endDx  = Vector(
-        startRight.x + dirDx.x * rangeUnits,
-        startRight.y,
-        startRight.z + dirDx.z * rangeUnits
-    )
-
-    -- Arco finale: da endSx a endDx
-    local puntiArco = {}
-
+    local puntiSinistro, puntiDestro, puntiArco = {}, {}, {}
     for i = 0, segmenti do
-        local t   = i / segmenti
-        local ang = -angolo + (2 * angolo * t)
-        local dir = ruota(fwdXZ, ang)
-
-        local cx = startLeft.x + (startRight.x - startLeft.x) * t
-        local cz = startLeft.z + (startRight.z - startLeft.z) * t
-
-        table.insert(puntiArco, shooter.positionToLocal(Vector(
-            cx + dir.x * rangeUnits,
-            startLeft.y,
-            cz + dir.z * rangeUnits
-        )))
+        local k = (i / segmenti) * rangeUnits
+        table.insert(puntiSinistro, puntoCono(cono.s0 + k * cosA, cono.tL - k * sinA))
+        table.insert(puntiDestro,   puntoCono(cono.s0 + k * cosA, cono.tR + k * sinA))
     end
-
-    local puntiSinistro = {}
-    local puntiDestro   = {}
-
-    for i = 0, segmenti do
-        local t = i / segmenti
-        local pS = Vector(
-            startLeft.x  + (endSx.x - startLeft.x)  * t,
-            startLeft.y,
-            startLeft.z  + (endSx.z - startLeft.z)  * t
-        )
-        local pD = Vector(
-            startRight.x + (endDx.x - startRight.x) * t,
-            startRight.y,
-            startRight.z + (endDx.z - startRight.z) * t
-        )
-        table.insert(puntiSinistro, shooter.positionToLocal(pS))
-        table.insert(puntiDestro,   shooter.positionToLocal(pD))
+    -- Limite di gittata = tutti i punti a distanza rangeUnits dal
+    -- fronte: arco attorno all'angolo sinistro (da -angolo a 0),
+    -- segmento dritto davanti al fronte, arco attorno all'angolo
+    -- destro (da 0 a +angolo). È la stessa misura bordo-bordo usata
+    -- per il bersaglio (main_rectsDistance).
+    local meta = math.floor(segmenti / 2)
+    for i = 0, meta do
+        local ang = -angolo + angolo * (i / meta)
+        table.insert(puntiArco, puntoCono(cono.s0 + rangeUnits * math.cos(ang), cono.tL + rangeUnits * math.sin(ang)))
+    end
+    for i = 0, meta do
+        local ang = angolo * (i / meta)
+        table.insert(puntiArco, puntoCono(cono.s0 + rangeUnits * math.cos(ang), cono.tR + rangeUnits * math.sin(ang)))
     end
 
     local nemici = shoot_getNemici(shooter, shooterSlot)
@@ -295,8 +189,7 @@ function shoot_range_and_target(player, selection)
         local cerchio = {}
         for i = 0, 48 do
             local a = 2 * math.pi * i / 48
-            table.insert(cerchio, shooter.positionToLocal(Vector(
-                cx + math.cos(a) * (rMax + rangeUnits), y, cz + math.sin(a) * (rMax + rangeUnits))))
+            table.insert(cerchio, { cx + math.cos(a) * (rMax + rangeUnits), y, cz + math.sin(a) * (rMax + rangeUnits) })
         end
         conoLines = { {points = cerchio, color = {1, 0.8, 0.1}, thickness = 0.1} }
     end
@@ -319,42 +212,9 @@ function shoot_range_and_target(player, selection)
             table.insert(basiNemiche, target)  -- fallback di sicurezza
         end
 
-        local rangeInches = rangeUnits / INCH_TO_TTS
-        local basiPronte = 0
-
-        -- Passo 1: basi tiratrici (fronte) pronte (arancione scuro) — determina numDadi
-        for _, baseObj in ipairs(basiFronte) do
-            local posA = baseObj.getPosition()
-
-            local bersaglioTrovato = nil
-            for _, baseNemica in ipairs(basiNemiche) do
-                local targetPos = baseNemica.getPosition()
-
-                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
-                    bersaglioTrovato = baseNemica
-                    break
-                end
-            end
-
-            if bersaglioTrovato then
-                basiPronte = basiPronte + 1
-                baseObj.highlightOn({1, 0.549, 0})
-            end
-        end
-
-        -- Passo 2: basi nemiche raggiungibili dal fronte (blu) — indipendente da chi le trova
-        for _, baseNemica in ipairs(basiNemiche) do
-            local targetPos = baseNemica.getPosition()
-
-            for _, baseObj in ipairs(basiFronte) do
-                local posA = baseObj.getPosition()
-
-                if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
-                    baseNemica.highlightOn({0.2, 0.6, 1})
-                    break
-                end
-            end
-        end
+        local basiPronte, pronte, raggiunte = shoot_basiPronte(basiFronte, basiNemiche, rangeUnits, angoloGradi)
+        for _, b in ipairs(pronte) do b.highlightOn({1, 0.549, 0}) end
+        for _, b in ipairs(raggiunte) do b.highlightOn({0.2, 0.6, 1}) end
 
         IEF_SHOOT_STATE.shooter      = shooter
         IEF_SHOOT_STATE.target       = target
@@ -365,8 +225,19 @@ function shoot_range_and_target(player, selection)
         IEF_SHOOT_STATE.targetUnit   = targetUnit
         IEF_SHOOT_STATE.targetSlot   = targetSlot
         IEF_SHOOT_STATE.basiNemiche  = basiNemiche
+        IEF_SHOOT_STATE.angoloGradi  = angoloGradi
 
-        local distInch  = main_distanceInches(shooter, target)
+        -- Distanza mostrata = la stessa usata per trovare il
+        -- bersaglio: minima bordo-bordo fra basi tiratrici e unità
+        -- bersaglio (non fra la base cliccata e una base qualsiasi).
+        -- Solo la parte delle basi nemiche dentro il cono.
+        local distInch = math.huge
+        for _, n in ipairs(basiNemiche) do
+            local info = main_parseNickname(n.getName())
+            local d = shoot_distInCone(cono, mieRect, main_baseRectOfType(n, info and info.unitType))
+            if d < distInch then distInch = d end
+        end
+        distInch = distInch / INCH_TO_TTS
         local rangeInch = rangeUnits / INCH_TO_TTS
 
         local warnings = {}
@@ -384,8 +255,6 @@ function shoot_range_and_target(player, selection)
       else
       end
         
-        IEF_SHOOTING.activeLines = nil
-        
      else
         -- Nessun nemico in gittata: niente popup di conferma, solo
         -- l'avviso. Pulisce un eventuale bersaglio precedente, mostra
@@ -394,20 +263,22 @@ function shoot_range_and_target(player, selection)
         shoot_Reset()
         warningToColor(string.format("Nessun bersaglio entro gittata di %.0f\"", rangeUnits / INCH_TO_TTS), player, "Yellow", 5, true)
 
-        shooter.setVectorLines(conoLines)
+        IEF_SHOOTING.activeLines = conoLines
         IEF_SHOOTING.activeShooter = shooter
         callHandler("aggiornaLinee")
 
         Wait.time(function()
             if IEF_SHOOTING.activeShooter == shooter and not IEF_SHOOT_STATE.target then
-                shooter.setVectorLines({})
+                IEF_SHOOTING.activeLines = nil
                 IEF_SHOOTING.activeShooter = nil
+                callHandler("aggiornaLinee")
             end
         end, 5)
         return false
     end
 
-    shooter.setVectorLines(conoLines)
+    IEF_SHOOTING.activeLines = conoLines
+    IEF_SHOOTING.conoLines = conoLines
     IEF_SHOOTING.activeShooter = shooter
     callHandler("aggiornaLinee")
 
@@ -492,6 +363,176 @@ function shoot_rectInCone(c, rect)
     return false
 end
 -- ============================================================
+-- FUNZIONE: shoot_clipRectToCone(c, rect)
+-- Parte della base nemica DENTRO il cono (poligono convesso,
+-- lista di {x, z}); vuota se la base è fuori. Ritaglio della
+-- base con i 3 semipiani del cono: davanti al fronte e dentro i
+-- due lati a angoloGradi.
+-- ============================================================
+function shoot_clipRectToCone(c, rect)
+    local k = rect.corners   -- (-w,-d) (-w,+d) (+w,-d) (+w,+d)
+    local poly = { { x = k[1].x, z = k[1].z }, { x = k[2].x, z = k[2].z },
+                   { x = k[4].x, z = k[4].z }, { x = k[3].x, z = k[3].z } }
+    if c.tutto then return poly end
+
+    local function sOf(p) return p.x * c.fx + p.z * c.fz - c.s0 end
+    local function tOf(p) return p.x * c.rx + p.z * c.rz end
+    local piani = {
+        function(p) return sOf(p) end,
+        function(p) return tOf(p) - c.tL + sOf(p) * c.tan end,
+        function(p) return c.tR - tOf(p) + sOf(p) * c.tan end,
+    }
+    for _, h in ipairs(piani) do
+        local out = {}
+        local n = #poly
+        for i = 1, n do
+            local a, b = poly[i], poly[(i % n) + 1]
+            local ha, hb = h(a), h(b)
+            if ha >= 0 then table.insert(out, a) end
+            if (ha >= 0) ~= (hb >= 0) then
+                local u = ha / (ha - hb)
+                table.insert(out, { x = a.x + (b.x - a.x) * u, z = a.z + (b.z - a.z) * u })
+            end
+        end
+        poly = out
+        if #poly == 0 then return poly end
+    end
+    return poly
+end
+-- ============================================================
+-- FUNZIONE: shoot_distRectToPoly(rect, poly)
+-- Distanza minima (unità TTS) fra una base (rettangolo) e un
+-- poligono convesso: il minimo cade su un vertice dell'uno o
+-- sul bordo dell'altro.
+-- ============================================================
+function shoot_distRectToPoly(rect, poly)
+    if #poly == 0 then return math.huge end
+    local m = math.huge
+    for _, v in ipairs(poly) do
+        local d = main_pointRectDistance(v.x, v.z, rect)
+        if d < m then m = d end
+    end
+    local function segDist(px, pz, a, b)
+        local dx, dz = b.x - a.x, b.z - a.z
+        local l2 = dx * dx + dz * dz
+        local u = (l2 > 0) and (((px - a.x) * dx + (pz - a.z) * dz) / l2) or 0
+        if u < 0 then u = 0 elseif u > 1 then u = 1 end
+        local qx, qz = a.x + dx * u - px, a.z + dz * u - pz
+        return math.sqrt(qx * qx + qz * qz)
+    end
+    for _, k in ipairs(rect.corners) do
+        for i = 1, #poly do
+            local d = segDist(k.x, k.z, poly[i], poly[(i % #poly) + 1])
+            if d < m then m = d end
+        end
+    end
+    return m
+end
+-- ============================================================
+-- FUNZIONE: shoot_distInCone(c, mieRect, rect)
+-- Distanza minima fra le basi tiratrici e la sola parte della
+-- base nemica dentro il cono (math.huge se è tutta fuori). La
+-- gittata si misura così: un angolo della base fuori dal cono
+-- non conta.
+-- ============================================================
+function shoot_distInCone(c, mieRect, rect)
+    local poly = shoot_clipRectToCone(c, rect)
+    local m = math.huge
+    for _, mr in ipairs(mieRect) do
+        local d = shoot_distRectToPoly(mr, poly)
+        if d < m then m = d end
+    end
+    return m, poly
+end
+-- ============================================================
+-- LINEA DI VISTA (geometrica, rettangoli dichiarati)
+-- Regolamento: tirano le basi "che abbiano la linea di vista
+-- libera verso l'unità bersaglio". La vista è bloccata da
+-- qualsiasi base di un'altra unità (amica o nemica, Generali
+-- esclusi) che il segmento attraversa. Le basi della stessa
+-- unità tiratrice non bloccano (il 2° rango tira sopra il 1°).
+-- ============================================================
+function shoot_ostacoli()
+    local out = {}
+    for _, o in ipairs(getAllObjects()) do
+        if o.hasTag("Army1") or o.hasTag("Army2") then
+            local info = main_parseNickname(o.getName())
+            if info and info.unitType ~= "GEN" then
+                local key = main_getUnitKey(o)
+                if key and not main_isGeneralKey(key) then
+                    local r = main_baseRectOfType(o, info.unitType)
+                    r.key = key
+                    table.insert(out, r)
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- Segmento A-B attraversa il rettangolo r (ristretto di un
+-- margine, così le basi solo a contatto non bloccano)?
+function shoot_segInRect(ax, az, bx, bz, r)
+    local MARGINE = 0.02
+    local hw, hd = r.hw - MARGINE, r.hd - MARGINE
+    if hw <= 0 or hd <= 0 then return false end
+    local function loc(x, z)
+        local dx, dz = x - r.x, z - r.z
+        return dx * r.rx + dz * r.rz, dx * r.fx + dz * r.fz
+    end
+    local u0, v0 = loc(ax, az)
+    local u1, v1 = loc(bx, bz)
+    local du, dv = u1 - u0, v1 - v0
+    local t0, t1 = 0, 1
+    local function taglia(p, q)
+        if p == 0 then return q >= 0 end
+        local t = q / p
+        if p < 0 then
+            if t > t1 then return false end
+            if t > t0 then t0 = t end
+        else
+            if t < t0 then return false end
+            if t < t1 then t1 = t end
+        end
+        return true
+    end
+    return taglia(-du, u0 + hw) and taglia(du, hw - u0)
+       and taglia(-dv, v0 + hd) and taglia(dv, hd - v0)
+       and t0 <= t1
+end
+
+-- Vista libera da una base tiratrice (rettangolo) alla parte di
+-- base nemica nel cono (poligono): basta una linea libera fra un
+-- punto del fronte della tiratrice e un punto del poligono.
+function shoot_losLibera(mioRect, poly, ostacoli, escludi)
+    if not poly or #poly == 0 then return false end
+    local k = mioRect.corners   -- (-w,-d) (-w,+d) (+w,-d) (+w,+d): fronte = 2 e 4
+    local fl, fr = k[2], k[4]
+    local da = {
+        { x = fl.x * 0.9 + fr.x * 0.1, z = fl.z * 0.9 + fr.z * 0.1 },
+        { x = (fl.x + fr.x) / 2,       z = (fl.z + fr.z) / 2 },
+        { x = fl.x * 0.1 + fr.x * 0.9, z = fl.z * 0.1 + fr.z * 0.9 },
+    }
+    local cx, cz = 0, 0
+    for _, v in ipairs(poly) do cx, cz = cx + v.x, cz + v.z end
+    local a = { { x = cx / #poly, z = cz / #poly } }
+    for _, v in ipairs(poly) do table.insert(a, v) end
+
+    for _, p in ipairs(da) do
+        for _, q in ipairs(a) do
+            local bloccata = false
+            for _, r in ipairs(ostacoli) do
+                if not escludi[r.key] and shoot_segInRect(p.x, p.z, q.x, q.z, r) then
+                    bloccata = true
+                    break
+                end
+            end
+            if not bloccata then return true end
+        end
+    end
+    return false
+end
+-- ============================================================
 -- FUNZIONE: shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
 -- Regolamento: "si deve sempre tirare al bersaglio più vicino".
 -- Candidate = unità nemiche (non Generali, non in mischia) con
@@ -511,6 +552,7 @@ function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
     end
     local cono = shoot_coneOf(mieRect, angoloGradi)
     local inMischia = main_unitsInMelee()
+    local ostacoli = shoot_ostacoli()
 
     local unita = {}
     for _, nemico in ipairs(nemici) do
@@ -519,19 +561,16 @@ function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
             local key = main_getUnitKey(nemico)
             if not main_isGeneralKey(key) and not inMischia[key] then
                 local rect = main_baseRectOfType(nemico, info.unitType)
-                if shoot_rectInCone(cono, rect) then
-                    local dMin = math.huge
-                    for _, mr in ipairs(mieRect) do
-                        local d = main_rectsDistance(mr, rect)
-                        if d < dMin then dMin = d end
-                    end
+                local dMin, poly = shoot_distInCone(cono, mieRect, rect)
+                do
                     if dMin <= rangeUnits then
                         local u = unita[key]
                         if not u then
                             u = { minDist = math.huge, basi = {} }
                             unita[key] = u
                         end
-                        table.insert(u.basi, { obj = nemico, dist = dMin })
+                        u.key = key
+                        table.insert(u.basi, { obj = nemico, dist = dMin, poly = poly })
                         if dMin < u.minDist then u.minDist = dMin end
                     end
                 end
@@ -545,9 +584,10 @@ function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
 
     for _, u in ipairs(lista) do
         table.sort(u.basi, function(a, b) return a.dist < b.dist end)
+        local escludi = { [main_getUnitKey(basiObjs[1])] = true, [u.key] = true }
         for _, bn in ipairs(u.basi) do
-            for _, tiratrice in ipairs(basiObjs) do
-                if shoot_checkLOS(tiratrice, tiratrice.getPosition(), bn.obj.getPosition(), bn.obj) then
+            for i, _ in ipairs(basiObjs) do
+                if shoot_losLibera(mieRect[i], bn.poly, ostacoli, escludi) then
                     return bn.obj, nil
                 end
             end
@@ -625,9 +665,11 @@ function shoot_ResetLines(player, value, id)
 
     if IEF_SHOOTING.activeShooter then
         IEF_SHOOTING.activeShooter.setVectorLines({})
+        IEF_SHOOTING.activeShooter = nil
     end
 
     IEF_SHOOTING.activeLines = nil
+    callHandler("aggiornaLinee")
 
     if IEF_SHOOT_STATE.basiNemiche then
         for _, b in ipairs(IEF_SHOOT_STATE.basiNemiche) do
@@ -678,7 +720,7 @@ function shoot_Confirm(player)
     local shooterKey = main_getUnitKey(state.shooter)
     local targetKey  = main_getUnitKey(state.target)
     local weapon = shoot_getWeapon(shooterKey)
-    local basiPronte = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits)
+    local basiPronte = shoot_basiPronte(state.basiObjs, state.basiNemiche, state.rangeUnits, state.angoloGradi)
     local scheda, numDadi, soglia = shoot_diceScheda("TIRO", shooterKey, targetKey, weapon, basiPronte, false)
 
     local ctx = {
@@ -709,25 +751,91 @@ function shoot_Confirm(player)
     engine_dicePanelOpen(slot, scheda)
 end
 -- ============================================================
--- FUNZIONE: shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
+-- FUNZIONE: shoot_basiTiratrici(basiObjs, tipo)
+-- Regolamento Fase 4: tirano le basi del primo e del secondo
+-- rango. Rango = distanza dal vertice più avanzato lungo il
+-- fronte dell'unità, in profondità di base.
 -- ============================================================
-function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits)
-    if not basiObjs or #basiObjs == 0 then return 0 end
-    if not basiNemiche or #basiNemiche == 0 then return 0 end
+function shoot_basiTiratrici(basiObjs, tipo)
+    if not basiObjs or #basiObjs == 0 then return {} end
+    if not tipo then
+        local info = main_parseNickname(basiObjs[1].getName())
+        tipo = info and info.unitType
+    end
+    local ut = main_getUnitType(tipo)
+    local rankStep = ((ut and tonumber(ut.base_depth_cm)) or 3) * CM_TO_TTS
 
-    local rangeInches = rangeUnits / INCH_TO_TTS
-    local count = 0
-    for _, baseObj in ipairs(basiObjs) do
-        local posA = baseObj.getPosition()
-        for _, baseNemica in ipairs(basiNemiche) do
-            local targetPos = baseNemica.getPosition()
-            if main_distanceInches(baseObj, baseNemica) <= rangeInches and shoot_checkLOS(baseObj, posA, targetPos, baseNemica) then
-                count = count + 1
-                break
-            end
+    local f = basiObjs[1].getTransformForward()
+    local fXZ = Vector(f.x, 0, f.z):normalized()
+    local maxProj = -math.huge
+    for _, b in ipairs(basiObjs) do
+        local p = b.getPosition()
+        local proj = p.x * fXZ.x + p.z * fXZ.z
+        if proj > maxProj then maxProj = proj end
+    end
+
+    local out = {}
+    for _, b in ipairs(basiObjs) do
+        local p = b.getPosition()
+        local offset = maxProj - (p.x * fXZ.x + p.z * fXZ.z)
+        if math.floor((offset + rankStep * 0.6) / rankStep) < 2 then
+            table.insert(out, b)
         end
     end
-    return count
+    if #out == 0 then out = basiObjs end
+    return out
+end
+-- ============================================================
+-- FUNZIONE: shoot_basiPronte(basiObjs, basiNemiche, rangeUnits, angoloGradi)
+-- Basi pronte al tiro: del 1° e 2° rango, con almeno una base
+-- nemica DENTRO il cono dell'unità, entro gittata (bordo-bordo,
+-- come la ricerca del bersaglio) e in LOS. angoloGradi di default
+-- IEF_SHOOTING.angle (45°).
+-- Ritorna: numero, basi pronte, basi nemiche raggiunte.
+-- ============================================================
+function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits, angoloGradi)
+    if not basiObjs or #basiObjs == 0 then return 0, {}, {} end
+    if not basiNemiche or #basiNemiche == 0 then return 0, {}, {} end
+
+    local tiratrici = shoot_basiTiratrici(basiObjs)
+    local info0 = main_parseNickname(tiratrici[1].getName())
+    local tipo0 = info0 and info0.unitType
+
+    local mieRect = {}
+    for i, b in ipairs(tiratrici) do mieRect[i] = main_baseRectOfType(b, tipo0) end
+    local cono = shoot_coneOf(mieRect, angoloGradi or IEF_SHOOTING.angle or 45)
+
+    local nemRect = {}
+    for _, n in ipairs(basiNemiche) do
+        local info = main_parseNickname(n.getName())
+        local r = main_baseRectOfType(n, info and info.unitType)
+        local poly = shoot_clipRectToCone(cono, r)
+        if #poly > 0 then
+            r.poly = poly
+            table.insert(nemRect, r)
+        end
+    end
+
+    local ostacoli = shoot_ostacoli()
+    local escludi = { [main_getUnitKey(tiratrici[1])] = true }
+    if basiNemiche[1] then escludi[main_getUnitKey(basiNemiche[1])] = true end
+
+    local pronte, raggiunte, visti = {}, {}, {}
+    for i, b in ipairs(tiratrici) do
+        local ok = false
+        for _, nr in ipairs(nemRect) do
+            if shoot_distRectToPoly(mieRect[i], nr.poly) <= rangeUnits
+               and shoot_losLibera(mieRect[i], nr.poly, ostacoli, escludi) then
+                ok = true
+                if not visti[nr.obj] then
+                    visti[nr.obj] = true
+                    table.insert(raggiunte, nr.obj)
+                end
+            end
+        end
+        if ok then table.insert(pronte, b) end
+    end
+    return #pronte, pronte, raggiunte
 end
 -- ============================================================
 -- FUNZIONE: shoot_shootCancel()
@@ -840,9 +948,13 @@ function shoot_numDiceBreakdown(shooterKey, basiPronte, raffica)
     elseif tipo == "ART" then
         n = basiPronte * 2
         table.insert(voci, { "ART: 2D6 per base", tostring(n) })
-    elseif raffica then
-        n = math.floor(basiPronte / 2) * 3 + ((basiPronte % 2 > 0) and 2 or 0)
-        table.insert(voci, { "RAFFICA: 3D6 ogni 2 basi", tostring(n) })
+    end
+
+    -- RAFFICA (solo Tiro d'Arresto): +50% dei dadi, per difetto
+    -- (6 dadi -> +3, 5 dadi -> +2)
+    if raffica then
+        n = n + math.floor(n / 2)
+        table.insert(voci, { "RAFFICA: +50% dei dadi", tostring(n) })
     end
 
     if main_isMistaMeta(meta) then
@@ -952,4 +1064,122 @@ function shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raf
         soglia      = soglia,
     }
     return scheda, numDadi, soglia
+end
+-- ============================================================
+-- FUNZIONE: debug_shootRects(unitKeyA, unitKeyB)
+-- Solo test: con il tiro aperto /execute debug_shootRects()
+-- oppure /execute debug_shootRects("CHIAVE_TIRATORE", "CHIAVE_BERSAGLIO")
+-- Disegna in azzurro i rettangoli DICHIARATI (unit_types) delle
+-- basi delle due unità e stampa, per ogni base, misura dichiarata
+-- e ingombro reale della mesh (getBoundsNormalized, figure
+-- comprese), più la distanza minima bordo-bordo fra le unità.
+-- Se l'azzurro non coincide con le basi visibili, la differenza
+-- cono/base nasce dalle misure dichiarate, non dal disegno.
+-- ============================================================
+function debug_shootRects(unitKeyA, unitKeyB)
+    -- Senza argomenti: tiratore e bersaglio del tiro in corso
+
+    local best
+    local P
+    local Q
+    local nomeT = math.huge
+    local nomeB = math.huge
+
+    local st = IEF_SHOOT_STATE or {}
+    local tiratore = st.shooter or IEF_SHOOTING.activeShooter
+    unitKeyA = unitKeyA or (tiratore and main_getUnitKey(tiratore))
+    unitKeyB = unitKeyB or (st.target and main_getUnitKey(st.target))
+    print(string.format("[RECT] tiratore=%s bersaglio=%s", tostring(unitKeyA), tostring(unitKeyB)))
+    for _, key in ipairs({ unitKeyA, unitKeyB }) do
+        if #main_getUnitBases(key) == 0 then
+            print("[RECT] nessuna base trovata per la chiave " .. tostring(key))
+            return
+        end
+    end
+    -- Solo il cono del tiro aperto: niente rettangoli rimasti da
+    -- un debug precedente.
+    local linee = {}
+    for _, l in ipairs(IEF_SHOOTING.conoLines or {}) do table.insert(linee, l) end
+    local rects = {}
+    for _, key in ipairs({ unitKeyA, unitKeyB }) do
+        rects[key] = {}
+        for _, b in ipairs(main_getUnitBases(key)) do
+            local meta = main_getUnitMeta(b)
+            local tipo = meta and meta.unitType
+            local r = main_baseRectOfType(b, tipo)
+            table.insert(rects[key], r)
+            local c = r.corners   -- ordine: (-w,-d) (-w,+d) (+w,-d) (+w,+d)
+            local y = 1.32
+            table.insert(linee, { points = {
+                { c[1].x, y, c[1].z }, { c[2].x, y, c[2].z }, { c[4].x, y, c[4].z },
+                { c[3].x, y, c[3].z }, { c[1].x, y, c[1].z } }, color = { 0.2, 0.9, 1 }, thickness = 0.04 })
+            local bn = b.getBoundsNormalized()
+            local ut = main_getUnitType(tipo)
+            local pp, rr = b.getPosition(), b.getRotation()
+            local bb = b.getBounds()
+            local cs = main_baseCentro(b)
+            print(string.format("[RECT] %s guid=%s tipo=%s pos=(%.2f, %.2f) rotY=%.1f | centro mesh=(%.2f, %.2f) | scostamento salvato=(%.2f, %.2f) | dichiarata %.2fx%.2f cm | mesh+figure %.2fx%.2f cm",
+                b.getName(), b.getGUID(), tostring(tipo), pp.x, pp.z, rr.y, bb.center.x, bb.center.z, cs.x, cs.z,
+                (ut and ut.base_width_cm) or 4, (ut and ut.base_depth_cm) or 3,
+                bn.size.x / CM_TO_TTS, bn.size.z / CM_TO_TTS))
+        end
+    end
+    local dMin = math.huge
+    for _, ra in ipairs(rects[unitKeyA] or {}) do
+        for _, rb in ipairs(rects[unitKeyB] or {}) do
+            local d = main_rectsDistance(ra, rb)
+            if d < dMin then dMin = d end
+        end
+    end
+    print(string.format("[RECT] distanza minima dichiarata: %.2f\"", dMin / INCH_TO_TTS))
+
+    -- Segmento magenta = coppia di punti più vicini secondo il
+    -- calcolo della gittata (basi tiratrici di 1°/2° rango, parte
+    -- della base nemica dentro il cono).
+    local tiratrici = shoot_basiTiratrici(main_getUnitBases(unitKeyA))
+    local tr = {}
+    for i, b in ipairs(tiratrici) do
+        local meta = main_getUnitMeta(b)
+        tr[i] = main_baseRectOfType(b, meta and meta.unitType)
+    end
+    local cono = shoot_coneOf(tr, (IEF_SHOOT_STATE and IEF_SHOOT_STATE.angoloGradi) or IEF_SHOOTING.angle or 45)
+    local function vicinoSuRect(px, pz, r)
+        local dx, dz = px - r.x, pz - r.z
+        local u = math.max(-r.hw, math.min(r.hw, dx * r.rx + dz * r.rz))
+        local v = math.max(-r.hd, math.min(r.hd, dx * r.fx + dz * r.fz))
+        return r.x + r.rx * u + r.fx * v, r.z + r.rz * u + r.fz * v
+    end
+    local function vicinoSuSeg(px, pz, a, b)
+        local dx, dz = b.x - a.x, b.z - a.z
+        local l2 = dx * dx + dz * dz
+        local u = (l2 > 0) and (((px - a.x) * dx + (pz - a.z) * dz) / l2) or 0
+        u = math.max(0, math.min(1, u))
+        return a.x + dx * u, a.z + dz * u
+    end
+    
+    for i, mr in ipairs(tr) do
+        for j, rb in ipairs(rects[unitKeyB] or {}) do
+            local poly = shoot_clipRectToCone(cono, rb)
+            for _, v in ipairs(poly) do
+                local qx, qz = vicinoSuRect(v.x, v.z, mr)
+                local d = math.sqrt((v.x - qx)^2 + (v.z - qz)^2)
+                if d < best then best, P, Q, nomeT, nomeB = d, { qx, qz }, { v.x, v.z }, tiratrici[i].getName(), rb.obj.getName() end
+            end
+            for _, k in ipairs(mr.corners) do
+                for n = 1, #poly do
+                    local qx, qz = vicinoSuSeg(k.x, k.z, poly[n], poly[(n % #poly) + 1])
+                    local d = math.sqrt((k.x - qx)^2 + (k.z - qz)^2)
+                    if d < best then best, P, Q, nomeT, nomeB = d, { k.x, k.z }, { qx, qz }, tiratrici[i].getName(), rb.obj.getName() end
+                end
+            end
+        end
+    end
+    if P then
+        print(string.format("[RECT] gittata: %s -> %s = %.2f\" (segmento magenta)", nomeT, nomeB, best / INCH_TO_TTS))
+        print(string.format("[RECT] cono s0=%.3f tL=%.3f tR=%.3f f=(%.3f,%.3f) r=(%.3f,%.3f)",
+            cono.s0, cono.tL, cono.tR, cono.fx, cono.fz, cono.rx, cono.rz))
+        table.insert(linee, { points = { { P[1], 1.34, P[2] }, { Q[1], 1.34, Q[2] } }, color = { 1, 0, 1 }, thickness = 0.06 })
+    end
+    IEF_SHOOTING.activeLines = linee
+    callHandler("aggiornaLinee")
 end

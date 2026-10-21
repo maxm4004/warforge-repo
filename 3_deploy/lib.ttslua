@@ -104,10 +104,6 @@ function deployment_spawnArmy(slot, armyData)
     local startX      = slot == 1 and -50 or 50
     local unitOffsetX = startX
     local unitOffsetZ = -45.00
-    -- Fila di spawn: oltre |x| = DEPLOY_SPAWN_X_LIMIT si va a capo su
-    -- una nuova fila, più lontana dal tavolo.
-    local rowZ     = 0
-    local rowDepth = 0
     local prevModel   = nil
 
     local prevMaxX  = 0
@@ -132,7 +128,7 @@ function deployment_spawnArmy(slot, armyData)
 
             Wait.time(function()
                     warning("Attendere che il caricamento sia completo...", "Yellow")
-                    deployment_AttachMinisToBase(slot)
+                    -- attach già fatto base per base in deployment_onBaseSpawned
                     --onProgressingBar(slot, 0, 100)
                     Wait.time(function()
                             warning("Attendere che il caricamento sia completo...", "Yellow")
@@ -181,8 +177,44 @@ function deployment_spawnArmy(slot, armyData)
             if (bp.x or 0) > entryMaxX then entryMaxX = bp.x end
             if (bp.z or 0) > entryMaxZ then entryMaxZ = bp.z end
         end
-        local utEntry = main_getUnitType(tipo)
-        local depthCm = (utEntry and (utEntry.base_depth_cm or utEntry.base_width_cm)) or 3
+
+        -- Limite di spawn in Z: nessuna base oltre |z| = DEPLOY_SPAWN_Z_LIMIT.
+        -- Le basi sono raggruppate per sottounità (basi_per_rango, come la
+        -- numerazione): la sottounità che sfora riparte da z = 0 su una
+        -- nuova colonna, spostata in X di una larghezza della voce.
+        local limiteCm   = (DEPLOY_SPAWN_Z_LIMIT - DEPLOY_SPAWN_Z_BASE) / CM_TO_TTS
+        local colonnaCm  = entryMaxX + 4 + GAP_DIVERSO / CM_TO_TTS
+        local gruppi     = {}
+        local nRango     = (rango and rango > 0) and rango or #(unitData.basi or {})
+        for i, b in ipairs(unitData.basi or {}) do
+            local g = math.floor((i - 1) / math.max(nRango, 1)) + 1
+            local bz = (b.posizione and b.posizione.z) or 0
+            local gr = gruppi[g]
+            if not gr then
+                gr = { minZ = bz, maxZ = bz }
+                gruppi[g] = gr
+            end
+            if bz < gr.minZ then gr.minZ = bz end
+            if bz > gr.maxZ then gr.maxZ = bz end
+        end
+        local col, colZ0 = 0, 0
+        for g, gr in ipairs(gruppi) do
+            if g > 1 and (gr.maxZ - colZ0) > limiteCm then
+                col   = col + 1
+                colZ0 = gr.minZ
+            end
+            gr.dx = col * colonnaCm
+            gr.dz = -colZ0
+        end
+        local basiSpawn = {}
+        for i, b in ipairs(unitData.basi or {}) do
+            local gr = gruppi[math.floor((i - 1) / math.max(nRango, 1)) + 1]
+            local bp = b.posizione or {}
+            local copia = {}
+            for k, v in pairs(b) do copia[k] = v end
+            copia.posizione = { x = (bp.x or 0) + gr.dx, y = bp.y, z = (bp.z or 0) + gr.dz }
+            basiSpawn[i] = copia
+        end
 
         -- local gap = 0
 
@@ -212,7 +244,7 @@ function deployment_spawnArmy(slot, armyData)
             -- Builder con più basi di basi_per_rango forma più unità.
             local unitNumber = nil
 
-            for _, baseData in ipairs(unitData.basi or {}) do
+            for _, baseData in ipairs(basiSpawn) do
                 
                 base = base + 1
                 if prevEntry == unitData then
@@ -227,23 +259,7 @@ function deployment_spawnArmy(slot, armyData)
                     else
                         unitOffsetX = unitOffsetX - (prevMaxX + 4) * CM_TO_TTS - GAP_DIVERSO
                     end
-
-                    -- Bordo esterno del blocco (centro base + mezza base)
-                    local bordo = (entryMaxX + 2) * CM_TO_TTS
-                    local fuori = (slot == 1 and unitOffsetX + bordo > DEPLOY_SPAWN_X_LIMIT)
-                               or (slot ~= 1 and unitOffsetX - bordo < -DEPLOY_SPAWN_X_LIMIT)
-                    if fuori and rowDepth > 0 then
-                        -- nuova fila: si riparte da startX, dietro la fila precedente
-                        rowZ = rowZ + rowDepth + GAP_DIVERSO
-                        rowDepth = 0
-                        if slot == 1 then
-                            unitOffsetX = startX + 4 * CM_TO_TTS + GAP_DIVERSO
-                        else
-                            unitOffsetX = startX - 4 * CM_TO_TTS - GAP_DIVERSO
-                        end
-                    end
-
-                    unitOffsetZ = rowZ
+                    unitOffsetZ = 0
                     prevEntry = unitData
                     prevModel = unitData.model
                     basi = 1
@@ -253,15 +269,11 @@ function deployment_spawnArmy(slot, armyData)
                 deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.elementi, unitOffsetX, unitOffsetZ, onBaseSpawnata)
             end
 
-        -- profondità della fila corrente (la voce più profonda)
-        local profondita = (entryMaxZ + depthCm) * CM_TO_TTS
-        if profondita > rowDepth then rowDepth = profondita end
-
         -- salva valori per prossima iterazione
         prevMaxX  = 0
         prevMaxZ  = 0
 
-        for _, b in ipairs(unitData.basi or {}) do
+        for _, b in ipairs(basiSpawn) do
             if (b.posizione.x or 0) > prevMaxX then prevMaxX = b.posizione.x end
             if (b.posizione.z or 0) > prevMaxZ then prevMaxZ = b.posizione.z end
         end
@@ -451,14 +463,47 @@ function deployment_onBaseSpawned(obj, slot, armyTag, nickname, unitData, baseDa
         -- Metadata
         deployment_applyBaseMetadata(obj, slot, armyTag, nickname, unitData, baseData)
 
-        -- Figure figlie
-        deployment_spawnChildrenRecursive(obj, pos, rot, armyTag, templateData.children, nickname, slot)
+        -- Figure figlie (spawnate bloccate)
+        local attese = deployment_spawnChildrenRecursive(obj, pos, rot, armyTag, templateData.children, nickname, slot)
 
-        Wait.time(function()
-            if obj then obj.setLock(false) end
-        end, 3)
+        -- La base resta bloccata finché tutte le sue figure non sono
+        -- spawnate e caricate: solo allora attach e sblocco. Così base e
+        -- figure non sono mai oggetti fisici separati durante il
+        -- caricamento (niente compenetrazioni che sollevano la base).
+        local function figurePronte()
+            if not obj or obj.loading_custom then return false end
+            local minis = minisModel[nickname] or {}
+            if #minis < attese then return false end
+            for _, m in ipairs(minis) do
+                if m and m.loading_custom then return false end
+            end
+            return true
+        end
 
-        if onSpawnata then onSpawnata() end
+        local function concludi()
+            if obj then
+                -- Centro reale della mesh della base (prima dell'attach,
+                -- quindi senza figure) rispetto al suo punto di posizione,
+                -- in assi locali: il pivot delle mesh non è al centro.
+                -- Usato da main_baseRectOfType per i rettangoli.
+                main_saveBaseCentro(obj)
+                for _, m in ipairs(minisModel[nickname] or {}) do
+                    if m then pcall(function() obj.addAttachment(m) end) end
+                end
+                minisModel[nickname] = nil
+                Wait.frames(function()
+                    if obj then obj.setLock(false) end
+                    if onSpawnata then onSpawnata() end
+                end, 5)
+            elseif onSpawnata then
+                onSpawnata()
+            end
+        end
+
+        Wait.condition(concludi, figurePronte, 30, function()
+            printToAll("[DEPLOY] Figure non caricate in tempo: " .. tostring(nickname), {r=1,g=0.6,b=0})
+            concludi()
+        end)
 
     end, 2)
 end
@@ -516,7 +561,20 @@ end
 -- Spawna le figure figlie (e loro figli) attaccandole alla base.
 -- ============================================================
 function deployment_spawnChildrenRecursive(baseObj, basePos, baseRot, armyTag, children, nicknameBase, slot)
-    if not children or #children == 0 then return end
+    if not children or #children == 0 then return 0 end
+
+    -- Figure attese (stesso filtro di spawnLevel, ricorsivo)
+    local function contaFigure(nodi)
+        local n = 0
+        for _, c in ipairs(nodi or {}) do
+            local m = c.customMesh
+            if (m and m.meshURL and m.meshURL ~= "") or c.customAssetbundle then
+                n = n + 1 + contaFigure(c.children)
+            end
+        end
+        return n
+    end
+    local attese = contaFigure(children)
     
     if nomeUnit[slot] == nil then nomeUnit[slot] = {} end
     table.insert(nomeUnit[slot], nicknameBase)
@@ -550,6 +608,7 @@ function deployment_spawnChildrenRecursive(baseObj, basePos, baseRot, armyTag, c
     end
 
     spawnLevel(children, nicknameBase)
+    return attese
 end
 function deployment_AttachMinisToBase(slot)
       for _, value in ipairs(nomeUnit[slot]) do
@@ -593,6 +652,7 @@ function deployment_buildFigureParams(nickname, childData, basePos, baseRot)
         return {
             Name      = "Custom_Assetbundle",
             Nickname  = nickname,
+            Locked    = true,
             Transform = {
                 posX = px,
                 posY = py,
@@ -620,6 +680,7 @@ function deployment_buildFigureParams(nickname, childData, basePos, baseRot)
         return {
             Name      = "Custom_Model",
             Nickname  = nickname,
+            Locked    = true,
             Transform = {
                 posX = px,
                 posY = py,

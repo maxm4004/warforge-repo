@@ -208,6 +208,7 @@ function charge_moveChoose(ctx, slot, player, rec, value)
     elseif value == "CARICA" then
         charge_executeChargeMove(player, ctx.unitKey, elemento)
     end
+    charge_refreshAllAttackRows()
 end
 -- ============================================================
 -- FUNZIONE: charge_stopfireCalc(ctx)

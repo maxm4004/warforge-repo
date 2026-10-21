@@ -185,7 +185,14 @@ function charge_findOrCreateElement(mySlot, myKey, otherSlot, otherKey)
     local existing = charge_findElementByUnits(mySlot, myKey, otherSlot, otherKey)
     if existing then return existing, false end
     
-    IEF_CHARGE_NEXT_ID = (IEF_CHARGE_NEXT_ID or 0) + 1
+    -- Id univoco: il contatore non è salvato, dopo un caricamento
+    -- ripartirebbe da 0 e duplicherebbe gli id della coda salvata
+    -- (charge_elementoById tornerebbe l'elemento sbagliato).
+    local maxId = IEF_CHARGE_NEXT_ID or 0
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if (e.id or 0) > maxId then maxId = e.id end
+    end
+    IEF_CHARGE_NEXT_ID = maxId + 1
     local nuovo = {
         id = IEF_CHARGE_NEXT_ID,
         unitArmy1Key = (mySlot == 1) and myKey or otherKey,
@@ -1064,7 +1071,7 @@ function charge_getAttackListPanelXml(slot)
        
         local risposta = "carica la"
 
-        if mioResponse == REACTION_TYPE.EVA then
+        if mioResponse == REACTION_TYPE.EVA and not charge_elementoRequest(e, slot) then
             risposta = "evade la"
         elseif mioResponse == REACTION_TYPE.COC then
             risposta = "contro carica la"
@@ -1075,7 +1082,7 @@ function charge_getAttackListPanelXml(slot)
         rows = rows .. string.format(
             '<Row preferredHeight="30">' ..
                 '<Cell>' ..
-                    '<Button id="charge_attack_row_%d_%d" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="White" alignment="MiddleLeft" onClick="charge_attackRowClick"/>' ..
+                    '<Button id="charge_attack_row_%d_%d" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="%s" alignment="MiddleLeft" onClick="charge_attackRowClick"/>' ..
                 '</Cell>' ..
             '</Row>',
 
@@ -1083,7 +1090,7 @@ function charge_getAttackListPanelXml(slot)
             main_decodeExtendedUnitLabel(myKey),
             risposta,
             main_decodeExtendedUnitLabel(otherKey),
-            slot, otherKey, labelBtn
+            (ENGINE.phase == PHASE.CHARGE_AUTO and charge_attackRowDone(slot, e)) and CHARGE_ROW_DONE_COLOR or "White"
         )
     end
 
@@ -1182,7 +1189,9 @@ function charge_attackRowClick(player, value, id)
     engine_subOpen("CHARGE_MOVE", slot, {
         queueId  = elemento.id,
         unitKey  = myKey,
-        evasione = charge_elementoResponse(elemento, slot) == REACTION_TYPE.EVA,
+        -- chi ha dichiarato la carica non evade mai
+        evasione = not charge_elementoRequest(elemento, slot)
+                   and charge_elementoResponse(elemento, slot) == REACTION_TYPE.EVA,
     }, nil)
 end
 -- ============================================================
@@ -1339,7 +1348,7 @@ end
 -- Usata sia dal guard sui bottoni fase CHARGE_REACT sia dalla
 -- condizione COND.CHARGE_QUEUE_NOT_EMPTY/EMPTY quando serve.
 -- ============================================================
-function charge_reactQueueHasPending()
+function charge_reactQueueHasPending(slot)
 
     local sh = engine_subShared()
     if sh and sh.name == "STOPFIRE" then return true end
@@ -1348,8 +1357,9 @@ function charge_reactQueueHasPending()
             -- Lato SENZA request=true: chi non ha dichiarato deve
             -- ancora scegliere una reazione, a meno che non l'abbia
             -- già fatto (responseArmy{quel lato} impostata).
-            if not e.requestArmy1 and not e.responseArmy1 then return true end
-            if not e.requestArmy2 and not e.responseArmy2 then return true end
+            -- Con slot: solo le reazioni di quell'esercito.
+            if (slot == nil or slot == 1) and not e.requestArmy1 and not e.responseArmy1 then return true end
+            if (slot == nil or slot == 2) and not e.requestArmy2 and not e.responseArmy2 then return true end
         end
     end
     return false
@@ -1395,7 +1405,7 @@ end
 -- ============================================================
 function charge_attackVerb(slot, elemento)
     local r = charge_elementoResponse(elemento, slot)
-    if r == REACTION_TYPE.EVA then return "evade la" end
+    if r == REACTION_TYPE.EVA and not charge_elementoRequest(elemento, slot) then return "evade la" end
     if r == REACTION_TYPE.COC then return "contro carica la" end
     return "carica la"
 end
@@ -1430,7 +1440,42 @@ function charge_refreshAttackRowText(slot, elemento)
         main_decodeExtendedUnitLabel(myKey),
         charge_attackVerb(slot, elemento),
         main_decodeExtendedUnitLabel(otherKey)))
-    UI.setAttribute(rowId, "textColor", "white")
+    local fatta = charge_attackRowDone(slot, elemento)
+    Wait.frames(function()
+        UI.setAttribute(rowId, "textColor", fatta and CHARGE_ROW_DONE_COLOR or "White")
+    end, 1)
+end
+-- ============================================================
+-- FUNZIONE: charge_attackRowDone(slot, elemento)
+-- Riga Attacco processata: il lato slot ha già mosso (carica o
+-- evasione) o la carica è chiusa.
+-- ============================================================
+CHARGE_ROW_DONE_COLOR = "#6FCF6F"
+function charge_attackRowDone(slot, elemento)
+    if elemento.step == CHARGE_STEP.CLO then return true end
+    return (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2) or false
+end
+-- ============================================================
+-- FUNZIONE: charge_attackRowShown(slot, elemento)
+-- Stesso filtro di charge_getAttackListPanelXml.
+-- ============================================================
+function charge_attackRowShown(slot, elemento)
+    local r = charge_elementoResponse(elemento, slot)
+    return charge_elementoRequest(elemento, slot) or r == REACTION_TYPE.COC or r == REACTION_TYPE.EVA
+end
+-- ============================================================
+-- FUNZIONE: charge_refreshAllAttackRows()
+-- Dopo un movimento di carica/evasione: aggiorna testo e colore
+-- di tutte le righe Attacco di entrambi gli eserciti (un'azione
+-- può chiudere anche altre cariche).
+-- ============================================================
+function charge_refreshAllAttackRows()
+    if ENGINE.phase ~= PHASE.CHARGE_AUTO then return end
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        for slot = 1, 2 do
+            if charge_attackRowShown(slot, e) then charge_refreshAttackRowText(slot, e) end
+        end
+    end
 end
 -- ============================================================
 -- FUNZIONE: charge_executeEvade(slot, elemento)
@@ -1773,7 +1818,7 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         return
     end
 
-    local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
+    local distanzaTotaleInch = main_distanceInchesAlongCenters(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
     -- print(string.format("[DEBUG CHARGEMOVE] myBase.rot=%.1f otherBase.rot=%.1f distanzaTotaleInch=%.3f",
@@ -1876,12 +1921,13 @@ function charge_slotStillNeedsAction(elemento, slot)
     end
 
     local myResponse = charge_elementoResponse(elemento, slot)
-    if myResponse == REACTION_TYPE.EVA then
-        return true
+    local myMoved = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
+    if myResponse == REACTION_TYPE.EVA and not charge_elementoRequest(elemento, slot) then
+        -- l'evasione è l'azione di questo esercito: fatta = libero
+        return not myMoved
     end
 
     local chargingSlot = elemento.requestArmy1 and 1 or (elemento.requestArmy2 and 2 or nil)
-    local myMoved = (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2)
     return chargingSlot == slot and not myMoved
 end
 -- ============================================================
@@ -1906,7 +1952,7 @@ function charge_stopfireMoveToRange(elemento, defenderSlot)
     local otherBase = getObjectFromGUID(otherBaseGUID)
     if not myBase or not otherBase then return end
 
-    local distanzaTotaleInch = main_distanceInches(myBase, otherBase)
+    local distanzaTotaleInch = main_distanceInchesAlongCenters(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
     local distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)

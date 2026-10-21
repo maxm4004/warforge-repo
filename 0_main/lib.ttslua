@@ -1518,8 +1518,6 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
         end
     end
 
-    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
-
     if IEF_MOVE_BUDGET[unitKey] == nil or IEF_MOVE_TEST_MODE then
         local unitTypesDict = IEF_DATA.unitTypes and (IEF_DATA.unitTypes.unit_types or IEF_DATA.unitTypes)
         local baseInfo = main_parseNickname(obj.getName())
@@ -1530,6 +1528,15 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
     if IEF_PIVOT_BUDGET[unitKey] == nil or IEF_MOVE_TEST_MODE then
         IEF_PIVOT_BUDGET[unitKey] = 3
     end
+
+    -- Mossa già completata in questo turno (budget esaurito, anche da
+    -- un cambio di formazione che consuma la mossa): avviso e stop.
+    if not inRotta and not IEF_MOVE_TEST_MODE and (IEF_MOVE_BUDGET[unitKey] or 0) <= 0.001 then
+        warningToColor("Movimento gia' eseguito in questo turno", Player[player_color], "Yellow", 5, true)
+        return
+    end
+
+    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
 
     local startPos, startRot = {}, {}
     for i, b in ipairs(basiObjs) do
@@ -2496,8 +2503,27 @@ end
 
 -- ============================================================
 -- FUNZIONE: main_distanceInches(objA, objB)
+-- Distanza regolamentare: minima bordo-bordo fra i rettangoli
+-- dichiarati delle due basi (unit_types), in pollici. È la
+-- stessa misura usata per gittata, bersaglio e raggio di comando.
 -- ============================================================
 function main_distanceInches(objA, objB)
+    if not objA or not objB then return nil end
+    local function rettangolo(o)
+        local meta = main_getUnitMeta(o)
+        return main_baseRectOfType(o, meta and meta.unitType)
+    end
+    return main_rectsDistance(rettangolo(objA), rettangolo(objB)) / INCH_TO_TTS
+end
+
+-- ============================================================
+-- FUNZIONE: main_distanceInchesAlongCenters(objA, objB)
+-- Distanza bordo-bordo LUNGO la linea fra i centri (raggio che
+-- esce dai rettangoli dichiarati). Solo per i movimenti di carica
+-- verso il centro della base nemica: percorrendo questa distanza
+-- su quella linea le basi arrivano esattamente a contatto.
+-- ============================================================
+function main_distanceInchesAlongCenters(objA, objB)
     if not objA or not objB then return nil end
 
     local posA = objA.getPosition()
@@ -2929,8 +2955,13 @@ function main_baseRectOfType(obj, tipo)
     local fXZ = Vector(f.x, 0, f.z):normalized()
     local rXZ = Vector(r.x, 0, r.z):normalized()
 
+    -- Centro della mesh (il pivot non coincide col centro)
+    local c = main_baseCentro(obj)
+    local cx = p.x + rXZ.x * c.x + fXZ.x * c.z
+    local cz = p.z + rXZ.z * c.x + fXZ.z * c.z
+
     local rect = {
-        x = p.x, z = p.z,
+        x = cx, z = cz,
         fx = fXZ.x, fz = fXZ.z,
         rx = rXZ.x, rz = rXZ.z,
         hw = widthCm * CM_TO_TTS / 2,
@@ -2947,6 +2978,41 @@ function main_baseRectOfType(obj, tipo)
         end
     end
     return rect
+end
+
+-- ============================================================
+-- FUNZIONE: main_baseCentro(obj) / main_saveBaseCentro(obj)
+-- Scostamento (assi locali: x = destra, z = avanti) del centro
+-- della mesh della base rispetto al suo punto di posizione.
+-- Misurato al deploy prima di attaccare le figure (bounds della
+-- sola base) e salvato nei GMNotes (campo centro); cache per GUID.
+-- Basi senza il dato (deploy precedente): nessuno scostamento.
+-- ============================================================
+IEF_BASE_CENTRO = IEF_BASE_CENTRO or {}
+
+function main_saveBaseCentro(obj)
+    if not obj then return end
+    local bn = obj.getBoundsNormalized()
+    local off = bn and bn.offset
+    if not off then return end
+    local centro = { x = off.x, z = off.z }
+    local ok, meta = pcall(function() return JSON.decode(obj.getGMNotes()) end)
+    if ok and type(meta) == "table" then
+        meta.centro = centro
+        obj.setGMNotes(JSON.encode(meta))
+    end
+    IEF_BASE_CENTRO[obj.getGUID()] = centro
+end
+
+function main_baseCentro(obj)
+    local guid = obj.getGUID()
+    local c = IEF_BASE_CENTRO[guid]
+    if c then return c end
+    local meta = main_getUnitMeta(obj)
+    c = (meta and type(meta.centro) == "table" and meta.centro) or { x = 0, z = 0 }
+    c = { x = tonumber(c.x) or 0, z = tonumber(c.z) or 0 }
+    IEF_BASE_CENTRO[guid] = c
+    return c
 end
 
 -- ============================================================
