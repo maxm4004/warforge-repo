@@ -212,7 +212,7 @@ function shoot_range_and_target(player, selection)
             table.insert(basiNemiche, target)  -- fallback di sicurezza
         end
 
-        local basiPronte, pronte, raggiunte = shoot_basiPronte(basiFronte, basiNemiche, rangeUnits, angoloGradi)
+        local basiPronte, pronte, raggiunte, motivi = shoot_basiPronte(basiFronte, basiNemiche, rangeUnits, angoloGradi)
         for _, b in ipairs(pronte) do b.highlightOn({1, 0.549, 0}) end
         for _, b in ipairs(raggiunte) do b.highlightOn({0.2, 0.6, 1}) end
 
@@ -240,12 +240,18 @@ function shoot_range_and_target(player, selection)
         distInch = distInch / INCH_TO_TTS
         local rangeInch = rangeUnits / INCH_TO_TTS
 
-        local warnings = {}
-        warnings[1] = string.format("Bersaglio del tiro: %s", main_decodeExtendedUnitLabel(target.getName()))
-        warnings[2] = string.format("Distanza: %.2f inch Gittata: %.1f inch", distInch, rangeInch)
-        warnings[3] = string.format("Basi che tirano: %d/%d", basiPronte, #basiFronte)
-        
-        warningListToColor(warnings, player, "Yellow", 5)
+        shoot_infoShow(player, {
+            shooterKey  = unitKey,
+            targetKey   = main_getUnitKey(target),
+            weapon      = weapon,
+            rangeInch   = rangeInch,
+            distInch    = distInch,
+            basiPronte  = basiPronte,
+            basiFronte  = #basiFronte,
+            oltreRango  = #basiObjs - #basiFronte,
+            motivi      = motivi,
+            basiNemiche = basiNemiche,
+        })
 
         UI.setAttribute("confirm_panel_shoot", "active", "true")
         UI.setAttribute("confirm_panel_shoot", "visibility", player.color)
@@ -661,7 +667,7 @@ end
 -- ============================================================
 -- FUNZIONE: shoot_ResetLines(player, value, id)
 -- ============================================================
-function shoot_ResetLines(player, value, id)
+function shoot_ResetLines(player, value, id, tieniInfo)
 
     if IEF_SHOOTING.activeShooter then
         IEF_SHOOTING.activeShooter.setVectorLines({})
@@ -670,6 +676,9 @@ function shoot_ResetLines(player, value, id)
 
     IEF_SHOOTING.activeLines = nil
     callHandler("aggiornaLinee")
+    -- Alla conferma il pannello info resta: diventa il pannello
+    -- del tiro dei dadi (si chiude a fine tiro).
+    if not tieniInfo then shoot_infoHide() end
 
     if IEF_SHOOT_STATE.basiNemiche then
         for _, b in ipairs(IEF_SHOOT_STATE.basiNemiche) do
@@ -731,24 +740,29 @@ function shoot_Confirm(player)
         targetLabel  = state.targetUnit.tipo .. "_" .. state.targetUnit.unita_num,
         dadi         = numDadi,
         soglia       = soglia,
+        sogliaTesto  = scheda.sogliaTesto,
         scheda       = scheda,
     }
 
     IEF_FIRED[shooterKey] = true
 
-    shoot_ResetLines(player)
+    shoot_ResetLines(player, nil, nil, true)
     shoot_Reset()
 
-    if not engine_subOpen("SHOOT_ROLL", slot, ctx, nil) then return end
+    if not engine_subOpen("SHOOT_ROLL", slot, ctx, nil) then
+        shoot_infoHide()
+        return
+    end
 
     if numDadi <= 0 then
         ctx.motivo = "Nessuna base in gittata con LOS"
+        shoot_infoStato(ctx.motivo, SHOOTINFO.malus)
         engine_subStep("SHOOT_ROLL", slot, "ESCI")
         return
     end
 
     engine_diceCameraZoom(player, slot)
-    engine_dicePanelOpen(slot, scheda)
+    shoot_infoStato(string.format("Premi Roll: tira %dD6", numDadi), SHOOTINFO.gold)
 end
 -- ============================================================
 -- FUNZIONE: shoot_basiTiratrici(basiObjs, tipo)
@@ -821,21 +835,31 @@ function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits, angoloGradi)
     if basiNemiche[1] then escludi[main_getUnitKey(basiNemiche[1])] = true end
 
     local pronte, raggiunte, visti = {}, {}, {}
+    local fuoriGittata, senzaVista = 0, 0
     for i, b in ipairs(tiratrici) do
-        local ok = false
+        local ok, inGittata = false, false
         for _, nr in ipairs(nemRect) do
-            if shoot_distRectToPoly(mieRect[i], nr.poly) <= rangeUnits
-               and shoot_losLibera(mieRect[i], nr.poly, ostacoli, escludi) then
-                ok = true
-                if not visti[nr.obj] then
-                    visti[nr.obj] = true
-                    table.insert(raggiunte, nr.obj)
+            if shoot_distRectToPoly(mieRect[i], nr.poly) <= rangeUnits then
+                inGittata = true
+                if shoot_losLibera(mieRect[i], nr.poly, ostacoli, escludi) then
+                    ok = true
+                    if not visti[nr.obj] then
+                        visti[nr.obj] = true
+                        table.insert(raggiunte, nr.obj)
+                    end
                 end
             end
         end
-        if ok then table.insert(pronte, b) end
+        if ok then
+            table.insert(pronte, b)
+        elseif inGittata then
+            senzaVista = senzaVista + 1
+        else
+            fuoriGittata = fuoriGittata + 1
+        end
     end
-    return #pronte, pronte, raggiunte
+    -- motivi delle basi di 1°/2° rango che non tirano
+    return #pronte, pronte, raggiunte, { fuoriGittata = fuoriGittata, senzaVista = senzaVista }
 end
 -- ============================================================
 -- FUNZIONE: shoot_shootCancel()
@@ -1025,6 +1049,29 @@ function shoot_hitThreshold(weapon, targetKey)
 end
 
 -- ============================================================
+-- FUNZIONE: shoot_sogliaTesto(base, soglia)
+-- Regolamento: si colpisce con 4+ DOPO aver applicato i
+-- modificatori a ogni dado. Si mostra quindi la soglia di
+-- partenza e il modificatore al dado, non la soglia ricalcolata
+-- (es. "Serve 4+ con +1 a ogni dado", non "Serve 3+").
+-- soglia = base - modificatore (usata per contare i successi).
+-- ============================================================
+function shoot_sogliaTesto(base, soglia)
+    local mod = base - soglia
+    local testo
+    if mod == 0 then
+        testo = string.format("Serve %d+ su ogni dado", base)
+    else
+        testo = string.format("Serve %d+ con %+d a ogni dado", base, mod)
+    end
+    if soglia <= 1 then
+        testo = testo .. " (ogni dado colpisce)"
+    elseif soglia > 6 then
+        testo = testo .. " (nessun dado puo' colpire)"
+    end
+    return testo
+end
+-- ============================================================
 -- FUNZIONE: shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raffica)
 -- Scheda del pannello dadi per un tiro (Tiro e Tiro d'Arresto).
 -- Ritorna: scheda, numDadi, soglia
@@ -1046,14 +1093,7 @@ function shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raf
     end
     for _, v in ipairs(vociSoglia) do table.insert(righe, v) end
 
-    local serve
-    if soglia <= 1 then
-        serve = "Ogni dado colpisce"
-    elseif soglia > 6 then
-        serve = "Nessun dado puo' colpire"
-    else
-        serve = string.format("Serve %d+ su ogni dado", soglia)
-    end
+    local serve = shoot_sogliaTesto(base, soglia)
 
     local scheda = {
         titolo      = titolo,
@@ -1062,124 +1102,256 @@ function shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raf
         righe       = righe,
         serve       = serve,
         soglia      = soglia,
+        sogliaTesto = serve,
     }
     return scheda, numDadi, soglia
 end
 -- ============================================================
--- FUNZIONE: debug_shootRects(unitKeyA, unitKeyB)
--- Solo test: con il tiro aperto /execute debug_shootRects()
--- oppure /execute debug_shootRects("CHIAVE_TIRATORE", "CHIAVE_BERSAGLIO")
--- Disegna in azzurro i rettangoli DICHIARATI (unit_types) delle
--- basi delle due unità e stampa, per ogni base, misura dichiarata
--- e ingombro reale della mesh (getBoundsNormalized, figure
--- comprese), più la distanza minima bordo-bordo fra le unità.
--- Se l'azzurro non coincide con le basi visibili, la differenza
--- cono/base nasce dalle misure dichiarate, non dal disegno.
+-- PANNELLO INFO TIRO
+-- Visibile al giocatore che tira dal clic sul pulsante base
+-- (bersaglio trovato) fino al tiro o a Chiudi. Solo
+-- informazioni, nessun pulsante: Tiro/Chiudi restano in
+-- confirm_panel_shoot. Stile del pannello dadi.
 -- ============================================================
-function debug_shootRects(unitKeyA, unitKeyB)
-    -- Senza argomenti: tiratore e bersaglio del tiro in corso
+SHOOTINFO = SHOOTINFO or {
+    width     = 560,
+    colWidth  = 262,
+    padding   = 12,
+    titleH    = 24,
+    noteH     = 16,
+    rowH      = 17,
+    gap       = 6,
+    colRows   = 7,     -- righe per colonna (Tiratore / Bersaglio)
+    rows      = 8,     -- righe per colonna della parte bassa (Dadi / Per colpire)
+    valWidth  = 80,    -- larghezza della colonna valori (Dadi / Per colpire)
+    bg        = "rgba(0,0,0,0.70)",
+    gold      = "#FFD833",
+    grey      = "#BBBBBB",
+    bonus     = "#5BD35B",
+    malus     = "#FF6B6B",
+    statoH    = 22,
+    esitoH    = 26,
+    maxFaces  = 16,
+    faceSize  = 28,
+    faceGap   = 4,
+    faceKo    = "rgba(1,1,1,0.3)",
+}
 
-    local best
-    local P
-    local Q
-    local nomeT = math.huge
-    local nomeB = math.huge
+-- ============================================================
+-- FUNZIONE: shoot_infoPanelXml()
+-- XML fisso (buildUI): le righe esistono già, il contenuto si
+-- scrive con UI.setAttribute (righe vuote disattivate).
+-- ============================================================
+function shoot_infoPanelXml()
+    local S = SHOOTINFO
+    local function testo(id, h, size, color, bold, align)
+        return string.format('<Text id="%s" text="" font="warforge_font" fontSize="%d" color="%s" fontStyle="%s" alignment="%s" preferredHeight="%d" active="false"/>',
+            id, size, color, bold and "Bold" or "Normal", align or "MiddleLeft", h)
+    end
+    local function colonna(lato)
+        local x = string.format('<VerticalLayout spacing="0" childForceExpandHeight="false" childAlignment="UpperLeft" preferredWidth="%d">', S.colWidth)
+        for i = 1, S.colRows do x = x .. testo("shootinfo_" .. lato .. i, S.rowH, 11, "White", false) end
+        return x .. '</VerticalLayout>'
+    end
+    local facce = string.format('<HorizontalLayout id="shootinfo_faces" spacing="%d" childAlignment="MiddleCenter" childForceExpandWidth="false" preferredHeight="%d" active="false">',
+        S.faceGap, S.faceSize)
+    for i = 1, S.maxFaces do
+        facce = facce .. string.format('<Image id="shootinfo_f%d" image="d1" color="White" preserveAspect="true" preferredWidth="%d" preferredHeight="%d" active="false"/>',
+            i, S.faceSize, S.faceSize)
+    end
+    facce = facce .. '</HorizontalLayout>'
+    -- Parte bassa su due colonne: DADI (D) a sinistra, PER COLPIRE (C) a destra
+    local function colonnaVoci(lato)
+        local x = string.format('<VerticalLayout spacing="0" childForceExpandHeight="false" childAlignment="UpperLeft" preferredWidth="%d">', S.colWidth)
+        for i = 1, S.rows do
+            x = x .. string.format(
+                '<HorizontalLayout id="shootinfo_%s%d" preferredHeight="%d" childForceExpandWidth="false" active="false">%s%s</HorizontalLayout>',
+                lato, i, S.rowH,
+                string.format('<Text id="shootinfo_%s%d_l" text="" font="warforge_font" fontSize="11" color="White" alignment="MiddleLeft" preferredWidth="%d"/>', lato, i, S.colWidth - S.valWidth),
+                string.format('<Text id="shootinfo_%s%d_v" text="" font="warforge_font" fontSize="11" color="White" fontStyle="Bold" alignment="MiddleRight" preferredWidth="%d"/>', lato, i, S.valWidth))
+        end
+        return x .. '</VerticalLayout>'
+    end
+    local basso = '<HorizontalLayout spacing="12" childForceExpandWidth="false" childAlignment="UpperLeft">' ..
+        colonnaVoci("D") .. colonnaVoci("C") .. '</HorizontalLayout>'
 
-    local st = IEF_SHOOT_STATE or {}
-    local tiratore = st.shooter or IEF_SHOOTING.activeShooter
-    unitKeyA = unitKeyA or (tiratore and main_getUnitKey(tiratore))
-    unitKeyB = unitKeyB or (st.target and main_getUnitKey(st.target))
-    print(string.format("[RECT] tiratore=%s bersaglio=%s", tostring(unitKeyA), tostring(unitKeyB)))
-    for _, key in ipairs({ unitKeyA, unitKeyB }) do
-        if #main_getUnitBases(key) == 0 then
-            print("[RECT] nessuna base trovata per la chiave " .. tostring(key))
-            return
-        end
-    end
-    -- Solo il cono del tiro aperto: niente rettangoli rimasti da
-    -- un debug precedente.
-    local linee = {}
-    for _, l in ipairs(IEF_SHOOTING.conoLines or {}) do table.insert(linee, l) end
-    local rects = {}
-    for _, key in ipairs({ unitKeyA, unitKeyB }) do
-        rects[key] = {}
-        for _, b in ipairs(main_getUnitBases(key)) do
-            local meta = main_getUnitMeta(b)
-            local tipo = meta and meta.unitType
-            local r = main_baseRectOfType(b, tipo)
-            table.insert(rects[key], r)
-            local c = r.corners   -- ordine: (-w,-d) (-w,+d) (+w,-d) (+w,+d)
-            local y = 1.32
-            table.insert(linee, { points = {
-                { c[1].x, y, c[1].z }, { c[2].x, y, c[2].z }, { c[4].x, y, c[4].z },
-                { c[3].x, y, c[3].z }, { c[1].x, y, c[1].z } }, color = { 0.2, 0.9, 1 }, thickness = 0.04 })
-            local bn = b.getBoundsNormalized()
-            local ut = main_getUnitType(tipo)
-            local pp, rr = b.getPosition(), b.getRotation()
-            local bb = b.getBounds()
-            local cs = main_baseCentro(b)
-            print(string.format("[RECT] %s guid=%s tipo=%s pos=(%.2f, %.2f) rotY=%.1f | centro mesh=(%.2f, %.2f) | scostamento salvato=(%.2f, %.2f) | dichiarata %.2fx%.2f cm | mesh+figure %.2fx%.2f cm",
-                b.getName(), b.getGUID(), tostring(tipo), pp.x, pp.z, rr.y, bb.center.x, bb.center.z, cs.x, cs.z,
-                (ut and ut.base_width_cm) or 4, (ut and ut.base_depth_cm) or 3,
-                bn.size.x / CM_TO_TTS, bn.size.z / CM_TO_TTS))
-        end
-    end
-    local dMin = math.huge
-    for _, ra in ipairs(rects[unitKeyA] or {}) do
-        for _, rb in ipairs(rects[unitKeyB] or {}) do
-            local d = main_rectsDistance(ra, rb)
-            if d < dMin then dMin = d end
-        end
-    end
-    print(string.format("[RECT] distanza minima dichiarata: %.2f\"", dMin / INCH_TO_TTS))
+    return string.format(
+        '<Panel id="shoot_info_panel" rectAlignment="LowerCenter" offsetXY="0 50" width="%d" height="200" color="%s" active="false">' ..
+        '<VerticalLayout padding="%d %d %d %d" spacing="2" childForceExpandHeight="false" childAlignment="UpperCenter">' ..
+        '%s%s' ..
+        '<HorizontalLayout spacing="12" childForceExpandWidth="false" childAlignment="UpperLeft" id="shootinfo_cols">%s%s</HorizontalLayout>' ..
+        '%s%s%s%s' ..
+        '</VerticalLayout></Panel>',
+        S.width, S.bg, S.padding, S.padding, S.padding, S.padding,
+        testo("shootinfo_title", S.titleH, 15, S.gold, true, "MiddleCenter"),
+        testo("shootinfo_note", S.noteH, 10, S.grey, false, "MiddleCenter"),
+        colonna("L"), colonna("R"), basso,
+        testo("shootinfo_stato", S.statoH, 13, S.gold, true, "MiddleCenter"),
+        facce,
+        testo("shootinfo_esito", S.esitoH, 16, "White", true, "MiddleCenter"))
+end
 
-    -- Segmento magenta = coppia di punti più vicini secondo il
-    -- calcolo della gittata (basi tiratrici di 1°/2° rango, parte
-    -- della base nemica dentro il cono).
-    local tiratrici = shoot_basiTiratrici(main_getUnitBases(unitKeyA))
-    local tr = {}
-    for i, b in ipairs(tiratrici) do
-        local meta = main_getUnitMeta(b)
-        tr[i] = main_baseRectOfType(b, meta and meta.unitType)
+-- ============================================================
+-- FUNZIONE: shoot_infoHide()
+-- ============================================================
+function shoot_infoHide()
+    UI.setAttribute("shoot_info_panel", "active", "false")
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_infoShow(player, d)
+-- d = { shooterKey, targetKey, weapon, rangeInch, distInch,
+--       basiPronte, basiFronte, oltreRango, motivi, basiNemiche }
+-- ============================================================
+function shoot_infoShow(player, d)
+    local S = SHOOTINFO
+    local function set(id, testo, colore)
+        UI.setAttribute(id, "text", testo or "")
+        if colore then UI.setAttribute(id, "color", colore) end
+        UI.setAttribute(id, "active", (testo and testo ~= "") and "true" or "false")
     end
-    local cono = shoot_coneOf(tr, (IEF_SHOOT_STATE and IEF_SHOOT_STATE.angoloGradi) or IEF_SHOOTING.angle or 45)
-    local function vicinoSuRect(px, pz, r)
-        local dx, dz = px - r.x, pz - r.z
-        local u = math.max(-r.hw, math.min(r.hw, dx * r.rx + dz * r.rz))
-        local v = math.max(-r.hd, math.min(r.hd, dx * r.fx + dz * r.fz))
-        return r.x + r.rx * u + r.fx * v, r.z + r.rz * u + r.fz * v
+
+    local sBase = main_getUnitBases(d.shooterKey)[1]
+    local sMeta = (sBase and main_getUnitMeta(sBase)) or {}
+    local tBase = d.basiNemiche[1]
+    local tMeta = (tBase and main_getUnitMeta(tBase)) or {}
+    local nomeArma = (d.weapon and (d.weapon.label or d.weapon._arma_key)) or "?"
+
+    set("shootinfo_title", string.format("%s %s con %s tira su %s", main_decodeUnitTypeLabel(d.shooterKey), main_decodeArmyCodeLabel(d.shooterKey), nomeArma, main_decodeExtendedUnitLabel(d.targetKey)))
+    set("shootinfo_note", "Bersaglio obbligato: il piu' vicino nel cono di tiro")
+
+    -- Colonna TIRATORE
+    local L = {
+        { "TIRATORE", S.gold },
+        { string.format("Arma: %s  -  gittata %.0f\"", nomeArma, d.rangeInch) },
+        { string.format("Distanza: %.2f\"", d.distInch) },
+        { string.format("Basi pronte: %d/%d", d.basiPronte, d.basiFronte) },
+    }
+    if d.motivi and d.motivi.senzaVista > 0 then table.insert(L, { string.format("  - %d senza vista", d.motivi.senzaVista), S.grey }) end
+    if d.motivi and d.motivi.fuoriGittata > 0 then table.insert(L, { string.format("  - %d fuori gittata", d.motivi.fuoriGittata), S.grey }) end
+    if d.oltreRango > 0 then table.insert(L, { string.format("  - %d oltre il 2 rango (non tirano)", d.oltreRango), S.grey }) end
+
+    -- Colonna BERSAGLIO
+    local scudo = false
+    for _, a in ipairs(tMeta.armi or {}) do if a == "SCUDO" then scudo = true end end
+    local ut = main_getUnitType(tMeta.unitType)
+    local coes = main_getCohesion(d.targetKey) or COHESION.SAL
+    local R = {
+        { "BERSAGLIO", S.gold },
+        { string.format("Tipo: %s  -  %s", tostring(tMeta.unitType or "?"), tostring(tMeta.morale or "?")) },
+        { "Coesione: " .. tostring(coes), (coes == COHESION.SAL) and nil or S.malus },
+        { "Scudo: " .. (scudo and "si'" or "no") },
+        { string.format("Basi in campo: %d", #d.basiNemiche) },
+        { string.format("Figure per base: %s", tostring(ut and ut.figures_per_base or "?")) },
+    }
+    for i = 1, S.colRows do
+        local l, r = L[i], R[i]
+        set("shootinfo_L" .. i, l and l[1] or "", l and (l[2] or "White") or nil)
+        set("shootinfo_R" .. i, r and r[1] or "", r and (r[2] or "White") or nil)
     end
-    local function vicinoSuSeg(px, pz, a, b)
-        local dx, dz = b.x - a.x, b.z - a.z
-        local l2 = dx * dx + dz * dz
-        local u = (l2 > 0) and (((px - a.x) * dx + (pz - a.z) * dz) / l2) or 0
-        u = math.max(0, math.min(1, u))
-        return a.x + dx * u, a.z + dz * u
+    local righeCol = math.max(math.min(#L, S.colRows), math.min(#R, S.colRows))
+
+     -- Parte bassa: DADI (colonna D) e PER COLPIRE (colonna C)
+    local D = { { "DADI", "", S.gold } }
+    local nDadi, vociDadi = shoot_numDiceBreakdown(d.shooterKey, d.basiPronte, false)
+    for _, v in ipairs(vociDadi) do table.insert(D, { v[1], v[2] }) end
+    table.insert(D, { "Totale dadi", nDadi .. "D6" })
+
+    local B = { { "PER COLPIRE", "", S.gold } }
+    local base, voci = DEFAULT_HIT_THRESHOLD, {}
+    if d.weapon then
+        local _
+        _, voci, base = shoot_hitBreakdown(d.weapon, d.targetKey)
     end
-    
-    for i, mr in ipairs(tr) do
-        for j, rb in ipairs(rects[unitKeyB] or {}) do
-            local poly = shoot_clipRectToCone(cono, rb)
-            for _, v in ipairs(poly) do
-                local qx, qz = vicinoSuRect(v.x, v.z, mr)
-                local d = math.sqrt((v.x - qx)^2 + (v.z - qz)^2)
-                if d < best then best, P, Q, nomeT, nomeB = d, { qx, qz }, { v.x, v.z }, tiratrici[i].getName(), rb.obj.getName() end
+    table.insert(B, { nomeArma .. ": serve", base .. "+" })
+    if #voci == 0 then
+        table.insert(B, { "Nessun modificatore", "", S.grey })
+    end
+    for _, v in ipairs(voci) do
+        local malus = tostring(v[2]):sub(1, 1) == "-"
+        table.insert(B, { v[1], v[2] .. " al dado", malus and S.malus or S.bonus })
+    end
+
+    local function scriviColonna(lato, lista)
+        for i = 1, S.rows do
+            local b = lista[i]
+            local id = "shootinfo_" .. lato .. i
+            if b then
+                UI.setAttribute(id, "active", "true")
+                UI.setAttribute(id .. "_l", "text", b[1])
+                UI.setAttribute(id .. "_l", "color", (b[3] and b[2] == "") and b[3] or "White")
+                UI.setAttribute(id .. "_v", "text", b[2] or "")
+                UI.setAttribute(id .. "_v", "color", b[3] or "White")
+            else
+                UI.setAttribute(id, "active", "false")
             end
-            for _, k in ipairs(mr.corners) do
-                for n = 1, #poly do
-                    local qx, qz = vicinoSuSeg(k.x, k.z, poly[n], poly[(n % #poly) + 1])
-                    local d = math.sqrt((k.x - qx)^2 + (k.z - qz)^2)
-                    if d < best then best, P, Q, nomeT, nomeB = d, { k.x, k.z }, { qx, qz }, tiratrici[i].getName(), rb.obj.getName() end
-                end
-            end
         end
     end
-    if P then
-        print(string.format("[RECT] gittata: %s -> %s = %.2f\" (segmento magenta)", nomeT, nomeB, best / INCH_TO_TTS))
-        print(string.format("[RECT] cono s0=%.3f tL=%.3f tR=%.3f f=(%.3f,%.3f) r=(%.3f,%.3f)",
-            cono.s0, cono.tL, cono.tR, cono.fx, cono.fz, cono.rx, cono.rz))
-        table.insert(linee, { points = { { P[1], 1.34, P[2] }, { Q[1], 1.34, Q[2] } }, color = { 1, 0, 1 }, thickness = 0.06 })
+    scriviColonna("D", D)
+    scriviColonna("C", B)
+    local righeB = math.max(math.min(#D, S.rows), math.min(#B, S.rows))
+
+    -- Parte del tiro (stato, facce, esito) spenta finché non si tira
+    UI.setAttribute("shootinfo_stato", "active", "false")
+    UI.setAttribute("shootinfo_faces", "active", "false")
+    UI.setAttribute("shootinfo_esito", "active", "false")
+
+    S.hBase = 2 * S.padding + S.titleH + S.noteH + righeCol * S.rowH + righeB * S.rowH + 2 * 5 + 8
+    UI.setAttribute("shoot_info_panel", "height", tostring(S.hBase))
+    UI.setAttribute("shoot_info_panel", "visibility", player.color)
+    UI.setAttribute("shoot_info_panel", "active", "true")
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_infoAltezza(stato, facce, esito)
+-- Altezza del pannello con le parti del tiro accese.
+-- ============================================================
+function shoot_infoAltezza(stato, facce, esito)
+    local S = SHOOTINFO
+    local h = (S.hBase or 200)
+    if stato then h = h + S.statoH + 2 end
+    if facce then h = h + S.faceSize + 6 end
+    if esito then h = h + S.esitoH + 2 end
+    UI.setAttribute("shoot_info_panel", "height", tostring(h))
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_infoStato(testo, colore)
+-- Dopo la conferma: riga di stato del tiro (es. "Premi Roll").
+-- Il pannello diventa visibile a entrambi i giocatori, come il
+-- pannello dadi che sostituisce.
+-- ============================================================
+function shoot_infoStato(testo, colore)
+    UI.setAttribute("shootinfo_stato", "text", testo or "")
+    UI.setAttribute("shootinfo_stato", "color", colore or SHOOTINFO.gold)
+    UI.setAttribute("shootinfo_stato", "active", "true")
+    UI.setAttribute("shoot_info_panel", "visibility", "")
+    shoot_infoAltezza(true, false, false)
+end
+
+-- ============================================================
+-- FUNZIONE: shoot_infoRisultati(risultati, soglia, colpi)
+-- Facce uscite (verde = a segno, sbiadita = mancato) ed esito.
+-- soglia = valore minimo del dado già corretto dai modificatori.
+-- ============================================================
+function shoot_infoRisultati(risultati, soglia, colpi)
+    local S = SHOOTINFO
+    UI.setAttribute("shootinfo_stato", "active", "false")
+    for i = 1, S.maxFaces do
+        local v = risultati and risultati[i]
+        local id = "shootinfo_f" .. i
+        if v then
+            UI.setAttribute(id, "image", "d" .. v)
+            UI.setAttribute(id, "color", (v >= soglia) and S.bonus or S.faceKo)
+            UI.setAttribute(id, "active", "true")
+        else
+            UI.setAttribute(id, "active", "false")
+        end
     end
-    IEF_SHOOTING.activeLines = linee
-    callHandler("aggiornaLinee")
+    UI.setAttribute("shootinfo_faces", "active", "true")
+    UI.setAttribute("shootinfo_esito", "text",
+        (colpi == 1) and "1 COLPO A SEGNO" or string.format("%d COLPI A SEGNO", colpi or 0))
+    UI.setAttribute("shootinfo_esito", "color", ((colpi or 0) > 0) and S.bonus or S.malus)
+    UI.setAttribute("shootinfo_esito", "active", "true")
+    shoot_infoAltezza(false, true, true)
 end

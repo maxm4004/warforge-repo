@@ -314,7 +314,8 @@ function charge_stopfireRoll(ctx, slot, player, rec)
     IEF_DICE_ROLL_TRY[slot] = { dadi = numDadi, soglia = soglia }
     IEF_FIRED[defenderKey] = true
 
-    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", defenderKey, numDadi, soglia), player, "Yellow", 5, true)
+    warningToColor(string.format("%s tira %d D6: %s", defenderKey, numDadi,
+        (calc.scheda and calc.scheda.sogliaTesto) or string.format("minimo per colpire %d+", soglia)), player, "Yellow", 5, true)
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         Wait.time(function()

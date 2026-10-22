@@ -113,6 +113,18 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
     GEN = "GEN",
 }
 
+ UNIT_TYPE_LABELS_EXT = {
+    KN  = "Cavalieri",
+    CP  = "Cavalleria Pesante",
+    CL  = "Cavalleria Leggera",
+    FP  = "Fanteria Pesante",
+    FM  = "Fanteria Media",
+    FL  = "Fanteria Leggera",
+    ART = "Artiglieria",
+    EL  = "Elefanti",
+    GEN = "Generale",
+}
+
 ARMIES_LABELS = {
 ["ANG"] = "AngloSassone",					
 ["VIK"] = "Vichinga",				

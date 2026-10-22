@@ -17,7 +17,7 @@
 IEF_MORALE_TEST_ROLLING = { [1] = false, [2] = false }
 
 -- Secondi in cui l'esito del test resta visibile prima della chiusura
-MORALE_ESITO_SECONDS = 3
+MORALE_ESITO_SECONDS = 6
 
 -- ============================================================
 -- FUNZIONE: main_subphases()

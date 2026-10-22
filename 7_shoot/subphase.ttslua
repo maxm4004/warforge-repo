@@ -48,9 +48,6 @@ function shoot_rollFocus(ctx, slot, player, rec)
     if player then
         engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
     end
-    if ctx.scheda and not engine_dicePanelIsOpen(slot) then
-        engine_dicePanelOpen(slot, ctx.scheda)
-    end
 end
 
 -- ============================================================
@@ -58,13 +55,12 @@ end
 -- Roll fisico nello step TIRO.
 -- ============================================================
 function shoot_rollDo(ctx, slot, player, rec)
-    printToAll(string.format("[TIRO] %s tira %dD6 vs %s (soglia %d+)",
-        ctx.shooterLabel or "?", ctx.dadi, ctx.targetLabel or "?", ctx.soglia), {r=1,g=0.85,b=0.2})
+    printToAll(string.format("[TIRO] %s tira %dD6 vs %s: %s",
+        ctx.shooterLabel or "?", ctx.dadi, ctx.targetLabel or "?",
+        ctx.sogliaTesto or string.format("soglia %d+", ctx.soglia)), {r=1,g=0.85,b=0.2})
 
     IEF_DICE_ROLL_TRY[slot] = { dadi = ctx.dadi, soglia = ctx.soglia }
-    if ctx.scheda and not engine_dicePanelIsOpen(slot) then
-        engine_dicePanelOpen(slot, ctx.scheda)
-    end
+    shoot_infoStato("Tiro in corso...", SHOOTINFO.gold)
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
         Wait.time(function()
@@ -75,9 +71,8 @@ function shoot_rollDo(ctx, slot, player, rec)
 
         local hits = successi or 0
         ctx.colpi = hits
-        engine_dicePanelOutcome(slot,
-            (hits == 1) and "1 colpo a segno" or string.format("%d colpi a segno", hits),
-            (hits > 0) and DICEPANEL.okColor or DICEPANEL.koColor)
+        -- Esito nel pannello info del tiro (sostituisce il pannello dadi)
+        shoot_infoRisultati(risultati, ctx.soglia, hits)
         if hits > 0 then
             local targetObj = main_getUnitBases(ctx.targetKey)[1]
             shoot_resolveHits(targetObj, ctx.targetSlot, hits)
@@ -95,7 +90,7 @@ function shoot_rollEsciEnter(ctx, slot, rec)
     Wait.time(function()
         local live = shoot_rollRec(slot)
         if live == rec and live.step == "ESCI" then
-            engine_dicePanelClose(slot)
+            shoot_infoHide()
             engine_subClose("SHOOT_ROLL", slot, nil)
         end
     end, MORALE_ESITO_SECONDS)

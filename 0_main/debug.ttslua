@@ -577,3 +577,41 @@ function debug_routCheck(unitKey, distInches)
     for key in pairs(st.davanti) do print("  si ferma davanti a " .. key) end
     for key in pairs(st.generali) do print("  Generale da spostare " .. key) end
 end
+-- ============================================================
+-- FUNZIONE: debug_allRects(attivo)
+-- Solo test: /execute debug_allRects()       -> disegna
+--            /execute debug_allRects(false)  -> cancella
+-- Disegna in celeste il rettangolo usato dai calcoli
+-- (main_baseRectOfType) per OGNI base di entrambi gli eserciti,
+-- in coordinate del tavolo. Le linee sono una fotografia: se le
+-- basi si muovono, rilanciare. Stampa quante basi non hanno le
+-- misure reali salvate (deploy precedente alla fix).
+-- ============================================================
+function debug_allRects(attivo)
+    IEF_DEBUG_RECT_LINES = {}
+    if attivo == false then
+        callHandler("aggiornaLinee")
+        print("[RECT] rettangoli cancellati")
+        return
+    end
+    local y = 1.32
+    local basi, senzaMisure = 0, 0
+    for _, o in ipairs(getAllObjects()) do
+        if o.hasTag("Army1") or o.hasTag("Army2") then
+            local info = main_parseNickname(o.getName())
+            if info then
+                local meta = main_getUnitMeta(o)
+                local r = main_baseRectOfType(o, meta and meta.unitType)
+                local c = r.corners   -- (-w,-d) (-w,+d) (+w,-d) (+w,+d)
+                table.insert(IEF_DEBUG_RECT_LINES, { points = {
+                    { c[1].x, y, c[1].z }, { c[2].x, y, c[2].z }, { c[4].x, y, c[4].z },
+                    { c[3].x, y, c[3].z }, { c[1].x, y, c[1].z } },
+                    color = { 0.2, 0.9, 1 }, thickness = 0.03 })
+                basi = basi + 1
+                if not main_baseCentro(o).w then senzaMisure = senzaMisure + 1 end
+            end
+        end
+    end
+    callHandler("aggiornaLinee")
+    print(string.format("[RECT] %d basi disegnate, %d senza misure reali salvate", basi, senzaMisure))
+end

@@ -165,6 +165,7 @@ function getRulesetUiXml()
                     onClick="shoot_ResetLines"/>
         </HorizontalLayout>
         </Panel>
+    ]] .. shoot_infoPanelXml() .. [[
 
 <Panel id="confirm_panel_charge"
    rectAlignment="LowerCenter"

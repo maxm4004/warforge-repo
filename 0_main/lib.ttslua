@@ -209,6 +209,11 @@ function main_aggiornaLinee()
         end
     end
 
+    -- Debug: rettangoli di tutte le basi (debug_allRects)
+    for _, l in ipairs(IEF_DEBUG_RECT_LINES or {}) do
+        table.insert(linee, l)
+    end
+
     Global.setVectorLines(linee)
 end
 -- ============================================================
@@ -2064,7 +2069,7 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.RECOVERY]         = {range, info}
     }
 
-    local pos = {x = 1.3, y = -0.15, z = -1.2}
+    local pos = {x = 1.3, y = 0.1, z = -1.2}
     local rot = {x = 0, y = 180, z = 0}
     local w  = 400
     local h = 250
@@ -2303,6 +2308,19 @@ function main_decodeUnitTypeLabel(unitKey)
     for segmento in unitKey:gmatch("[^_]+") do
         if UNIT_TYPE_LABELS[segmento] then
             return UNIT_TYPE_LABELS[segmento]
+        end
+    end
+    return "Sconosciuto"
+end
+-- ============================================================
+-- FUNZIONE:  main_decodeUnitTypeLabel(unitKey)
+-- ============================================================
+function main_decodeUnitTypeExtendedLabel(unitKey)
+
+    if not unitKey then return "Sconosciuto" end
+    for segmento in unitKey:gmatch("[^_]+") do
+        if UNIT_TYPE_LABELS_EXT[segmento] then
+            return UNIT_TYPE_LABELS_EXT[segmento]
         end
     end
     return "Sconosciuto"
@@ -2955,7 +2973,9 @@ function main_baseRectOfType(obj, tipo)
     local fXZ = Vector(f.x, 0, f.z):normalized()
     local rXZ = Vector(r.x, 0, r.z):normalized()
 
-    -- Centro della mesh (il pivot non coincide col centro)
+    -- Centro e misure della mesh reale (salvati al deploy): il
+    -- rettangolo combacia con la base visibile. Senza dato: misure
+    -- dichiarate in unit_types e nessuno scostamento.
     local c = main_baseCentro(obj)
     local cx = p.x + rXZ.x * c.x + fXZ.x * c.z
     local cz = p.z + rXZ.z * c.x + fXZ.z * c.z
@@ -2964,8 +2984,8 @@ function main_baseRectOfType(obj, tipo)
         x = cx, z = cz,
         fx = fXZ.x, fz = fXZ.z,
         rx = rXZ.x, rz = rXZ.z,
-        hw = widthCm * CM_TO_TTS / 2,
-        hd = depthCm * CM_TO_TTS / 2,
+        hw = (c.w and c.w > 0) and (c.w / 2) or (widthCm * CM_TO_TTS / 2),
+        hd = (c.d and c.d > 0) and (c.d / 2) or (depthCm * CM_TO_TTS / 2),
         obj = obj,
     }
     rect.corners = {}
@@ -2985,20 +3005,27 @@ end
 -- Scostamento (assi locali: x = destra, z = avanti) del centro
 -- della mesh della base rispetto al suo punto di posizione.
 -- Misurato al deploy prima di attaccare le figure (bounds della
--- sola base) e salvato nei GMNotes (campo centro); cache per GUID.
+-- sola base) e salvato nei GMNotes (campo centroMesh); cache per GUID.
 -- Basi senza il dato (deploy precedente): nessuno scostamento.
 -- ============================================================
 IEF_BASE_CENTRO = IEF_BASE_CENTRO or {}
 
 function main_saveBaseCentro(obj)
     if not obj then return end
+    -- getBoundsNormalized().offset = posizione - centro (assi
+    -- locali): lo scostamento del centro è il suo opposto.
+    -- Verificato: FP rotY 0 centro (-0.14, -0.30) => offset (0.14, 0.30).
+    -- size = ingombro della sola base (figure non ancora attaccate),
+    -- senza rotazione: x = larghezza (destra), z = profondità (avanti).
     local bn = obj.getBoundsNormalized()
     local off = bn and bn.offset
     if not off then return end
-    local centro = { x = off.x, z = off.z }
+    local centro = { x = -off.x, z = -off.z,
+                     w = bn.size and bn.size.x or nil, d = bn.size and bn.size.z or nil }
     local ok, meta = pcall(function() return JSON.decode(obj.getGMNotes()) end)
     if ok and type(meta) == "table" then
-        meta.centro = centro
+        meta.centro = nil            -- vecchio dato col segno sbagliato
+        meta.centroMesh = centro
         obj.setGMNotes(JSON.encode(meta))
     end
     IEF_BASE_CENTRO[obj.getGUID()] = centro
@@ -3009,8 +3036,8 @@ function main_baseCentro(obj)
     local c = IEF_BASE_CENTRO[guid]
     if c then return c end
     local meta = main_getUnitMeta(obj)
-    c = (meta and type(meta.centro) == "table" and meta.centro) or { x = 0, z = 0 }
-    c = { x = tonumber(c.x) or 0, z = tonumber(c.z) or 0 }
+    c = (meta and type(meta.centroMesh) == "table" and meta.centroMesh) or { x = 0, z = 0 }
+    c = { x = tonumber(c.x) or 0, z = tonumber(c.z) or 0, w = tonumber(c.w), d = tonumber(c.d) }
     IEF_BASE_CENTRO[guid] = c
     return c
 end

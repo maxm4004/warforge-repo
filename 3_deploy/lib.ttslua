@@ -266,7 +266,14 @@ function deployment_spawnArmy(slot, armyData)
                     counters[tipo] = (counters[tipo] or 0) + 1
                     unitNumber = counters[tipo]
                 end
-                deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.elementi, unitOffsetX, unitOffsetZ, onBaseSpawnata)
+                -- Unità mista: la seconda metà delle basi di ogni unità
+                -- (es. 5-8 su 8) usa il modello del 2° rango (model_2).
+                local modelKey = unitData.model
+                local perUnita = rango or #(unitData.basi or {})
+                if unitData.model_2 and unitData.model_2 ~= "" and base > math.ceil(perUnita / 2) then
+                    modelKey = unitData.model_2
+                end
+                deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, armyData.elementi, unitOffsetX, unitOffsetZ, onBaseSpawnata, modelKey)
             end
 
         -- salva valori per prossima iterazione
@@ -285,9 +292,9 @@ end
 -- ============================================================
 -- FUNZIONE: deployment_spawnBase()
 -- ============================================================
-function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, elementi, unitOffsetX, unitOffsetZ, onSpawnata)
-       
-    local modelKey     = unitData.model
+function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, elementi, unitOffsetX, unitOffsetZ, onSpawnata, modelKeyOverride)
+
+    local modelKey     = modelKeyOverride or unitData.model
     local templateData = elementi and elementi[modelKey]
 
     if not templateData then
@@ -327,7 +334,7 @@ function deployment_buildBaseNickname(unitData, baseData, unitNumber)
     -- unitKey = nome + tipo + numero (es. VIK_BONDI + FP + 1 -> VIK_BONDI_FP_1);
     -- se il nome finisce già con il tipo (VIK_GEN + GEN, VIK_HUSCARL_FP + FP)
     -- il tipo non si ripete.
-    local model = unitData.model or ""
+    local model = unitData.unit_name or unitData.model or ""
     local tipo  = unitData.tipo or ""
     local nome  = model
     if tipo ~= "" and model:sub(-(#tipo + 1)) ~= ("_" .. tipo) then
