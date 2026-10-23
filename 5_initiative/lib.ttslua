@@ -7,8 +7,9 @@ function initiative_dicePanelOpen(slot)
         titolo      = "TIRO INIZIATIVA",
         sottotitolo = ARMY[slot] and ARMY[slot].name or nil,
         righe       = {
+            { "DADI", "", "sezione" },
             { "Dadi", "1D6" },
-            { "Modificatori", "nessuno" },
+            { "Modificatori", "nessuno", DICEPANEL.subColor },
         },
         serve       = "Vince il risultato piu' alto",
     })

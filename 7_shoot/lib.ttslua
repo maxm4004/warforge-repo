@@ -1083,15 +1083,15 @@ function shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raf
         soglia, vociSoglia, base = shoot_hitBreakdown(weapon, targetKey)
     end
 
-    local righe = {}
+    local righe = { { "DADI", "", "sezione" } }
     for _, v in ipairs(vociDadi) do table.insert(righe, v) end
     table.insert(righe, { "Totale dadi", numDadi .. "D6" })
-    table.insert(righe, { string.format("%s: colpisce con %d+",
-        weapon and (weapon.label or weapon._arma_key) or "Tiro", base), "" })
+    table.insert(righe, { "PER COLPIRE", "", "sezione" })
+    table.insert(righe, { (weapon and (weapon.label or weapon._arma_key) or "Tiro") .. ": serve", base .. "+" })
     if #vociSoglia == 0 then
-        table.insert(righe, { "Nessun modificatore", "" })
+        table.insert(righe, { "Nessun modificatore", "", DICEPANEL.subColor })
     end
-    for _, v in ipairs(vociSoglia) do table.insert(righe, v) end
+    for _, v in ipairs(vociSoglia) do table.insert(righe, { v[1], v[2] .. " al dado" }) end
 
     local serve = shoot_sogliaTesto(base, soglia)
 

@@ -978,7 +978,8 @@ end
 -- (regolamento, "POSSIBILI RISPOSTE ALLE CARICHE"):
 --   - KN caricato > contro-carica obbligatoria
 --   - CP con IMPETO > contro-carica obbligatoria
---   - CP senza IMPETO > contro-carica o resta ferma (scelta)
+--   - CP senza IMPETO > contro-carica (Ferma solo per chi non
+--     ha altre risposte: decisione Max 23/10)
 --   - CL > contro-carica / evasione / resta ferma (scelta)
 --   - FL caricata da non-FL/EL > evasione obbligatoria
 --   - FL caricata da FL/EL > evasione o resta ferma (scelta)
@@ -1008,7 +1009,7 @@ function charge_determineResponses(myTipo, myArmi, myCapabilities, attackerTipo,
         if charge_hasCapability(myCapabilities, "IMPETO") then
             return REACTION_TYPE.COC, {}
         end
-        return nil, { REACTION_TYPE.COC, REACTION_TYPE.FER }
+        return REACTION_TYPE.COC, {}
     elseif myTipo == "CL" then
         return nil, { REACTION_TYPE.COC, REACTION_TYPE.EVA, REACTION_TYPE.FER }
     elseif myTipo == "FL" then
@@ -1047,65 +1048,105 @@ function charge_hasArmaDaTiro(armi)
     return false
 end
 -- ============================================================
+-- STILE LISTE LATERALI (nuova grafica, come pannello tiro/dadi)
+-- Usato da: liste Cariche/Movimenti di carica e Reazioni.
+-- Le righe sono Button (click), con id invariati: i refresh via
+-- UI.setAttribute (testo/textColor) continuano a funzionare.
+-- ============================================================
+LISTPANEL = LISTPANEL or {
+    width     = 420,
+    offsetXY  = "-10 -330",
+    padding   = 10,
+    spacing   = 2,
+    titleH    = 22,
+    noteH     = 16,
+    rowH      = 24,
+    bg        = "rgba(0,0,0,0.70)",
+    rowBg     = "rgba(1,1,1,0.06)",
+    gold      = "#FFD833",
+    grey      = "#BBBBBB",
+    todo      = "White",     -- riga da fare
+    done      = "#5BD35B",   -- riga fatta / scelta
+    font      = "warforge_font",
+}
+
+-- ============================================================
+-- FUNZIONE: ui_listPanelXml(o)
+-- o = { id, titleId, titolo, nota, visibility, attivo,
+--       righe = { { id, testo, colore, onClick }, ... },
+--       vuoto = "testo se non ci sono righe",
+--       rectAlignment = "UpperRight" (default), offsetXY = LISTPANEL.offsetXY (default) }
+-- ============================================================
+function ui_listPanelXml(o)
+    local S = LISTPANEL
+    local function esc(t)
+        t = tostring(t or "")
+        return (t:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"))
+    end
+    local righe = o.righe or {}
+    local rows = ""
+    for _, r in ipairs(righe) do
+        rows = rows .. string.format(
+            '<Button id="%s" text="  %s" font="%s" fontSize="12" color="%s" textColor="%s" textAlignment="MiddleLeft" preferredHeight="%d" onClick="%s"/>',
+            r.id, esc(r.testo), S.font, S.rowBg, r.colore or S.todo, S.rowH, r.onClick)
+    end
+    local n = #righe
+    if n == 0 and o.vuoto then
+        rows = string.format('<Text text="%s" font="%s" fontSize="11" color="%s" alignment="MiddleCenter" preferredHeight="%d"/>',
+            esc(o.vuoto), S.font, S.grey, S.rowH)
+        n = 1
+    end
+    local h = 2 * S.padding + S.titleH + (o.nota and (S.noteH + S.spacing) or 0) + n * (S.rowH + S.spacing)
+    return string.format(
+        '<Panel id="%s" rectAlignment="%s" color="%s" width="%d" height="%d" offsetXY="%s" visibility="%s" active="%s">' ..
+        '<VerticalLayout padding="%d %d %d %d" spacing="%d" childForceExpandHeight="false" childAlignment="UpperCenter">' ..
+            '<Text id="%s" text="%s" font="%s" fontSize="14" fontStyle="Bold" color="%s" alignment="MiddleCenter" preferredHeight="%d"/>' ..
+            '%s%s' ..
+        '</VerticalLayout></Panel>',
+        o.id, o.rectAlignment or "UpperRight", S.bg, S.width, h, o.offsetXY or S.offsetXY, o.visibility or "", o.attivo or "false",
+        S.padding, S.padding, S.padding, S.padding, S.spacing,
+        o.titleId, esc(o.titolo), S.font, S.gold, S.titleH,
+        o.nota and string.format('<Text text="%s" font="%s" fontSize="10" color="%s" alignment="MiddleCenter" preferredHeight="%d"/>',
+            esc(o.nota), S.font, S.grey, S.noteH) or "",
+        rows)
+end
+-- ============================================================
 -- FUNZIONE: charge_getAttackListPanelXml(slot)
 -- ============================================================
 function charge_getAttackListPanelXml(slot)
 
-    local righe = {}
+    local elementi = {}
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        local mioResponse = charge_elementoResponse(e, slot)
-        if charge_elementoRequest(e, slot) or mioResponse == REACTION_TYPE.COC or mioResponse == REACTION_TYPE.EVA then
-            table.insert(righe, e)
-        end
-    end
-    
-    local colore = ARMY[slot] and ARMY[slot].color or "White"
-    local attivo = ((ENGINE.phase == PHASE.CHARGE_DECLARE or ENGINE.phase == PHASE.CHARGE_AUTO) and #righe > 0) and "true" or "false"
-    
-    local rows = ""    
-    for i, e in ipairs(righe) do
-
-        local myKey = charge_elementoUnitKey(e, slot)
-        local otherKey = charge_elementoOtherKey(e, slot)
-        local mioResponse = charge_elementoResponse(e, slot)
-       
-        local risposta = "carica la"
-
-        if mioResponse == REACTION_TYPE.EVA and not charge_elementoRequest(e, slot) then
-            risposta = "evade la"
-        elseif mioResponse == REACTION_TYPE.COC then
-            risposta = "contro carica la"
-        end        
-
-        local labelBtn = (ENGINE.phase == PHASE.CHARGE_AUTO) and "Procedi" or "Controlla"
-
-        rows = rows .. string.format(
-            '<Row preferredHeight="30">' ..
-                '<Cell>' ..
-                    '<Button id="charge_attack_row_%d_%d" text="La %s %s %s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="%s" alignment="MiddleLeft" onClick="charge_attackRowClick"/>' ..
-                '</Cell>' ..
-            '</Row>',
-
-            slot, e.id,
-            main_decodeExtendedUnitLabel(myKey),
-            risposta,
-            main_decodeExtendedUnitLabel(otherKey),
-            (ENGINE.phase == PHASE.CHARGE_AUTO and charge_attackRowDone(slot, e)) and CHARGE_ROW_DONE_COLOR or "White"
-        )
+        if charge_attackRowShown(slot, e) then table.insert(elementi, e) end
     end
 
-    local titolo = (ENGINE.phase == PHASE.CHARGE_AUTO) and "ELENCO MOVIMENTI DI CHIUSURA CARICA " or "ELENCO CARICHE"
+    local auto = ENGINE.phase == PHASE.CHARGE_AUTO
+    local attivo = ((ENGINE.phase == PHASE.CHARGE_DECLARE or auto) and #elementi > 0) and "true" or "false"
 
-    return string.format(
-    
-        '<Panel id="charge_attack_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -330" visibility="%s" active="%s">' ..
-        '<Text id="charge_attack_list_title_army%d" text="%s %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
-        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="400" position="0 -5 0">' ..
-        '%s' ..
-        '</TableLayout>' ..
-        '</Panel>',
-        slot, colore, attivo, slot, titolo, ARMY[slot].name, rows
-    )
+    local righe = {}
+    for _, e in ipairs(elementi) do
+        table.insert(righe, {
+            id      = string.format("charge_attack_row_%d_%d", slot, e.id),
+            testo   = string.format("La %s %s %s",
+                main_decodeExtendedUnitLabel(charge_elementoUnitKey(e, slot)),
+                charge_attackVerb(slot, e),
+                main_decodeExtendedUnitLabel(charge_elementoOtherKey(e, slot))),
+            colore  = (auto and charge_attackRowDone(slot, e)) and LISTPANEL.done or LISTPANEL.todo,
+            onClick = "charge_attackRowClick",
+        })
+    end
+
+    return ui_listPanelXml({
+        id         = "charge_attack_list_army" .. slot,
+        titleId    = "charge_attack_list_title_army" .. slot,
+        titolo     = (auto and "MOVIMENTI DI CARICA - " or "CARICHE - ") .. ARMY[slot].name,
+        nota       = auto and "Clicca una riga per eseguire il movimento (verde = eseguito)"
+                          or "Clicca una riga per controllare la carica",
+        visibility = ARMY[slot] and ARMY[slot].color or "",
+        attivo     = attivo,
+        righe      = righe,
+        vuoto      = "Nessuna carica",
+    })
 end
 -- ============================================================
 -- FUNZIONE: charge_getDefenseListPanelXml(slot)
@@ -1113,43 +1154,35 @@ end
 function charge_getDefenseListPanelXml(slot)
 
     local otherSlot = charge_elementoOtherSlot(slot)
-    local righe = {}
-
+    local elementi = {}
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
         if charge_elementoRequest(e, otherSlot) and not charge_elementoIsReciprocal(e) then
-            table.insert(righe, e)
+            table.insert(elementi, e)
         end
     end
 
-    local colore = ARMY[slot] and ARMY[slot].color or "White"
-    local attivo = ((ENGINE.phase == PHASE.CHARGE_REACT or ENGINE.phase == PHASE.CHARGE_AUTO) and #righe > 0) and "true" or "false"
+    local attivo = ((ENGINE.phase == PHASE.CHARGE_REACT or ENGINE.phase == PHASE.CHARGE_AUTO) and #elementi > 0) and "true" or "false"
 
-    local rows = ""
-    for _, e in ipairs(righe) do
-        local otherKey = charge_elementoOtherKey(e, slot)
-        local scelta = charge_elementoResponse(e, slot) ~= nil
-
-        rows = rows .. string.format(
-            '<Row preferredHeight="30">' ..
-                '<Cell>' ..
-                    '<Button id="charge_defense_row_%d_%d" text="%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="%s" alignment="MiddleLeft" onClick="charge_defenseRowClick"/>' ..
-                '</Cell>' ..
-            '</Row>',
-            slot, e.id,
-            charge_defenseRowText(slot, e),
-            scelta and "#AAAAAA" or "White"
-        )
+    local righe = {}
+    for _, e in ipairs(elementi) do
+        table.insert(righe, {
+            id      = string.format("charge_defense_row_%d_%d", slot, e.id),
+            testo   = charge_defenseRowText(slot, e),
+            colore  = (charge_elementoResponse(e, slot) ~= nil) and LISTPANEL.done or LISTPANEL.todo,
+            onClick = "charge_defenseRowClick",
+        })
     end
 
-    return string.format(
-        '<Panel id="charge_defense_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -330" visibility="%s" active="%s">' ..
-        '<Text id="charge_defense_list_title_army%d" text="ELENCO REAZIONI %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
-        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="400" position="0 -5 0">' ..
-        '%s' ..
-        '</TableLayout>' ..
-        '</Panel>',
-        slot, colore, attivo, slot, ARMY[slot].name, rows
-    )
+    return ui_listPanelXml({
+        id         = "charge_defense_list_army" .. slot,
+        titleId    = "charge_defense_list_title_army" .. slot,
+        titolo     = "REAZIONI - " .. ARMY[slot].name,
+        nota       = "Clicca una riga per scegliere la reazione (verde = scelta)",
+        visibility = ARMY[slot] and ARMY[slot].color or "",
+        attivo     = attivo,
+        righe      = righe,
+        vuoto      = "Nessuna carica subita",
+    })
 end
 
 -- ============================================================
@@ -1251,61 +1284,222 @@ function charge_defenseRowClick(player, value, id)
     }, nil)
 end
 -- ============================================================
--- FUNZIONE: charge_resolveConflicts()
+-- FUNZIONE: charge_elementoFlanked(elemento, slot)
+-- Vero se il lato slot è caricato sul fianco/retro in questa
+-- carica (calcolato a fine dichiarazioni).
 -- ============================================================
-function charge_resolveConflicts()
-    -- Per ogni unitKey: l'elemento dove è richiedente (asAttacker)
-    -- e l'elemento dove è bersaglio puro, cioè l'altro lato ha
-    -- request=true mentre la sua non ce l'ha (asTarget).
-    local asAttacker, asTarget = {}, {}
-    for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if e.requestArmy1 then asAttacker[e.unitArmy1Key] = e end
-        if e.requestArmy2 then asAttacker[e.unitArmy2Key] = e end
-        if e.requestArmy1 and not e.requestArmy2 then asTarget[e.unitArmy2Key] = e end
-        if e.requestArmy2 and not e.requestArmy1 then asTarget[e.unitArmy1Key] = e end
+function charge_elementoFlanked(elemento, slot)
+    if slot == 1 then return elemento.flankedArmy1 == true end
+    return elemento.flankedArmy2 == true
+end
+
+-- ============================================================
+-- FUNZIONE: charge_isFlankCharge(chargerKey, targetKey)
+-- Regolamento, CARICHE SUL FIANCO: "L'unità che carica, per
+-- iniziare il movimento, dovrà avere almeno due basi dietro il
+-- prolungamento ideale della linea del fronte dell'unità
+-- bersaglio". Linea del fronte = bordo anteriore più avanzato
+-- delle basi del bersaglio (rettangoli reali delle basi); una
+-- base è "dietro" se tutti i suoi 4 angoli lo sono.
+-- ============================================================
+CHARGE_FLANK_TOL = 0.02
+function charge_isFlankCharge(chargerKey, targetKey)
+    local d = charge_flankDetails(chargerKey, targetKey)
+    return d ~= nil and d.dietro >= 2
+end
+
+-- ============================================================
+-- FUNZIONE: charge_flankDetails(chargerKey, targetKey)
+-- Dati del calcolo del fianco (usati anche da debug_flank):
+-- { fronte, fwd, right, basiT={rect}, basiC={ {rect, dietro} },
+--   dietro = numero basi del caricante tutte dietro il fronte }
+-- nil se una delle due unità non ha basi.
+-- ============================================================
+function charge_flankDetails(chargerKey, targetKey)
+    local basiT = charge_getUnitBases(targetKey)
+    local basiC = charge_getUnitBases(chargerKey)
+    if #basiT == 0 or #basiC == 0 then return nil end
+
+    local metaT = charge_getUnitMeta(basiT[1])
+    local metaC = charge_getUnitMeta(basiC[1])
+    local f = basiT[1].getTransformForward()
+    local fwd = Vector(f.x, 0, f.z):normalized()
+
+    local d = { fwd = fwd, right = Vector(-fwd.z, 0, fwd.x), fronte = -math.huge,
+                basiT = {}, basiC = {}, dietro = 0 }
+    for _, b in ipairs(basiT) do
+        local r = main_baseRectOfType(b, metaT and metaT.unitType)
+        table.insert(d.basiT, r)
+        for _, c in ipairs(r.corners) do
+            local pr = c.x * fwd.x + c.z * fwd.z
+            if pr > d.fronte then d.fronte = pr; d.puntoFronte = c end
+        end
     end
 
-    local unitKeys = {}
+    for _, b in ipairs(basiC) do
+        local r = main_baseRectOfType(b, metaC and metaC.unitType)
+        local tutta = true
+        for _, c in ipairs(r.corners) do
+            if c.x * fwd.x + c.z * fwd.z > d.fronte + CHARGE_FLANK_TOL then tutta = false; break end
+        end
+        table.insert(d.basiC, { rect = r, dietro = tutta })
+        if tutta then d.dietro = d.dietro + 1 end
+    end
+    return d
+end
+
+-- ============================================================
+-- FUNZIONE: charge_resolveConflicts()
+-- Fine dichiarazioni. Risposte dell'autore (23/10):
+-- 1) la distanza non conta: chi è caricato deve dare la
+--    precedenza a chi lo carica, quindi la carica che aveva
+--    dichiarato NON parte (reagisce con le risposte del suo tipo,
+--    anche se caricato sul fianco);
+-- 2) più unità possono caricare lo stesso bersaglio, che
+--    reagisce una volta sola verso tutte (charge_setOtherReactions);
+-- 3) le cariche sul fianco hanno sempre la precedenza.
+-- Una carica è annullata solo se chi la fa è caricato da una
+-- carica che a sua volta parte (D carica C, C carica X, X carica
+-- B: C non parte, quindi X parte). Le cariche reciproche
+-- (contro-carica) partono sempre. Calcola anche il fianco.
+-- ============================================================
+function charge_resolveConflicts()
+    -- Fianco per ogni carica non reciproca (posizioni di partenza)
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if e.unitArmy1Key and e.unitArmy2Key then
-            unitKeys[e.unitArmy1Key] = true
-            unitKeys[e.unitArmy2Key] = true
+        e.flankedArmy1, e.flankedArmy2 = false, false
+        if not charge_elementoIsReciprocal(e) then
+            for slot = 1, 2 do
+                local other = charge_elementoOtherSlot(slot)
+                if charge_elementoRequest(e, other) then
+                    local fianco = charge_isFlankCharge(charge_elementoUnitKey(e, other), charge_elementoUnitKey(e, slot))
+                    if slot == 1 then e.flankedArmy1 = fianco else e.flankedArmy2 = fianco end
+                end
+            end
+        end
+        e.flankCharge = (e.flankedArmy1 or e.flankedArmy2) or nil
+    end
+
+    -- Cariche "pure" (un solo lato ha dichiarato): attaccante e bersaglio
+    local pure = {}
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if not charge_elementoIsReciprocal(e) then
+            local s = e.requestArmy1 and 1 or (e.requestArmy2 and 2 or nil)
+            if s then
+                table.insert(pure, { e = e, slot = s,
+                    atk = charge_elementoUnitKey(e, s),
+                    tgt = charge_elementoUnitKey(e, charge_elementoOtherSlot(s)) })
+            end
+        end
+    end
+
+    -- stato: nil = da decidere, true = parte, false = annullata
+    local stato = {}
+    local function caricanti(key)
+        local l = {}
+        for _, p in ipairs(pure) do
+            if p.tgt == key then table.insert(l, p) end
+        end
+        return l
+    end
+    local cambiato = true
+    while cambiato do
+        cambiato = false
+        for _, p in ipairs(pure) do
+            if stato[p] == nil then
+                local daDecidere, perChi = false, nil
+                for _, q in ipairs(caricanti(p.atk)) do
+                    if stato[q] == true then perChi = q; break end
+                    if stato[q] == nil then daDecidere = true end
+                end
+                if perChi then
+                    stato[p] = false; p.da = perChi; cambiato = true
+                elseif not daDecidere then
+                    stato[p] = true; cambiato = true
+                end
+            end
+        end
+    end
+    -- Ciclo residuo (ognuno caricato da qualcuno ancora indeciso):
+    -- tutti caricati, quindi tutti reagiscono e nessuno parte.
+    for _, p in ipairs(pure) do
+        if stato[p] == nil then
+            stato[p] = false
+            p.da = caricanti(p.atk)[1]
         end
     end
 
     local daRimuovere = {}
-    for uk in pairs(unitKeys) do
-        local elAtk = asAttacker[uk]
-        local elTgt = asTarget[uk]
-
-        -- Conflitto vero solo se sono due elementi DIVERSI: se
-        -- coincidono, uk è coinvolta in un'unica carica reciproca
-        -- (nessun doppio ruolo, nulla da arbitrare).
-        if elAtk and elTgt and elAtk ~= elTgt then
-            local mySlotInAtk = (elAtk.unitArmy1Key == uk) and 1 or 2
-            local distComeAttaccante = charge_elementoDistInches(elAtk, mySlotInAtk) or 0
-
-            local mySlotInTgt = (elTgt.unitArmy1Key == uk) and 1 or 2
-            local otherSlotInTgt = charge_elementoOtherSlot(mySlotInTgt)
-            local distComeBersaglio = charge_elementoDistInches(elTgt, otherSlotInTgt) or 0
-
-            if distComeBersaglio < distComeAttaccante then
-                daRimuovere[elAtk] = true
-            else
-                daRimuovere[elTgt] = true
-            end
+    for _, p in ipairs(pure) do
+        if stato[p] == false then
+            daRimuovere[p.e] = true
+            local q = p.da
+            local fianco = q and charge_elementoFlanked(q.e, p.slot)
+            printToAll(string.format("[CARICA] La carica della %s sulla %s non parte: la %s è caricata %sdalla %s",
+                main_decodeExtendedUnitLabel(p.atk), main_decodeExtendedUnitLabel(p.tgt),
+                main_decodeExtendedUnitLabel(p.atk), fianco and "sul fianco " or "",
+                q and main_decodeExtendedUnitLabel(q.atk) or "?"), {r=1,g=0.6,b=0.2})
         end
     end
 
     local nuova = {}
     for _, e in ipairs(IEF_CHARGE_QUEUE) do
-        if daRimuovere[e] then
-            printToAll(string.format("[CARICA] %s <-> %s scartata (conflitto di prossimità)", e.unitArmy1Key, e.unitArmy2Key), {r=1,g=0.6,b=0.2})
-        else
-            table.insert(nuova, e)
-        end
+        if not daRimuovere[e] then table.insert(nuova, e) end
     end
     IEF_CHARGE_QUEUE = nuova
+
+    -- Unità già impegnata in una carica reciproca e caricata anche
+    -- da altri: muove una volta sola (verso il nemico reciproco),
+    -- gli altri caricanti la raggiungono con tutta la distanza.
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if charge_elementoIsReciprocal(e) then
+            for slot = 1, 2 do
+                local key = charge_elementoUnitKey(e, slot)
+                for _, p in ipairs(pure) do
+                    if not daRimuovere[p.e] and p.tgt == key then
+                        if p.slot == 1 then p.e.movedArmy2 = true else p.e.movedArmy1 = true end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_applyFlankContact(elemento)
+-- A carica chiusa con contatto: se il bersaglio era caricato sul
+-- fianco e non ha contro-caricato (contatto sul fianco/retro),
+-- perde subito un livello di coesione, tranne se chi carica è
+-- CL o FL (regolamento, EFFETTI DELLA CARICA SUL FIANCO). Il
+-- fianco resta sull'elemento per la mischia (primo turno senza
+-- dadi verso quel nemico). Una volta sola per elemento.
+-- ============================================================
+function charge_applyFlankContact(elemento)
+    if elemento.flankApplied then return end
+    elemento.flankApplied = true
+    for slot = 1, 2 do
+        if charge_elementoFlanked(elemento, slot) then
+            if charge_elementoResponse(elemento, slot) == REACTION_TYPE.COC then
+                if slot == 1 then elemento.flankedArmy1 = false else elemento.flankedArmy2 = false end
+            else
+                local key = charge_elementoUnitKey(elemento, slot)
+                local otherKey = charge_elementoOtherKey(elemento, slot)
+                local ob = charge_getUnitBases(otherKey)
+                local om = ob[1] and charge_getUnitMeta(ob[1])
+                local tipo = om and om.unitType
+                if tipo ~= "CL" and tipo ~= "FL" then
+                    printToAll(string.format("[CARICA] %s contattata sul fianco: perde un livello di coesione",
+                        main_decodeExtendedUnitLabel(key)), {r=1,g=0.5,b=0.2})
+                    main_lowerAndCheckRout(key, slot, function(item, quando)
+                        if quando == "FINE_FASE" then
+                            table.insert(IEF_MORALE_END_QUEUE, item)
+                        else
+                            main_runMoraleQueue({ item })
+                        end
+                    end)
+                end
+            end
+        end
+    end
 end
 -- ============================================================
 -- FUNZIONE: charge_applyPivot(basiObjs, pivotBase, angoloSigned)
@@ -1381,6 +1575,8 @@ function charge_defenseRowText(slot, elemento)
         return string.format("La %s contro carica la %s", me, lui)
     elseif reazione == REACTION_TYPE.TIR then
         return string.format("La %s fa Tiro di Arresto sulla %s", me, lui)
+    elseif charge_elementoFlanked(elemento, slot) then
+        return string.format("La %s è caricata sul fianco dalla %s", me, lui)
     else
         return string.format("La %s è caricata dalla %s", me, lui)
     end
@@ -1394,9 +1590,9 @@ function charge_refreshDefenseRowText(slot, elemento)
     local rowId = string.format("charge_defense_row_%d_%d", slot, elemento.id)
     local scelta = charge_elementoResponse(elemento, slot) ~= nil
 
-    UI.setAttribute(rowId, "text", charge_defenseRowText(slot, elemento))
+    UI.setAttribute(rowId, "text", "  " .. charge_defenseRowText(slot, elemento))
     Wait.frames(function()
-        UI.setAttribute(rowId, "textColor", scelta and "#AAAAAA" or "White")
+        UI.setAttribute(rowId, "textColor", scelta and LISTPANEL.done or LISTPANEL.todo)
     end, 1)
 end
 -- ============================================================
@@ -1436,7 +1632,7 @@ function charge_refreshAttackRowText(slot, elemento)
     local otherKey = charge_elementoOtherKey(elemento, slot)
     local rowId = string.format("charge_attack_row_%d_%d", slot, elemento.id)
 
-    UI.setAttribute(rowId, "text", string.format("La %s %s %s",
+    UI.setAttribute(rowId, "text", string.format("  La %s %s %s",
         main_decodeExtendedUnitLabel(myKey),
         charge_attackVerb(slot, elemento),
         main_decodeExtendedUnitLabel(otherKey)))
@@ -1450,7 +1646,7 @@ end
 -- Riga Attacco processata: il lato slot ha già mosso (carica o
 -- evasione) o la carica è chiusa.
 -- ============================================================
-CHARGE_ROW_DONE_COLOR = "#6FCF6F"
+CHARGE_ROW_DONE_COLOR = "#5BD35B"
 function charge_attackRowDone(slot, elemento)
     if elemento.step == CHARGE_STEP.CLO then return true end
     return (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2) or false
@@ -1594,7 +1790,7 @@ function charge_chargeTestFor(attackerKey, targetKey)
     local situazioni = main_moraleSituationsFor("CHARGE_DECLARE", {
         tipo           = myMeta and myMeta.unitType,
         tipoAvversario = targetMeta and targetMeta.unitType,
-        lato           = "FRONTE",   -- TODO: lato reale quando 4_charge calcola il fianco
+        lato           = charge_isFlankCharge(attackerKey, targetKey) and "FIANCO" or "FRONTE",
         armi           = myMeta and myMeta.armi or {},
     })
     for _, s in ipairs(situazioni) do
@@ -1855,6 +2051,9 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         end
     else
         elemento.step = CHARGE_STEP.CLO
+    end
+    if elemento.step == CHARGE_STEP.CLO and elemento.outcome == CHARGE_OUTCOME.OK then
+        charge_applyFlankContact(elemento)
     end
 
     warningToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, distanzaTotaleInch), player, "Yellow", 5, true)

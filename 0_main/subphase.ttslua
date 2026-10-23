@@ -61,9 +61,9 @@ function main_moraleTestEnter(ctx, slot, rec)
     local req, idx = main_moraleFindRequest(slot, ctx.reqId)
     if req then
         local id = string.format("morale_queue_row_%d_%d", slot, idx)
-        UI.setAttribute(id, "text", main_moraleRowText(req, true))
+        UI.setAttribute(id, "text", "  " .. main_moraleRowText(req, true))
         Wait.frames(function()
-            UI.setAttribute(id, "textColor", "White")
+            UI.setAttribute(id, "textColor", LISTPANEL.gold)
         end, 1)
     end
 end
@@ -89,18 +89,19 @@ function main_moraleDiceScheda(req, modCalc, dettCalc)
     end
     mod = mod or 0
 
-    local righe = {}
+    local righe = { { "TEST", "", "sezione" } }
     table.insert(righe, { "Motivo: " .. main_moraleMotivoText(req.motivo or req.situazione), "" })
     if soglia then
-        table.insert(righe, { string.format("Morale %s: serve %d+ con 2D6", tostring(classe), soglia), "" })
+        table.insert(righe, { string.format("Morale %s: serve", tostring(classe)), soglia .. "+ su 2D6" })
     end
+    table.insert(righe, { "MODIFICATORI", "", "sezione" })
     if dettaglio then
         for _, d in ipairs(dettaglio) do
             local voce = main_moraleModifierLabel(d.chiave)
             if d.volte > 1 then voce = string.format("%s (x%d)", voce, d.volte) end
             table.insert(righe, { voce, string.format("%+d", d.valore) })
         end
-        if #dettaglio == 0 then table.insert(righe, { "Nessun modificatore", "" }) end
+        if #dettaglio == 0 then table.insert(righe, { "Nessun modificatore", "", DICEPANEL.subColor }) end
     else
         table.insert(righe, { "Modificatori fissi", string.format("%+d", mod) })
     end
@@ -108,13 +109,18 @@ function main_moraleDiceScheda(req, modCalc, dettCalc)
 
     local serve = nil
     if soglia then
+        -- Come nel tiro: soglia di partenza e modificatore al tiro,
+        -- non la soglia ricalcolata.
         local minimo = soglia - mod
-        if minimo <= 2 then
-            serve = "Superato con qualsiasi risultato"
-        elseif minimo > 12 then
-            serve = "Non superabile con 2D6"
+        if mod == 0 then
+            serve = string.format("Serve %d+ su 2D6", soglia)
         else
-            serve = string.format("Serve almeno %d sui dadi", minimo)
+            serve = string.format("Serve %d+ su 2D6 con %+d", soglia, mod)
+        end
+        if minimo <= 2 then
+            serve = serve .. " (superato sempre)"
+        elseif minimo > 12 then
+            serve = serve .. " (non superabile)"
         end
     end
 

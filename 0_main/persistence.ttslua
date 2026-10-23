@@ -60,7 +60,45 @@ function main_onSave()
     ief_general_attached = IEF_GENERAL_ATTACHED,
     ief_general_move_start = IEF_GENERAL_MOVE_START,
 }    
-    return JSON.encode(saveData)
+    return JSON.encode(main_saveSanitize(saveData, "save"))
+end
+
+-- ============================================================
+-- FUNZIONE: main_saveSanitize(valore, percorso, visti)
+-- Copia dei dati da salvare senza ciò che JSON non può
+-- codificare (oggetti TTS, funzioni): un oggetto finito per
+-- errore nello stato non deve far fallire il salvataggio.
+-- Stampa il percorso di ogni valore scartato, per trovarne
+-- l'origine e correggerla.
+-- ============================================================
+function main_saveSanitize(valore, percorso, visti)
+    local t = type(valore)
+    if t == "string" or t == "number" or t == "boolean" or t == "nil" then
+        return valore
+    end
+    if t ~= "table" then
+        print("[SAVE] scartato " .. t .. " in " .. tostring(percorso))
+        return nil
+    end
+    visti = visti or {}
+    if visti[valore] then
+        print("[SAVE] riferimento circolare scartato in " .. tostring(percorso))
+        return nil
+    end
+    visti[valore] = true
+    local out = {}
+    for k, v in pairs(valore) do
+        local tk = type(k)
+        if tk == "string" or tk == "number" then
+            out[k] = main_saveSanitize(v, tostring(percorso) .. "." .. tostring(k), visti)
+        else
+            -- JSON accetta solo chiavi stringa/numero: una tabella
+            -- indicizzata per oggetto (o booleano) fa fallire il save.
+            print("[SAVE] scartata chiave " .. tk .. " (" .. tostring(k) .. ") in " .. tostring(percorso))
+        end
+    end
+    visti[valore] = nil
+    return out
 end
 
 -- ============================================================

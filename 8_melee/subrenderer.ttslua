@@ -15,8 +15,17 @@ end
 registerSubRenderer("meleeTiro", function(rec, def, step, slot, isActor)
     local c = rec.ctx or {}
     if not c["entrato" .. slot] then return false end
-    if c["rolled" .. slot] or c["aiDadi" .. slot] then
+    if c["rolled" .. slot] then
         return { title = def.title, wait = "In attesa di " .. nomeAltro(slot) }
+    end
+    if c["aiDadi" .. slot] then
+        -- Piu' bersagli: un tiro per bersaglio, indica quale tocca
+        local tiri = c["tiri" .. slot] or {}
+        local i = c["tiro" .. slot] or 1
+        if #tiri > 1 then
+            return { title = def.title, wait = string.format("Tiro %d/%d: premi Roll", i, #tiri) }
+        end
+        return { title = def.title, wait = "Premi Roll" }
     end
     return { title = def.title, button = step.label }
 end)

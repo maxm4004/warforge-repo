@@ -31,50 +31,55 @@ function melee_resolveCtx(groupId)
     return nil
 end
 -- ============================================================
--- FUNZIONE: melee_diceScheda(slot, calc)
--- Scheda del pannello dadi per la mischia di uno slot: dadi di
--- ogni unità (contatto, posteriori, overlap, fianco,
--- disordinata), totale, soglia. Solo dati semplici (va in ctx).
+-- FUNZIONE: melee_diceScheda(slot, calc, tiro, i, n)
+-- Scheda del pannello dadi per UN tiro (unità -> nemico): dadi
+-- dell'unità (contatto, posteriori, overlap, mista, disordinata),
+-- dadi verso quel nemico, soglia e modificatori della coppia.
+-- tiro = nil: nessun dado per lo slot. Solo dati semplici.
 -- ============================================================
-function melee_diceScheda(slot, calc)
-    local righe = {}
-    local primo = false
-
-    for key, info in pairs((calc and calc.unita) or {}) do
-        if info.slot == slot then
-            local d = info.dettaglio or {}
-            if d.primoTurno then primo = true end
-            local parti = string.format("contatto %d, posteriori %d", d.contatto or 0, d.posteriori or 0)
-            if (d.overlap or 0) > 0 then
-                parti = parti .. string.format(", overlap %d", d.overlap)
-            end
-            table.insert(righe, { main_decodeExtendedUnitLabel(key) .. ": " .. parti, tostring(d.dadiGrezzi or 0) })
-            if d.fianco then
-                table.insert(righe, { "  caricata sul fianco: niente dadi verso chi carica", "" })
-            end
-            if d.dimezzati then
-                table.insert(righe, { "  disordinata: meta' dei dadi", tostring(info.dadi or 0) })
-            end
-        end
+function melee_diceScheda(slot, calc, tiro, i, n)
+    local righe = { { "DADI", "", "sezione" } }
+    local nomeEs = ARMY[slot] and ARMY[slot].name or ""
+    if not tiro then
+        table.insert(righe, { "Nessun dado in questa mischia", "", DICEPANEL.subColor })
+        return { titolo = "MISCHIA", sottotitolo = nomeEs, righe = righe }
     end
 
-    local dadi = (calc and calc[slot].dadi) or 0
-    local soglia = (calc and calc[slot].soglia) or 5
-    table.insert(righe, { "Totale dadi", dadi .. "D6" })
-    table.insert(righe, { "Turno di mischia", primo and "primo" or "successivo" })
-    table.insert(righe, { "Modificatori", "nessuno" })
+    local info = calc and calc.unita and calc.unita[tiro.unita] or {}
+    local d = info.dettaglio or {}
+    local parti = string.format("contatto %d, posteriori %d", d.contatto or 0, d.posteriori or 0)
+    if (d.overlap or 0) > 0 then parti = parti .. string.format(", overlap %d", d.overlap) end
+    table.insert(righe, { "Basi: " .. parti, tostring(d.dadiGrezzi or 0) })
+    if d.mista then table.insert(righe, { "Unita' mista: meta' dei dadi", "" }) end
+    if d.dimezzati then table.insert(righe, { "Disordinata: meta' dei dadi", "" }) end
+    if n and n > 1 then
+        table.insert(righe, { "Dadi contro " .. main_decodeExtendedUnitLabel(tiro.nemico), tostring(tiro.dadi) })
+    end
+    table.insert(righe, { "Totale dadi", tiro.dadi .. "D6" })
+
+    table.insert(righe, { "PER COLPIRE", "", "sezione" })
+    table.insert(righe, { "Turno di mischia", d.primoTurno and "primo" or "successivo" })
+    table.insert(righe, { "Mischia: serve", tiro.base .. "+" })
+    if not tiro.voci or #tiro.voci == 0 then
+        table.insert(righe, { "Nessun modificatore", "", DICEPANEL.subColor })
+    end
+    for _, v in ipairs(tiro.voci or {}) do table.insert(righe, { v[1], v[2] }) end
 
     return {
-        titolo      = "MISCHIA",
-        sottotitolo = ARMY[slot] and ARMY[slot].name or nil,
+        titolo      = (n and n > 1) and string.format("MISCHIA - tiro %d/%d", i, n) or "MISCHIA",
+        sottotitolo = string.format("%s: %s contro %s", nomeEs,
+            main_decodeExtendedUnitLabel(tiro.unita), main_decodeExtendedUnitLabel(tiro.nemico)),
         righe       = righe,
-        serve       = string.format("Serve %d+ su ogni dado", soglia),
-        soglia      = soglia,
+        serve       = shoot_sogliaTesto(tiro.base, tiro.soglia),
+        soglia      = tiro.soglia,
     }
 end
 -- ============================================================
 -- FUNZIONE: melee_resolveEnter(ctx, slot, rec)
--- Apertura: calcola i dadi del gruppo e le schede del pannello dadi.
+-- Apertura: calcola i dadi del gruppo, i tiri per bersaglio e
+-- le schede del pannello dadi (prima scheda di ogni esercito).
+-- ctx["tiri"..s] = { { unita, nemico, dadi, base, mod, soglia,
+--                      scheda, colpi }, ... }, ctx["tiro"..s] = indice
 -- ============================================================
 function melee_resolveEnter(ctx, slot, rec)
     engine_diceClearLastRoll(1)
@@ -85,13 +90,30 @@ function melee_resolveEnter(ctx, slot, rec)
 
     ctx.unita = {}
     for s = 1, 2 do
+        local tiri = {}
+        local lista = (calc and calc[s].tiri) or {}
+        for i, t in ipairs(lista) do
+            table.insert(tiri, {
+                unita = t.unita, nemico = t.nemico, dadi = t.dadi,
+                base = t.base, mod = t.mod, soglia = t.soglia,
+                scheda = melee_diceScheda(s, calc, t, i, #lista),
+                colpi = nil,
+            })
+        end
+        ctx["tiri" .. s]     = tiri
+        ctx["tiro" .. s]     = 1
         ctx["dadi" .. s]     = calc and calc[s].dadi or 0
-        ctx["soglia" .. s]   = calc and calc[s].soglia or 5
-        ctx["rolled" .. s]   = ctx["dadi" .. s] <= 0
+        ctx["rolled" .. s]   = #tiri == 0
         ctx["successi" .. s] = 0
-        ctx["scheda" .. s]   = melee_diceScheda(s, calc)
-        printToAll(string.format("[MISCHIA] %s: %d D6, colpisce con %d+",
-            ARMY[s].name, ctx["dadi" .. s], ctx["soglia" .. s]), {r=1,g=0.8,b=0.3})
+        ctx["scheda" .. s]   = tiri[1] and tiri[1].scheda or melee_diceScheda(s, calc, nil)
+        -- Entrambe le colonne del pannello dadi visibili da subito
+        -- (prima dei tiri), affiancate.
+        engine_dicePanelOpen(s, ctx["scheda" .. s])
+        for i, t in ipairs(tiri) do
+            printToAll(string.format("[MISCHIA] %s tiro %d/%d: %s contro %s, %dD6, %s",
+                ARMY[s].name, i, #tiri, main_decodeExtendedUnitLabel(t.unita),
+                main_decodeExtendedUnitLabel(t.nemico), t.dadi, t.scheda.serve or ""), {r=1,g=0.8,b=0.3})
+        end
     end
     if calc then
         for key, info in pairs(calc.unita) do
@@ -119,7 +141,7 @@ function melee_resolveFocus(ctx, slot, player, rec)
     if player then
         engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES)
     end
-    if ctx["scheda" .. slot] and not ctx["rolled" .. slot] then
+    if ctx["scheda" .. slot] and not ctx["rolled" .. slot] and not engine_dicePanelIsOpen(slot) then
         engine_dicePanelOpen(slot, ctx["scheda" .. slot])
     end
     engine_subRedraw()
@@ -127,36 +149,64 @@ end
 
 -- ============================================================
 -- FUNZIONE: melee_resolveRoll(ctx, slot, player, rec)
--- Roll fisico nello step TIRO. Salva i successi, NON toglie
--- basi: le perdite sono reciproche (melee_resolveOutcome).
+-- Roll fisico nello step TIRO: tira il tiro corrente dello slot
+-- (un'unità contro un nemico). Con più bersagli, dopo l'esito si
+-- passa al tiro successivo (nuovo Roll). Salva i colpi per
+-- coppia, NON toglie basi: le perdite sono reciproche
+-- (melee_resolveOutcome) e si calcolano a tiri finiti.
 -- ============================================================
 function melee_resolveRoll(ctx, slot, player, rec)
-    if ctx["rolled" .. slot] then return end
+    if ctx["rolled" .. slot] or ctx["tirando" .. slot] then return end
+    local tiri = ctx["tiri" .. slot] or {}
+    local idx = ctx["tiro" .. slot] or 1
+    local tiro = tiri[idx]
+    if not tiro then return end
 
     local groupId = ctx.groupId
-    local dadi, soglia = ctx["dadi" .. slot], ctx["soglia" .. slot]
-    IEF_DICE_ROLL_TRY[slot] = { dadi = dadi, soglia = soglia }
-    warningToColor(string.format("%s tira %d D6 minimo per colpire %d+", ARMY[slot].name, dadi, soglia), player, "Yellow", 5, true)
-    if ctx["scheda" .. slot] and not engine_dicePanelIsOpen(slot) then
-        engine_dicePanelOpen(slot, ctx["scheda" .. slot])
+    IEF_DICE_ROLL_TRY[slot] = { dadi = tiro.dadi, soglia = tiro.soglia }
+    ctx["tirando" .. slot] = true
+    warningToColor(string.format("%s tira %d D6 contro %s: %s", ARMY[slot].name, tiro.dadi,
+        main_decodeExtendedUnitLabel(tiro.nemico), tiro.scheda.serve or ""), player, "Yellow", 5, true)
+    if not engine_dicePanelIsOpen(slot) then
+        engine_dicePanelOpen(slot, tiro.scheda)
     end
 
     engine_diceThrowFromBag(slot, nil, function(risultati, successi)
+        local c = melee_resolveCtx(groupId)
+        if not c or c["rolled" .. slot] then return end
+        c["tirando" .. slot] = nil
+
+        local t = c["tiri" .. slot][idx]
+        t.colpi = successi or 0
+        c["successi" .. slot] = (c["successi" .. slot] or 0) + t.colpi
+        printToAll(string.format("[MISCHIA] %s: %s contro %s, %d colpi a segno", ARMY[slot].name,
+            main_decodeExtendedUnitLabel(t.unita), main_decodeExtendedUnitLabel(t.nemico), t.colpi), {r=1,g=0.8,b=0.3})
+        engine_dicePanelOutcome(slot,
+            (t.colpi == 1) and "1 colpo a segno" or string.format("%d colpi a segno", t.colpi),
+            (t.colpi > 0) and DICEPANEL.okColor or DICEPANEL.koColor)
+
+        local prossimo = c["tiri" .. slot][idx + 1]
+        if prossimo then
+            -- Tiro successivo dello stesso esercito: nuova scheda, nuovo Roll
+            c["tiro" .. slot] = idx + 1
+            c["scheda" .. slot] = prossimo.scheda
+            Wait.time(function()
+                local c2 = melee_resolveCtx(groupId)
+                if not c2 or c2["tiro" .. slot] ~= idx + 1 then return end
+                engine_diceClearLastRoll(slot)
+                engine_dicePanelOpen(slot, prossimo.scheda)
+                if player then engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_ROLL_DICES) end
+                warningToColor(string.format("Tiro %d/%d: %dD6 contro %s - premi Roll",
+                    idx + 1, #c2["tiri" .. slot], prossimo.dadi, main_decodeExtendedUnitLabel(prossimo.nemico)),
+                    player, "Yellow", 5, true)
+            end, MORALE_ESITO_SECONDS)
+            return
+        end
+
         Wait.time(function()
             engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME)
         end, 2)
-
-        local c = melee_resolveCtx(groupId)
-        if not c or c["rolled" .. slot] then return end
-
-        c["rolled" .. slot]   = true
-        c["successi" .. slot] = successi or 0
-        printToAll(string.format("[MISCHIA] %s: %d colpi a segno", ARMY[slot].name, c["successi" .. slot]), {r=1,g=0.8,b=0.3})
-        local hits = c["successi" .. slot]
-        engine_dicePanelOutcome(slot,
-            (hits == 1) and "1 colpo a segno" or string.format("%d colpi a segno", hits),
-            (hits > 0) and DICEPANEL.okColor or DICEPANEL.koColor)
-
+        c["rolled" .. slot] = true
         if c.rolled1 and c.rolled2 then
             melee_resolveOutcome(c)
         else

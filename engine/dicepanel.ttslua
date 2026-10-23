@@ -41,24 +41,27 @@ DICEPANEL = DICEPANEL or {
     offsetXY      = "0 -345",
     colWidth      = 330,      -- larghezza di una colonna
     colGap        = 16,       -- spazio fra le due colonne
-    bg            = "rgba(0,0,0,0.50)",
+    bg            = "rgba(0,0,0,0.70)",
     padding       = 12,
-    spacing       = 6,
-    titleColor    = "#FFD833",
+    spacing       = 2,
+    font          = "warforge_font",
+    titleColor    = "#FFD833",   -- titolo, intestazioni di sezione, "serve"
     textColor     = "White",
-    titleHeight   = 22,
-    subHeight     = 18,
-    rowHeight     = 18,
-    needHeight    = 20,
-    outcomeHeight = 22,
-    noteHeight    = 32,       -- nota sotto l'esito (2 righe)
-    maxRows       = 10,
+    subColor      = "#BBBBBB",   -- sottotitolo (nota sotto il titolo)
+    titleHeight   = 24,
+    subHeight     = 16,
+    rowHeight     = 17,
+    needHeight    = 22,
+    outcomeHeight = 26,
+    noteHeight    = 30,       -- nota sotto l'esito (2 righe)
+    valueWidth    = 90,       -- colonna dei valori delle righe
+    maxRows       = 14,
     maxFaces      = 24,
-    faceSize      = 30,
+    faceSize      = 28,
     faceSpacing   = 4,
     faceKoColor   = "rgba(1,1,1,0.3)",   -- dado non riuscito (con soglia)
-    okColor       = "#5BD35B",
-    koColor       = "#E05050",
+    okColor       = "#5BD35B",            -- esito positivo, dado a segno, bonus
+    koColor       = "#FF6B6B",            -- esito negativo, malus
 }
 
 IEF_DICE_PANEL     = IEF_DICE_PANEL or {}
@@ -147,11 +150,34 @@ local function dpAlign(slot, verticale)
     return (verticale or "Middle") .. lato
 end
 
--- Colore dell'icona di un dado
+-- Colore dell'icona di un dado: con soglia verde = riuscito,
+-- sbiadito = non riuscito; senza soglia (morale, iniziativa) bianco.
 local function dpFaceColor(p, v)
     local soglia = p.scheda and p.scheda.soglia
-    if soglia and v < soglia then return DICEPANEL.faceKoColor end
-    return "White"
+    if not soglia then return "White" end
+    if v < soglia then return DICEPANEL.faceKoColor end
+    return DICEPANEL.okColor
+end
+
+-- Colori di una riga della scheda.
+-- r = { voce, valore, terzo }  -- SOLO chiavi numeriche: la scheda
+-- finisce nello stato salvato e JSON non accetta tabelle con
+-- chiavi miste (numeri + stringhe).
+-- terzo = "sezione"  -> intestazione oro (es. "DADI", "PER COLPIRE")
+-- terzo = "#RRGGBB"  -> colore della riga
+-- Valore che inizia con + / - (modificatore): verde / rosso.
+local function dpRowColors(r)
+    if not r then return DICEPANEL.textColor, DICEPANEL.textColor end
+    if r[3] == "sezione" then return DICEPANEL.titleColor, DICEPANEL.titleColor end
+    local colore = r[3]
+    local v = tostring(r[2] or "")
+    local cv = colore
+    if not cv then
+        if v:match("^%+%d") then cv = DICEPANEL.okColor
+        elseif v:match("^%-%d") then cv = DICEPANEL.koColor
+        else cv = DICEPANEL.textColor end
+    end
+    return colore or DICEPANEL.textColor, cv
 end
 
 -- ============================================================
@@ -258,8 +284,11 @@ function engine_dicePanelRedraw()
                 local r = righe[i]
                 UI.setAttribute(pre .. "_row" .. i, "active", (i <= L.rows) and "true" or "false")
                 if i <= L.rows then
+                    local cl, cv = dpRowColors(r)
                     UI.setAttribute(pre .. "_row" .. i .. "_l", "text", r and r[1] or "")
+                    UI.setAttribute(pre .. "_row" .. i .. "_l", "color", cl)
                     UI.setAttribute(pre .. "_row" .. i .. "_v", "text", r and r[2] or "")
+                    UI.setAttribute(pre .. "_row" .. i .. "_v", "color", cv)
                 end
             end
 
@@ -306,10 +335,11 @@ local function dpColXml(slot, L)
     local rowsXml = ""
     for i = 1, DICEPANEL.maxRows do
         local r = righe[i]
-        local voce = string.format('<Text id="%s_row%d_l" text="%s" fontSize="12" color="%s" alignment="%s"/>',
-            pre, i, dpEsc(r and r[1]), DICEPANEL.textColor, dpAlign(slot))
-        local valore = string.format('<Text id="%s_row%d_v" text="%s" fontSize="12" fontStyle="Bold" color="%s" alignment="%s" preferredWidth="60" flexibleWidth="0"/>',
-            pre, i, dpEsc(r and r[2]), DICEPANEL.textColor, destra and "MiddleLeft" or "MiddleRight")
+        local cl, cv = dpRowColors(r)
+        local voce = string.format('<Text id="%s_row%d_l" text="%s" font="%s" fontSize="11" color="%s" alignment="%s"/>',
+            pre, i, dpEsc(r and r[1]), DICEPANEL.font, cl, dpAlign(slot))
+        local valore = string.format('<Text id="%s_row%d_v" text="%s" font="%s" fontSize="11" fontStyle="Bold" color="%s" alignment="%s" preferredWidth="%d" flexibleWidth="0"/>',
+            pre, i, dpEsc(r and r[2]), DICEPANEL.font, cv, destra and "MiddleLeft" or "MiddleRight", DICEPANEL.valueWidth)
         rowsXml = rowsXml .. string.format(
             '<HorizontalLayout id="%s_row%d" preferredHeight="%d" childForceExpandWidth="true" active="%s">%s</HorizontalLayout>',
             pre, i, DICEPANEL.rowHeight, (i <= L.rows) and "true" or "false",
@@ -328,25 +358,25 @@ local function dpColXml(slot, L)
     local esito = p and p.esito
     return string.format(
         '<VerticalLayout id="%s" preferredWidth="%d" spacing="%d" childAlignment="%s" childForceExpandHeight="false" childForceExpandWidth="true" active="%s">' ..
-            '<Text id="%s_title" text="%s" fontSize="16" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d"/>' ..
-            '<Text id="%s_sub" text="%s" fontSize="12" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
+            '<Text id="%s_title" text="%s" font="%s" fontSize="15" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d"/>' ..
+            '<Text id="%s_sub" text="%s" font="%s" fontSize="10" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
             '%s' ..
-            '<Text id="%s_need" text="%s" fontSize="14" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
+            '<Text id="%s_need" text="%s" font="%s" fontSize="13" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
             '<GridLayout id="%s_faces" cellSize="%d %d" spacing="%d %d" startCorner="%s" childAlignment="%s" preferredHeight="%d" active="%s">%s</GridLayout>' ..
-            '<Text id="%s_outcome" text="%s" fontSize="15" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
-            '<Text id="%s_note" text="%s" fontSize="11" color="%s" alignment="%s" horizontalOverflow="Wrap" preferredHeight="%d" active="%s"/>' ..
+            '<Text id="%s_outcome" text="%s" font="%s" fontSize="16" fontStyle="Bold" color="%s" alignment="%s" preferredHeight="%d" active="%s"/>' ..
+            '<Text id="%s_note" text="%s" font="%s" fontSize="10" color="%s" alignment="%s" horizontalOverflow="Wrap" preferredHeight="%d" active="%s"/>' ..
         '</VerticalLayout>',
         pre, DICEPANEL.colWidth, DICEPANEL.spacing, dpAlign(slot, "Upper"), p and "true" or "false",
-        pre, dpEsc(s.titolo), DICEPANEL.titleColor, dpAlign(slot), DICEPANEL.titleHeight,
-        pre, dpEsc(s.sottotitolo), DICEPANEL.textColor, dpAlign(slot), DICEPANEL.subHeight, L.sub and "true" or "false",
+        pre, dpEsc(s.titolo), DICEPANEL.font, DICEPANEL.titleColor, dpAlign(slot), DICEPANEL.titleHeight,
+        pre, dpEsc(s.sottotitolo), DICEPANEL.font, DICEPANEL.subColor, dpAlign(slot), DICEPANEL.subHeight, L.sub and "true" or "false",
         rowsXml,
-        pre, dpEsc(s.serve), DICEPANEL.titleColor, dpAlign(slot), DICEPANEL.needHeight, L.need and "true" or "false",
+        pre, dpEsc(s.serve), DICEPANEL.font, DICEPANEL.titleColor, dpAlign(slot), DICEPANEL.needHeight, L.need and "true" or "false",
         pre, DICEPANEL.faceSize, DICEPANEL.faceSize, DICEPANEL.faceSpacing, DICEPANEL.faceSpacing,
         dpAlign(slot, "Upper"), dpAlign(slot, "Upper"),
         dpFacesHeight(L.faces), L.faces > 0 and "true" or "false", facesXml,
-        pre, dpEsc(esito and esito.testo), (esito and esito.colore) or DICEPANEL.textColor,
+        pre, dpEsc(esito and esito.testo), DICEPANEL.font, (esito and esito.colore) or DICEPANEL.textColor,
         dpAlign(slot), DICEPANEL.outcomeHeight, L.esito and "true" or "false",
-        pre, dpEsc(esito and esito.nota), DICEPANEL.textColor, dpAlign(slot, "Upper"), DICEPANEL.noteHeight,
+        pre, dpEsc(esito and esito.nota), DICEPANEL.font, DICEPANEL.subColor, dpAlign(slot, "Upper"), DICEPANEL.noteHeight,
         L.nota and "true" or "false")
 end
 

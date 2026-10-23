@@ -615,3 +615,71 @@ function debug_allRects(attivo)
     callHandler("aggiornaLinee")
     print(string.format("[RECT] %d basi disegnate, %d senza misure reali salvate", basi, senzaMisure))
 end
+
+-- ============================================================
+-- FUNZIONE DI TEST: debug_flank(color)
+-- Il giocatore color seleziona almeno una base della SUA unità
+-- (chi carica) e una base dell'unità nemica (bersaglio), poi:
+--   /execute debug_flank("Red")      -> calcolo e disegno
+--   /execute debug_flank("Red", false) -> cancella il disegno
+-- Disegna: in giallo il prolungamento del fronte del bersaglio
+-- (con freccia verso il suo davanti), in ciano le basi del
+-- bersaglio, in verde le basi del caricante tutte dietro la
+-- linea, in rosso quelle che la superano anche di poco.
+-- Fianco = almeno 2 basi verdi.
+-- ============================================================
+function debug_flank(color, attivo)
+    IEF_DEBUG_RECT_LINES = {}
+    if attivo == false then
+        callHandler("aggiornaLinee")
+        print("[FIANCO] disegno cancellato")
+        return
+    end
+
+    local player = Player[color]
+    local mySlot = player and main_getArmyByColor(player)
+    if not mySlot then print("[FIANCO] colore non associato a un esercito: " .. tostring(color)); return end
+
+    local chargerKey, targetKey
+    for _, o in ipairs(player.getSelectedObjects() or {}) do
+        local key = main_getUnitKey(o)
+        if key and main_parseNickname(o.getName()) then
+            if o.hasTag("Army" .. mySlot) then chargerKey = chargerKey or key
+            elseif o.hasTag("Army1") or o.hasTag("Army2") then targetKey = targetKey or key end
+        end
+    end
+    if not chargerKey or not targetKey then
+        print("[FIANCO] Seleziona una base della tua unità (chi carica) e una base dell'unità nemica")
+        return
+    end
+
+    local d = charge_flankDetails(chargerKey, targetKey)
+    if not d then print("[FIANCO] basi non trovate"); return end
+
+    local y = 1.32
+    local function rett(r, col)
+        local c = r.corners
+        table.insert(IEF_DEBUG_RECT_LINES, { points = {
+            { c[1].x, y, c[1].z }, { c[2].x, y, c[2].z }, { c[4].x, y, c[4].z },
+            { c[3].x, y, c[3].z }, { c[1].x, y, c[1].z } }, color = col, thickness = 0.04 })
+    end
+
+    -- linea del fronte prolungata + freccia verso il davanti
+    local p, rgt, fwd, L = d.puntoFronte, d.right, d.fwd, 40
+    table.insert(IEF_DEBUG_RECT_LINES, { points = {
+        { p.x - rgt.x * L, y, p.z - rgt.z * L }, { p.x + rgt.x * L, y, p.z + rgt.z * L } },
+        color = { 1, 0.9, 0.1 }, thickness = 0.05 })
+    table.insert(IEF_DEBUG_RECT_LINES, { points = {
+        { p.x, y, p.z }, { p.x + fwd.x * 2, y, p.z + fwd.z * 2 } },
+        color = { 1, 0.9, 0.1 }, thickness = 0.05 })
+
+    for _, r in ipairs(d.basiT) do rett(r, { 0.2, 0.9, 1 }) end
+    for _, bc in ipairs(d.basiC) do
+        rett(bc.rect, bc.dietro and { 0.2, 1, 0.2 } or { 1, 0.2, 0.2 })
+    end
+    callHandler("aggiornaLinee")
+
+    print(string.format("[FIANCO] %s -> %s: %d basi su %d dietro il fronte => %s",
+        main_decodeExtendedUnitLabel(chargerKey), main_decodeExtendedUnitLabel(targetKey),
+        d.dietro, #d.basiC, d.dietro >= 2 and "CARICA SUL FIANCO" or "carica frontale"))
+end

@@ -57,7 +57,13 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
         end
     end
 
-    table.insert(righe, { testo = "Per colpire: 5+ base (modificatori non ancora applicati)" })
+    if info then
+        local base = main_getMeleeThreshold() or 5
+        local parti = {}
+        for _, v in ipairs(info.modVoci or {}) do table.insert(parti, v[1] .. " " .. v[2]) end
+        table.insert(righe, { testo = string.format("Per colpire: %d+%s", base,
+            (#parti > 0) and (" - " .. table.concat(parti, ", ")) or " (nessun modificatore)") })
+    end
 
     local testi = ""
     for _, r in ipairs(righe) do
@@ -166,8 +172,7 @@ end
 -- IEF_CHARGE_QUEUE è SOLO sorgente: ogni carica chiusa con
 -- esito OK diventa (o ritrova) una coppia in IEF_MELEE_LIST.
 -- "In carica" = ha dichiarato la carica o ha contro-caricato.
--- NOTA: flankedArmyX resta false finché 4_charge non scrive
--- il fianco sull'elemento di carica (flankCharge oggi è nil).
+-- Il fianco (flankedArmyX) arriva dall'elemento di carica.
 -- ============================================================
 function melee_importFromCharges()
     for _, c in ipairs(IEF_CHARGE_QUEUE or {}) do
@@ -182,6 +187,10 @@ function melee_importFromCharges()
                     if slot == 1 then e.chargedArmy1 = inCarica and true or false
                     else              e.chargedArmy2 = inCarica and true or false end
                 end
+                -- Fianco calcolato in 4_charge (charge_resolveConflicts /
+                -- charge_applyFlankContact): primo turno senza dadi.
+                e.flankedArmy1 = c.flankedArmy1 == true
+                e.flankedArmy2 = c.flankedArmy2 == true
                 printToAll(string.format("[MISCHIA] Nuova mischia: %s contro %s",
                     main_decodeExtendedUnitLabel(e.unitArmy1Key),
                     main_decodeExtendedUnitLabel(e.unitArmy2Key)), {r=1,g=0.8,b=0.3})
@@ -385,7 +394,7 @@ function melee_rowRefresh(gruppo)
     for slot = 1, 2 do
         local id = string.format("melee_row_%d_%s", slot, gruppo.id)
         local testo, colore = melee_rowText(gruppo, slot)
-        UI.setAttribute(id, "text", testo)
+        UI.setAttribute(id, "text", "  " .. testo)
         Wait.frames(function()
             UI.setAttribute(id, "textColor", colore)
         end, 1)
@@ -399,32 +408,30 @@ end
 -- ============================================================
 function melee_getListPanelXml(slot)
     local gruppi = melee_getGroups()
-
-    local colore = ARMY[slot] and ARMY[slot].color or "White"
     local attivo = (ENGINE.phase == PHASE.MELEE and #gruppi > 0) and "true" or "false"
 
-    local rows = ""
+    local righe = {}
     for _, g in ipairs(gruppi) do
         local testo, coloreTesto = melee_rowText(g, slot)
-        rows = rows .. string.format(
-            '<Row preferredHeight="30">' ..
-                '<Cell>' ..
-                    '<Button id="melee_row_%d_%s" text="%s" font="warforge_font" fontSize="11" color="rgba(0,0,0,0.30)" textColor="%s" alignment="MiddleLeft" onClick="melee_rowClick"/>' ..
-                '</Cell>' ..
-            '</Row>',
-            slot, g.id, testo, coloreTesto
-        )
+        table.insert(righe, {
+            id      = string.format("melee_row_%d_%s", slot, g.id),
+            testo   = testo,
+            colore  = coloreTesto,
+            onClick = "melee_rowClick",
+        })
     end
 
-    return string.format(
-        '<Panel id="melee_list_army%d" rectAlignment="UpperRight" color="rgba(0,0,0,0.35)" width="400" height="220" offsetXY="-10 -330" visibility="%s" active="%s">' ..
-        '<Text id="melee_list_title_army%d" text="ELENCO MISCHIE %s" font="warforge_font" fontSize="12" color="White" position="0 90 0" alignment="UpperCenter" width="300" height="22"/>' ..
-        '<TableLayout width="400" height="170" cellBackgroundColor="rgba(0,0,0,0.00)" columnWidths="400" position="0 -5 0">' ..
-        '%s' ..
-        '</TableLayout>' ..
-        '</Panel>',
-        slot, colore, attivo, slot, ARMY[slot].name, rows
-    )
+    return ui_listPanelXml({
+        id         = "melee_list_army" .. slot,
+        titleId    = "melee_list_title_army" .. slot,
+        titolo     = "MISCHIE - " .. ARMY[slot].name,
+        nota       = "Clicca una riga: il vincitore dell'iniziativa sceglie la mischia",
+        visibility = ARMY[slot] and ARMY[slot].color or "",
+        attivo     = attivo,
+        righe      = righe,
+        vuoto      = "Nessuna mischia",
+        offsetXY   = "-10 -330",
+    })
 end
 -- ============================================================
 -- FUNZIONE: melee_cameraToGroup(player, slot, gruppo)
@@ -650,7 +657,9 @@ end
 --                           primoTurno, dimezzati, dadiGrezzi } } } }
 -- ============================================================
 function melee_computeGroup(gruppo)
-    local calc = { [1] = { dadi = 0, soglia = 5 }, [2] = { dadi = 0, soglia = 5 }, unita = {} }
+    local base = main_getMeleeThreshold() or 5
+    local calc = { [1] = { dadi = 0, soglia = base, base = base, mod = 0, voci = {} },
+                   [2] = { dadi = 0, soglia = base, base = base, mod = 0, voci = {} }, unita = {} }
 
     for key, slot in pairs(gruppo.unita) do
         calc.unita[key] = { slot = slot, dadi = 0, verso = {} }
@@ -680,6 +689,11 @@ function melee_computeGroup(gruppo)
                 if primo then det.primoTurno = true end
                 if fianco then det.fianco = true end
                 local n = 0
+
+                -- Modificatori della coppia (unità -> questo nemico)
+                local tot, voci = melee_pairModifiers(e, info.slot, key, enemyKey, primo)
+                info.mods = info.mods or {}
+                info.mods[enemyKey] = { tot = tot, voci = voci }
 
                 if not fianco then
                     local contatto = melee_contactBases(key, main_getUnitBases(enemyKey))
@@ -714,10 +728,182 @@ function melee_computeGroup(gruppo)
         info.verso = grezzi
         info.dadi  = totale
         info.dettaglio = det
+
+        -- Modificatore dell'unità: quello verso il bersaglio con più
+        -- dadi (uno contro uno: l'unico bersaglio).
+        local scelto, maxDadi = nil, -1
+        for enemyKey, m in pairs(info.mods or {}) do
+            local nd = grezzi[enemyKey] or 0
+            if nd > maxDadi or (nd == maxDadi and scelto and enemyKey < scelto) then
+                scelto, maxDadi = enemyKey, nd
+            end
+        end
+        local m = scelto and info.mods[scelto] or { tot = 0, voci = {} }
+        info.modTot, info.modVoci = m.tot, m.voci
+        for _, altro in pairs(info.mods or {}) do
+            if altro.tot ~= m.tot then info.modDiversi = true end
+        end
+
         calc[info.slot].dadi = calc[info.slot].dadi + totale
     end
 
+    -- Soglia dell'esercito (un tiro per esercito): quella dell'unità
+    -- con più dadi. Soglie diverse fra unità/bersagli dello stesso
+    -- esercito: segnalate (tiri separati per bersaglio: passo
+    -- successivo).
+    for slot = 1, 2 do
+        local scelta, maxDadi = nil, -1
+        for key, info in pairs(calc.unita) do
+            if info.slot == slot and (info.dadi > maxDadi or (info.dadi == maxDadi and scelta and key < scelta)) then
+                scelta, maxDadi = key, info.dadi
+            end
+        end
+        local c = calc[slot]
+        if scelta then
+            local info = calc.unita[scelta]
+            c.mod, c.voci = info.modTot or 0, info.modVoci or {}
+            for _, altra in pairs(calc.unita) do
+                if altra.slot == slot and (altra.modDiversi or (altra.modTot or 0) ~= c.mod) then
+                    c.soglieDiverse = true
+                end
+            end
+        end
+        c.soglia = c.base - c.mod
+    end
+
+    -- Tiri separati per bersaglio (regolamento, mischie multiple:
+    -- "i lanci dei dadi per ogni unità vanno divisi sulle unità
+    -- avversarie"): un tiro per ogni coppia unità -> nemico con
+    -- dadi, ognuno con la sua soglia. Ordine stabile per chiave.
+    for slot = 1, 2 do
+        local tiri = {}
+        local chiavi = {}
+        for key, info in pairs(calc.unita) do
+            if info.slot == slot then table.insert(chiavi, key) end
+        end
+        table.sort(chiavi)
+        for _, key in ipairs(chiavi) do
+            local info = calc.unita[key]
+            local nemici = {}
+            for enemyKey, n in pairs(info.verso or {}) do
+                if n > 0 then table.insert(nemici, enemyKey) end
+            end
+            table.sort(nemici)
+            for _, enemyKey in ipairs(nemici) do
+                local m = (info.mods or {})[enemyKey] or { tot = 0, voci = {} }
+                table.insert(tiri, {
+                    unita  = key,
+                    nemico = enemyKey,
+                    dadi   = info.verso[enemyKey],
+                    base   = calc[slot].base,
+                    mod    = m.tot,
+                    soglia = calc[slot].base - m.tot,
+                    voci   = m.voci,
+                })
+            end
+        end
+        calc[slot].tiri = tiri
+    end
+
     return calc
+end
+
+-- ============================================================
+-- FUNZIONE: melee_unitProfile(unitKey, slot)
+-- Dati dell'unità per i modificatori di mischia: tipo, armi,
+-- capacità (DISORDINATA: solo SPADA), scudo, Generale aggregato.
+-- ============================================================
+function melee_unitProfile(unitKey, slot)
+    local b = main_getUnitBases(unitKey)[1]
+    local meta = (b and main_getUnitMeta(b)) or {}
+    local p = { tipo = meta.unitType, armi = {}, capacita = {}, scudo = false,
+                generale = main_generalAttachedTo(unitKey) ~= nil }
+    for _, a in ipairs(meta.armi or {}) do
+        p.armi[a] = true
+        if a == "SCUDO" then p.scudo = true end
+    end
+    local disordinata = main_getCohesion(unitKey) == COHESION.DIS
+    for _, c in ipairs(meta.capabilities or {}) do
+        -- Regolamento: le disordinate perdono le capacità tranne SPADA
+        if not disordinata or c == "SPADA" then p.capacita[c] = true end
+    end
+    return p
+end
+
+-- ============================================================
+-- FUNZIONE: melee_specMatch(spec, p)
+-- Vero se il profilo p soddisfa tutte le condizioni di spec
+-- (melee_modifiers.json): liste = basta un elemento, booleani =
+-- devono coincidere.
+-- ============================================================
+function melee_specMatch(spec, p)
+    if not spec then return true end
+    local function lista(campo, set)
+        local l = spec[campo]
+        if not l then return true end
+        for _, v in ipairs(l) do
+            if set[v] then return true end
+        end
+        return false
+    end
+    if spec.tipi then
+        local ok = false
+        for _, t in ipairs(spec.tipi) do if t == p.tipo then ok = true end end
+        if not ok then return false end
+    end
+    if not lista("armi", p.armi) then return false end
+    if not lista("capacita", p.capacita) then return false end
+    for _, campo in ipairs({ "inCarica", "generale", "scudo", "piuAlto" }) do
+        if spec[campo] ~= nil and (p[campo] and true or false) ~= spec[campo] then return false end
+    end
+    return true
+end
+
+-- ============================================================
+-- FUNZIONE: melee_pairModifiers(e, slot, key, enemyKey, primo)
+-- Modificatori per colpire dell'unità key contro enemyKey
+-- (tabella "modifiers" di melee_modifiers.json).
+-- Ritorna: totale, voci { { "etichetta", "+1 al dado" }, ... }
+-- ============================================================
+function melee_pairModifiers(e, slot, key, enemyKey, primo)
+    local data = IEF_DATA.melee and IEF_DATA.melee.melee or {}
+    local lista = data.modifiers or {}
+    local otherSlot = melee_elementoOtherSlot(slot)
+
+    local me = melee_unitProfile(key, slot)
+    local lui = melee_unitProfile(enemyKey, otherSlot)
+    me.inCarica  = melee_elementoCharged(e, slot) and true or false
+    lui.inCarica = melee_elementoCharged(e, otherSlot) and true or false
+
+    -- Posizione più alta: quota media delle basi in contatto
+    local function quota(basi)
+        if #basi == 0 then return nil end
+        local y = 0
+        for _, b in ipairs(basi) do y = y + b.getPosition().y end
+        return y / #basi
+    end
+    local yMe  = quota(melee_contactBases(key, main_getUnitBases(enemyKey)))
+    local yLui = quota(melee_contactBases(enemyKey, main_getUnitBases(key)))
+    local tol = data.height_tolerance or 0.2
+    me.piuAlto  = (yMe and yLui and yMe > yLui + tol) and true or false
+    lui.piuAlto = (yMe and yLui and yLui > yMe + tol) and true or false
+
+    local tot, voci = 0, {}
+    for _, m in ipairs(lista) do
+        local turnoOk = (m.turno == "tutti") or (primo and m.turno == "primo") or (not primo and m.turno == "successivi")
+        if turnoOk and melee_specMatch(m.chi, me) and melee_specMatch(m.contro, lui) then
+            local escluso = false
+            for _, t in ipairs(m.tranne or {}) do
+                if melee_specMatch(t, lui) then escluso = true; break end
+            end
+            if not escluso then
+                local v = tonumber(m.valore) or 0
+                tot = tot + v
+                table.insert(voci, { m.label or m.id, string.format("%+d al dado", v) })
+            end
+        end
+    end
+    return tot, voci
 end
 -- ============================================================
 -- FUNZIONE: melee_markLosses(unitKey, hits)
@@ -831,6 +1017,15 @@ function melee_resolveOutcome(ctx)
     end
 
     for slot = 1, 2 do
+      local tiri = ctx["tiri" .. slot]
+      if tiri then
+        -- Colpi esatti per coppia: ogni tiro è di un'unità contro un nemico
+        for _, t in ipairs(tiri) do
+            local colpi = t.colpi or 0
+            inflitti[t.unita]  = (inflitti[t.unita] or 0) + colpi
+            ricevuti[t.nemico] = (ricevuti[t.nemico] or 0) + colpi
+        end
+      else
         local pesiUnita, pesiBersagli = {}, {}
         for key, info in pairs(unita) do
             if info.slot == slot then
@@ -847,6 +1042,7 @@ function melee_resolveOutcome(ctx)
         for enemyKey, n in pairs(melee_distribuisci(successi, pesiBersagli)) do
             ricevuti[enemyKey] = (ricevuti[enemyKey] or 0) + n
         end
+      end
     end
 
     local chiavi = {}
