@@ -16,6 +16,15 @@ function melee_subphases()
                 ESCI   = { render = "meleeEsci",   actor = "both", onEnter = "melee_resolveEsciEnter", onRestore = "melee_resolveEsciEnter" },
             },
         },
+        SFONDAMENTO = {
+            scope   = "player",
+            title   = "SFONDAMENTO",
+            first   = "SCEGLI",
+            onEnter = "melee_btEnter",
+            steps = {
+                SCEGLI = { render = "meleeSfondamento", actor = "owner", onClick = "melee_btClick" },
+            },
+        },
     }
 end
 
@@ -289,3 +298,6 @@ registerHandler("melee_resolveRoll",      function(c,s,p,r)   return melee_resol
 registerHandler("melee_moraleTestDone",   function(d,esito)   return melee_moraleTestDone(d,esito) end)
 registerHandler("melee_resolveEsciEnter", function(c,s,r)     return melee_resolveEsciEnter(c,s,r) end)
 registerHandler("melee_resolveDone",      function(c,res,s)   return melee_resolveDone(c,res,s)    end)
+registerHandler("melee_btEnter",          function(c,s,r)     return melee_btEnter(c,s,r)          end)
+registerHandler("melee_btClick",          function(...)       return melee_btClick(...)            end)
+registerHandler("melee_btDone",           function(c,res,s)   return melee_btDone(c,res,s)         end)

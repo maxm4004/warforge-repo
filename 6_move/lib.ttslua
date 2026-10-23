@@ -307,6 +307,36 @@ function move_avanti_apply(unitKey, distanzaInch)
     end
 
     IEF_MOVE_BUDGET[unitKey] = residuo - distanzaInch
+
+    -- Terreni (non in rotta: la rotta ignora le penalità): il
+    -- passo si annulla se finisce in terreno vietato o supera il
+    -- movimento consentito dal terreno toccato; se c'è ancora
+    -- margine si rifà più corto.
+    if not state.rotta and not IEF_MOVE_TEST_MODE and not main_isGeneralKey(unitKey) then
+        local meta = main_getUnitMeta(basiObjs[1])
+        local tipo = meta and meta.unitType
+        local pieno = main_unitFullMove(unitKey)
+        local cap, chi = main_terrainMoveCap(unitKey, tipo, pieno)
+        local usatoPrima = pieno - residuo
+        if cap and (cap < 0 or usatoPrima + distanzaInch > cap + 0.01) then
+            move_restoreSnapshot(unitKey, table.remove(state.history))
+            local p = state.activePlayer
+            if cap < 0 then
+                if p then warningToColor(string.format("Terreno %s: non transitabile per questa unita'", chi), p, "Yellow", 5, true) end
+                move_redraw(unitKey)
+                return false
+            end
+            local margine = cap - usatoPrima
+            if margine > 0.05 then
+                if p then warningToColor(string.format("Terreno %s: movimento ridotto a %.1f\"", chi, cap), p, "Yellow", 5, true) end
+                return move_avanti_apply(unitKey, margine)
+            end
+            if p then warningToColor(string.format("Terreno %s: movimento esaurito (massimo %.1f\")", chi, cap), p, "Yellow", 5, true) end
+            move_redraw(unitKey)
+            return false
+        end
+    end
+
     move_redraw(unitKey)
     return true
 end
@@ -385,6 +415,11 @@ end
 function move_close(unitKey)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state then return end
+
+    -- Disordine/riordino da terreno a fine mossa (non per la rotta)
+    if not state.rotta and ENGINE.phase == PHASE.MOVE then
+        main_terrainCohesionAfterMove(unitKey)
+    end
 
     if state.lineHost then
         state.lineHost.setVectorLines({})

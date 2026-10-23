@@ -45,6 +45,11 @@ function main_onSave()
     field_state = callHandler("field_serializeState"),
     ief_charge_queue = IEF_CHARGE_QUEUE,
     ief_unit_no_move = IEF_UNIT_NO_MOVE_NEXT_TURN,
+    ief_terrain_disorder = IEF_TERRAIN_DISORDER,
+    ief_army_start = IEF_ARMY_START,
+    ief_army_points = IEF_ARMY_POINTS,
+    ief_game_over = IEF_GAME_OVER,
+    ief_charge_moved = IEF_CHARGE_MOVED,
     ief_unit_cohesion = IEF_UNIT_COHESION,
     ief_melee_list    = IEF_MELEE_LIST,
     ief_melee_next_id = IEF_MELEE_NEXT_ID,
@@ -161,6 +166,11 @@ function main_restoreState(save_state)
     if data.ief_unit_no_move then
         IEF_UNIT_NO_MOVE_NEXT_TURN = data.ief_unit_no_move
     end
+    IEF_CHARGE_MOVED = data.ief_charge_moved or {}
+    IEF_TERRAIN_DISORDER = data.ief_terrain_disorder or {}
+    IEF_ARMY_START = data.ief_army_start
+    IEF_ARMY_POINTS = data.ief_army_points
+    IEF_GAME_OVER = data.ief_game_over
 
     if data.ief_unit_button_base then
         IEF_UNIT_BUTTON_BASE = data.ief_unit_button_base
@@ -189,6 +199,8 @@ function main_restoreState(save_state)
     if data.ief_melee_marked then 
         IEF_MELEE_MARKED = data.ief_melee_marked 
     end
+    IEF_MELEE_BREAKTHROUGH = data.ief_melee_bt or {}
+    IEF_MELEE_BREAKTHROUGH_DONE = data.ief_melee_bt_done or {}
 
     if data.ief_recovery_done then
         IEF_RECOVERY_DONE = data.ief_recovery_done

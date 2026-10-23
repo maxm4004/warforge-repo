@@ -703,7 +703,7 @@ function charge_checkTarget(player, unitKey)
 
         local attackerMeta = charge_getUnitMeta(charge_getUnitBases(session.attackerKey)[1])
         local attackerTipo = attackerMeta and attackerMeta.unitType
-        local attackerCapabilities = attackerMeta and attackerMeta.capabilities or {}
+        local attackerCapabilities = main_capabilitiesOf(session.attackerKey, attackerMeta)
 
         local targetMeta = charge_getUnitMeta(charge_getUnitBases(targetKey)[1])
         local targetTipo = targetMeta and targetMeta.unitType
@@ -1265,7 +1265,7 @@ function charge_defenseRowClick(player, value, id)
     local myMeta = myBases[1] and charge_getUnitMeta(myBases[1])
     local myTipo = myMeta and myMeta.unitType
     local myArmi = myMeta and myMeta.armi or {}
-    local myCapabilities = myMeta and myMeta.capabilities or {}
+    local myCapabilities = main_capabilitiesOf(myKey, myMeta)
 
     local attackerMeta = attackerBases[1] and charge_getUnitMeta(attackerBases[1])
     local attackerTipo = attackerMeta and attackerMeta.unitType
@@ -1760,7 +1760,7 @@ function charge_checkMandatoryObligations(slot)
             if not charge_alreadyDeclared(slot, unitKey) then
                 local bases = charge_getUnitBases(unitKey)
                 local meta = bases[1] and charge_getUnitMeta(bases[1])
-                local capabilities = meta and meta.capabilities or {}
+                local capabilities = main_capabilitiesOf(unitKey, meta)
 
                 local targetKey, _, _, lineHost = charge_findLineTarget(unitKey, slot)
 
@@ -1843,7 +1843,7 @@ function charge_autoDeclareMandatory(slot)
                 local bases = charge_getUnitBases(unitKey)
                 if #bases > 0 then
                     local meta = charge_getUnitMeta(bases[1])
-                    local capabilities = meta and meta.capabilities or {}
+                    local capabilities = main_capabilitiesOf(unitKey, meta)
 
                     local targetKey, _, distInches, lineHost = charge_findLineTarget(unitKey, slot)
 
@@ -1928,6 +1928,136 @@ function charge_closestBasePair(basesA, basesB)
     return migliorA, migliorB, migliorDist
 end
 -- ============================================================
+-- FUNZIONE: charge_alignToEnemy(myKey, enemyKey)
+-- Regolamento, MOVIMENTO DI CARICA: "Quando l'unità che carica
+-- contatterà il nemico dovrà mettere le basi a contatto,
+-- adeguandosi al fronte dell'unità nemica, in modo da mettere
+-- sempre una base contro una base".
+-- 1) lato del nemico contattato (fronte, fianco sx/dx, retro)
+--    dalla posizione dell'unità rispetto al rettangolo nemico;
+-- 2) l'unità ruota (formazione rigida) per guardare quel lato;
+-- 3) avanza/arretra finché il suo fronte tocca il lato;
+-- 4) scorre lateralmente per mettere base contro base (lo
+--    spostamento più piccolo che allinea una sua base di fronte
+--    con una base nemica di quel lato).
+-- Ritorna il lato: "FRONTE" | "FIANCO" | "RETRO" (nil se non fatto).
+-- ============================================================
+CHARGE_ALIGN_TOL = 0.1
+function charge_alignToEnemy(myKey, enemyKey)
+    local mie, sue = charge_getUnitBases(myKey), charge_getUnitBases(enemyKey)
+    if #mie == 0 or #sue == 0 then return nil end
+    local mioTipo = (charge_getUnitMeta(mie[1]) or {}).unitType
+    local suoTipo = (charge_getUnitMeta(sue[1]) or {}).unitType
+
+    local function rects(basi, tipo)
+        local out = {}
+        for _, b in ipairs(basi) do table.insert(out, main_baseRectOfType(b, tipo)) end
+        return out
+    end
+    local function dot(c, v) return c.x * v.x + c.z * v.z end
+
+    -- 1) lato contattato, nel riferimento del nemico
+    local f0 = sue[1].getTransformForward()
+    local tf = Vector(f0.x, 0, f0.z):normalized()
+    local tr = Vector(-tf.z, 0, tf.x)
+    local fronte, retro, sx, dx = -math.huge, math.huge, math.huge, -math.huge
+    for _, r in ipairs(rects(sue, suoTipo)) do
+        for _, c in ipairs(r.corners) do
+            local v, u = dot(c, tf), dot(c, tr)
+            if v > fronte then fronte = v end
+            if v < retro then retro = v end
+            if u < sx then sx = u end
+            if u > dx then dx = u end
+        end
+    end
+    local cx, cz = 0, 0
+    for _, b in ipairs(mie) do local p = b.getPosition(); cx = cx + p.x; cz = cz + p.z end
+    local centro = { x = cx / #mie, z = cz / #mie }
+    local v, u = dot(centro, tf), dot(centro, tr)
+
+    local lato, dir
+    -- distanza fuori dal rettangolo per ciascun lato: il più "fuori" vince
+    local fuori = {
+        { "FRONTE", v - fronte, Vector(-tf.x, 0, -tf.z) },
+        { "RETRO",  retro - v,  Vector(tf.x, 0, tf.z) },
+        { "FIANCO", sx - u,     Vector(tr.x, 0, tr.z) },
+        { "FIANCO", u - dx,     Vector(-tr.x, 0, -tr.z) },
+    }
+    local migliore = nil
+    for _, o in ipairs(fuori) do
+        if not migliore or o[2] > migliore[2] then migliore = o end
+    end
+    lato, dir = migliore[1], migliore[3]
+
+    -- 2) rotazione rigida verso il lato (stessa convenzione di charge_applyPivot)
+    local f1 = mie[1].getTransformForward()
+    local mf = Vector(f1.x, 0, f1.z):normalized()
+    local ang = math.atan2(mf.x * dir.z - mf.z * dir.x, mf.x * dir.x + mf.z * dir.z)
+    if math.abs(ang) > 0.001 then
+        local perno = charge_closestBaseToPoint(mie, Vector(centro.x, 0, centro.z)) or mie[1]
+        charge_applyPivot(mie, perno, ang)
+    end
+
+    -- 3) fronte a contatto con il lato
+    local mieR = rects(mie, mioTipo)
+    local mioFronte = -math.huge
+    for _, r in ipairs(mieR) do
+        for _, c in ipairs(r.corners) do mioFronte = math.max(mioFronte, dot(c, dir)) end
+    end
+    local suoLato = math.huge
+    local sueR = rects(sue, suoTipo)
+    for _, r in ipairs(sueR) do
+        for _, c in ipairs(r.corners) do suoLato = math.min(suoLato, dot(c, dir)) end
+    end
+    local avanti = suoLato - mioFronte
+
+    -- 4) base contro base: centri laterali delle basi di fronte
+    local lat = Vector(-dir.z, 0, dir.x)
+    local mieFronte, sueLato = {}, {}
+    for _, r in ipairs(mieR) do
+        local m = -math.huge
+        for _, c in ipairs(r.corners) do m = math.max(m, dot(c, dir)) end
+        if m >= mioFronte - CHARGE_ALIGN_TOL then table.insert(mieFronte, r.x * lat.x + r.z * lat.z) end
+    end
+    for _, r in ipairs(sueR) do
+        local m = math.huge
+        for _, c in ipairs(r.corners) do m = math.min(m, dot(c, dir)) end
+        if m <= suoLato + CHARGE_ALIGN_TOL then table.insert(sueLato, r.x * lat.x + r.z * lat.z) end
+    end
+    local scorri = nil
+    for _, a in ipairs(mieFronte) do
+        for _, b in ipairs(sueLato) do
+            local d = b - a
+            if not scorri or math.abs(d) < math.abs(scorri) then scorri = d end
+        end
+    end
+    scorri = scorri or 0
+
+    for _, o in ipairs(mie) do
+        local p = o.getPosition()
+        main_setPositionOnGround(o, p.x + dir.x * avanti + lat.x * scorri, p.z + dir.z * avanti + lat.z * scorri)
+    end
+    main_syncGeneralsOfBases(mie)
+    return lato
+end
+
+-- ============================================================
+-- FUNZIONE: charge_pendingMoveOf(slot, unitKey, escludi)
+-- Carica (diversa da escludi, non chiusa) in cui l'unità deve
+-- ancora fare il SUO movimento: carica dichiarata o
+-- contro-carica non ancora eseguita. nil se non ne ha.
+-- ============================================================
+function charge_pendingMoveOf(slot, unitKey, escludi)
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        if e ~= escludi and e.step ~= CHARGE_STEP.CLO and charge_elementoUnitKey(e, slot) == unitKey then
+            local mosso = (slot == 1 and e.movedArmy1) or (slot == 2 and e.movedArmy2)
+            local devo = charge_elementoRequest(e, slot) or charge_elementoResponse(e, slot) == REACTION_TYPE.COC
+            if devo and not mosso then return e end
+        end
+    end
+    return nil
+end
+-- ============================================================
 -- FUNZIONE: charge_executeChargeMove(player, unitKey)
 -- ============================================================
 function charge_executeChargeMove(player, unitKey, elementoDato)
@@ -1963,6 +2093,21 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
     if otherResponse == REACTION_TYPE.EVA and not otherMoved then
         warningToColor(string.format("Attendi l'evasione della %s prima di caricare", main_decodeExtendedUnitLabel(charge_elementoUnitKey(elemento, otherSlot))), player, "Yellow", 5, true)
         return
+    end
+
+    -- Ordine dei movimenti (punto 12): chi carica un'unità che ha
+    -- ancora un suo movimento di carica/contro-carica da fare in
+    -- un'altra carica deve aspettarla, poi la raggiunge dove è
+    -- arrivata.
+    local otherKey = charge_elementoUnitKey(elemento, otherSlot)
+    local ioCarico = charge_elementoRequest(elemento, slot) and not reciproca
+    if ioCarico and otherResponse ~= REACTION_TYPE.EVA then
+        local attesa = charge_pendingMoveOf(otherSlot, otherKey, elemento)
+        if attesa then
+            warningToColor(string.format("Attendi il movimento della %s prima di caricarla",
+                main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 5, true)
+            return
+        end
     end
 
     local myBases = charge_getUnitBases(unitKey)
@@ -2031,6 +2176,19 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
     end
 
+    -- Il bersaglio si è già spostato (contro-carica verso un'altra
+    -- unità): lo si insegue fino alla nuova posizione, ma non oltre
+    -- il proprio movimento massimo; se non lo si raggiunge la carica
+    -- fallisce (decisione Max 23/10).
+    local nonRaggiunge = false
+    if ioCarico and IEF_CHARGE_MOVED[otherKey] then
+        local massimo = main_unitFullMove(unitKey)
+        if massimo > 0 and distanzaDaPercorrere > massimo then
+            distanzaDaPercorrere = massimo
+            nonRaggiunge = true
+        end
+    end
+
     local myOriginBase = charge_closestBaseToPoint(myBases, otherBase.getPosition())
     if not myOriginBase then return end
 
@@ -2040,6 +2198,19 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
     --     distanzaTotaleInch, main_distanceInches(myOriginBase, otherBase) or -1))
 
     charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
+    IEF_CHARGE_MOVED[unitKey] = true
+
+    if nonRaggiunge then
+        elemento.outcome = CHARGE_OUTCOME.ANN
+        elemento.step = CHARGE_STEP.CLO
+        if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
+        IEF_UNIT_NO_MOVE_NEXT_TURN[unitKey] = true
+        warningToColor(string.format("[CARICA] %s percorre %.2f\" (massimo) e non raggiunge la %s: carica fallita",
+            main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 6, true)
+        printToAll(string.format("[CARICA] %s non raggiunge la %s: carica fallita",
+            main_decodeExtendedUnitLabel(unitKey), main_decodeExtendedUnitLabel(otherKey)), {r=1,g=0.6,b=0.2})
+        return
+    end
 
     elemento.outcome = elemento.outcome or CHARGE_OUTCOME.OK
     
@@ -2053,7 +2224,18 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         elemento.step = CHARGE_STEP.CLO
     end
     if elemento.step == CHARGE_STEP.CLO and elemento.outcome == CHARGE_OUTCOME.OK then
+        -- Base contro base sul lato contattato; il fianco vale solo
+        -- se il contatto è davvero sul fianco o sul retro.
+        local lato = charge_alignToEnemy(unitKey, otherKey)
+        -- Unità in rotta raggiunta: rischio per il Generale aggregato
+        main_generalRoutCaught(otherKey)
+        if lato == "FRONTE" and charge_elementoFlanked(elemento, otherSlot) then
+            if otherSlot == 1 then elemento.flankedArmy1 = false else elemento.flankedArmy2 = false end
+            printToAll(string.format("[CARICA] Contatto sul fronte della %s: non è una carica sul fianco",
+                main_decodeExtendedUnitLabel(otherKey)), {r=0.8,g=0.8,b=0.8})
+        end
         charge_applyFlankContact(elemento)
+        charge_elephantContact(elemento)
     end
 
     warningToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, distanzaTotaleInch), player, "Yellow", 5, true)
@@ -2194,7 +2376,7 @@ function charge_autoResolveResponses()
                     local obbligato, opzioni = charge_determineResponses(
                         myMeta and myMeta.unitType,
                         myMeta and myMeta.armi or {},
-                        myMeta and myMeta.capabilities or {},
+                        main_capabilitiesOf(myKey, myMeta),
                         otherMeta and otherMeta.unitType,
                         main_isMistaMeta(myMeta),
                         main_unitsInMelee()[myKey] == true)
@@ -2230,6 +2412,67 @@ function charge_autoResolveResponses()
                     end
                 end
             end
+        end
+    end
+end
+-- ============================================================
+-- FUNZIONE: charge_chargedTests()
+-- Inizio REAZIONI: test di morale delle unità caricate previsti
+-- dalla tabella (evento CHARGED, es. FM caricata in terreno
+-- aperto da KN o CP). Un test per unità anche se caricata da più
+-- nemici; fallito = perde un livello di coesione.
+-- ============================================================
+function charge_chargedTests()
+    local fatti = {}
+    for _, e in ipairs(IEF_CHARGE_QUEUE) do
+        for slot = 1, 2 do
+            local other = charge_elementoOtherSlot(slot)
+            local key = charge_elementoUnitKey(e, slot)
+            if charge_elementoRequest(e, other) and not fatti[key] then
+                local mia = charge_getUnitMeta(charge_getUnitBases(key)[1]) or {}
+                local sua = charge_getUnitMeta(charge_getUnitBases(charge_elementoUnitKey(e, other))[1]) or {}
+                for _, s in ipairs(main_moraleSituationsFor("CHARGED", {
+                        tipo = mia.unitType, tipoAvversario = sua.unitType, terreno = main_getUnitTerrain(key) })) do
+                    if s.def.testa == "CARICATA" and not fatti[key] then
+                        fatti[key] = true
+                        printToAll(string.format("[CARICA] %s %s: test di morale",
+                            main_decodeExtendedUnitLabel(key), s.def.label or s.nome), {r=1,g=0.8,b=0.3})
+                        main_runMoraleQueue({ { key = key, slot = slot, motivo = s.nome, effetto = s.def.effetto } })
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: charge_elephantContact(elemento)
+-- Causa di disordine n. 6: "Contatto con EL di qualsiasi unità
+-- montata (KN, CP o CL)": a contatto avvenuto l'unità montata
+-- perde un livello di coesione.
+-- ============================================================
+function charge_elephantContact(elemento)
+    if elemento.elephantApplied then return end
+    elemento.elephantApplied = true
+    local tipi = {}
+    for slot = 1, 2 do
+        local m = charge_getUnitMeta(charge_getUnitBases(charge_elementoUnitKey(elemento, slot))[1]) or {}
+        tipi[slot] = m.unitType
+    end
+    for slot = 1, 2 do
+        local altro = charge_elementoOtherSlot(slot)
+        local t = tipi[slot]
+        if tipi[altro] == "EL" and (t == "KN" or t == "CP" or t == "CL") then
+            local key = charge_elementoUnitKey(elemento, slot)
+            printToAll(string.format("[CARICA] %s a contatto con elefanti: perde un livello di coesione",
+                main_decodeExtendedUnitLabel(key)), {r=1,g=0.5,b=0.2})
+            main_lowerAndCheckRout(key, slot, function(item, quando)
+                if quando == "FINE_FASE" then
+                    table.insert(IEF_MORALE_END_QUEUE, item)
+                else
+                    main_runMoraleQueue({ item })
+                end
+            end)
         end
     end
 end

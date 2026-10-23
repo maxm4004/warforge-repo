@@ -830,6 +830,26 @@ function main_getTerrainEffect(tipoTerreno, tipoUnita)
     return r
 end
 -- ============================================================
+-- FUNZIONE: main_capabilitiesOf(unitKey, meta)
+-- Capacità EFFETTIVE dell'unità: regolamento, EFFETTI DEL
+-- DISORDINE: "Perderanno tutti gli effetti delle loro CAPACITA',
+-- tranne per la capacità SPADA". meta opzionale (GMNotes).
+-- ============================================================
+function main_capabilitiesOf(unitKey, meta)
+    if not meta then
+        local b = unitKey and main_getUnitBases(unitKey)[1]
+        meta = b and main_getUnitMeta(b)
+    end
+    local tutte = (meta and meta.capabilities) or {}
+    if not unitKey or main_getCohesion(unitKey) ~= COHESION.DIS then return tutte end
+    local out = {}
+    for _, c in ipairs(tutte) do
+        if c == "SPADA" then table.insert(out, c) end
+    end
+    return out
+end
+
+-- ============================================================
 -- FUNZIONE: main_canManeuver(manovra, tipoUnita)
 -- ============================================================   
 function main_canManeuver(manovra, tipoUnita)
@@ -1925,6 +1945,9 @@ function main_setCohesion(unitKey, level)
     if prima ~= level then
         printToAll(string.format("[COESIONE] %s: %s -> %s",
             main_decodeExtendedUnitLabel(unitKey), prima, level), {r=1,g=0.8,b=0.3})
+        if level == COHESION.ROT and main_checkVictory then
+            Wait.frames(function() main_checkVictory() end, 1)
+        end
     end
 
         main_applyCohesionTint(unitKey)
@@ -2707,7 +2730,10 @@ function main_removeBases(unitKey, daRimuovere)
     end
   
     -- Generale aggregato: nuova base di riferimento a basi tolte
-    Wait.time(function() main_syncAttachedGeneral(unitKey) end, 2.5)
+    Wait.time(function()
+        main_syncAttachedGeneral(unitKey)
+        if main_checkVictory then main_checkVictory() end
+    end, 2.5)
 end
 
 -- ============================================================

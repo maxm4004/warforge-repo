@@ -533,6 +533,7 @@ function deployment_applyBaseMetadata(obj, slot, armyTag, nickname, unitData, ba
         capabilities    = unitData.capabilities or {},
         baseSeq         = baseData.seq,
         armamento       = unitData.armamento or "NORMALE",   -- MISTO = ranghi con armi diverse (Army Builder)
+        chiave          = unitData.chiave == true,           -- UNITA' CHIAVE (BP: conta 2)
     }
     obj.setGMNotes(JSON.encode(metadata))
 end

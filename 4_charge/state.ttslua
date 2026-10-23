@@ -105,6 +105,11 @@ IEF_CHARGE_NEXT_ID = IEF_CHARGE_NEXT_ID or 0
 -- collegare quando si costruirà quel controllo.
 IEF_UNIT_NO_MOVE_NEXT_TURN = IEF_UNIT_NO_MOVE_NEXT_TURN or {}
 
+-- Unità che hanno già eseguito un movimento di carica/contro-carica
+-- in questa fase: [unitKey] = true (azzerata in before_charge_declare).
+-- Serve a chi le carica: le insegue entro il proprio movimento.
+IEF_CHARGE_MOVED = IEF_CHARGE_MOVED or {}
+
 -- Sessione di dichiarazione interattiva (pannello 3D Perno Sx/Dx
 -- + Check Carica, agganciato alla base), una per esercito:
 -- [slot] = { attackerKey, myBases, startPos={guid=Vector},

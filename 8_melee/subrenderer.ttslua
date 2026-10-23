@@ -42,3 +42,14 @@ end)
 registerSubRenderer("meleeEsci", function(rec, def, step, slot, isActor)
     return { title = def.title, wait = "MISCHIA RISOLTA" }
 end)
+
+-- SFONDAMENTO: perno (max 2"), sfonda, rinuncia
+registerSubRenderer("meleeSfondamento", function(rec, def, step, slot, isActor)
+    if not isActor then return false end
+    return { title = def.title, buttons = {
+        { label = "Perno Sx",  icon = "default", value = "SX" },
+        { label = "Perno Dx",  icon = "default", value = "DX" },
+        { label = "Sfonda",    icon = "carica",  value = "GO" },
+        { label = "Rinuncia",  icon = "chiudi",  value = "NO" },
+    } }
+end)

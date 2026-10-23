@@ -31,6 +31,9 @@ function after_deploy_position(phaseName, phase)
     deployment_destroyArmy1HiddenZones()
     deployment_destroyArmy2HiddenZones()
 
+    -- Condizioni di vittoria: unità iniziali e Breakpoint
+    main_victoryRecordStart()
+
     TURN.completed = { Army1 = false, Army2 = false }
     linee_deploy = false
     callHandler("aggiornaLinee")

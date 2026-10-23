@@ -645,3 +645,200 @@ function main_routMoveDone(ctx, result, slot)
         if player then engine_cameraByNamme(player, nil, CAMERA_ZONE.ARMY_HOME) end
     end
 end
+
+-- ============================================================
+-- CONDIZIONI DI VITTORIA (regolamento p. 27)
+-- BP (Breakpoint) = numero iniziale di unità dell'esercito
+-- (Generali esclusi: come negli scenari storici, es. Peipus 14).
+-- Punti: unità CHIAVE in rotta o distrutta 2, Generale ucciso 2,
+-- altre unità in rotta o distrutte 1. Raggiunto il BP l'esercito
+-- è in rotta e la partita finisce subito, in qualsiasi fase.
+-- Lo stato è calcolato al momento (un'unità recuperata dalla
+-- rotta non conta più).
+-- IEF_ARMY_START[slot] = { bp, unita = { [unitKey] = { chiave, generale } } }
+-- ============================================================
+function main_victoryRecordStart()
+    IEF_ARMY_START = { [1] = { bp = 0, unita = {} }, [2] = { bp = 0, unita = {} } }
+    for _, o in ipairs(getAllObjects()) do
+        local slot = o.hasTag("Army1") and 1 or (o.hasTag("Army2") and 2 or nil)
+        local key = slot and main_parseNickname(o.getName()) and main_getUnitKey(o)
+        if key and not IEF_ARMY_START[slot].unita[key] then
+            local meta = main_getUnitMeta(o) or {}
+            local generale = main_isGeneralKey(key)
+            IEF_ARMY_START[slot].unita[key] = { chiave = meta.chiave == true, generale = generale }
+            if not generale then IEF_ARMY_START[slot].bp = IEF_ARMY_START[slot].bp + 1 end
+        end
+    end
+    IEF_ARMY_POINTS = { [1] = 0, [2] = 0 }
+    IEF_GAME_OVER = nil
+    for slot = 1, 2 do
+        printToAll(string.format("[VITTORIA] %s: Breakpoint %d", ARMY[slot] and ARMY[slot].name or ("Army" .. slot),
+            IEF_ARMY_START[slot].bp), {r=1,g=0.85,b=0.4})
+    end
+end
+
+-- Punti di rottura attuali dell'esercito, con dettaglio
+function main_victoryPoints(slot)
+    local start = IEF_ARMY_START and IEF_ARMY_START[slot]
+    if not start then return 0, 0, {} end
+    local punti, voci = 0, {}
+    for key, u in pairs(start.unita) do
+        local distrutta = #main_getUnitBases(key) == 0
+        local p = 0
+        if u.generale then
+            if distrutta then p = 2; table.insert(voci, "Generale ucciso: " .. main_decodeExtendedUnitLabel(key)) end
+        elseif distrutta or main_getCohesion(key) == COHESION.ROT then
+            p = u.chiave and 2 or 1
+            table.insert(voci, string.format("%s %s%s", main_decodeExtendedUnitLabel(key),
+                distrutta and "distrutta" or "in rotta", u.chiave and " (chiave)" or ""))
+        end
+        punti = punti + p
+    end
+    return punti, start.bp, voci
+end
+
+-- Controllo: chiamato dopo ogni rotta, rimozione di basi o
+-- morte di un Generale.
+function main_checkVictory()
+    if not IEF_ARMY_START or IEF_GAME_OVER then return end
+    local rotti = {}
+    for slot = 1, 2 do
+        local punti, bp = main_victoryPoints(slot)
+        if IEF_ARMY_POINTS and punti ~= IEF_ARMY_POINTS[slot] then
+            IEF_ARMY_POINTS[slot] = punti
+            printToAll(string.format("[VITTORIA] %s: %d punti di rottura su %d", ARMY[slot].name, punti, bp), {r=1,g=0.85,b=0.4})
+        end
+        if bp > 0 and punti >= bp then table.insert(rotti, slot) end
+    end
+    if #rotti == 0 then return end
+
+    IEF_GAME_OVER = { rotti = rotti }
+    local testo
+    if #rotti == 2 then
+        testo = "ENTRAMBI GLI ESERCITI IN ROTTA: PAREGGIO"
+    else
+        local perde = rotti[1]
+        local vince = (perde == 1) and 2 or 1
+        testo = string.format("L'ESERCITO %s E' IN ROTTA - VINCE %s",
+            string.upper(ARMY[perde].name), string.upper(ARMY[vince].name))
+    end
+    broadcastToAll("FINE PARTITA: " .. testo, {r=1,g=0.85,b=0.2})
+    printToAll("[VITTORIA] " .. testo, {r=1,g=0.85,b=0.2})
+    callHandler("updateCenterPanel")
+end
+
+-- Debug/consultazione: /execute debug_bp()
+function debug_bp()
+    for slot = 1, 2 do
+        local punti, bp, voci = main_victoryPoints(slot)
+        print(string.format("[VITTORIA] %s: %d/%d %s", ARMY[slot].name, punti, bp,
+            (#voci > 0) and ("- " .. table.concat(voci, ", ")) or ""))
+    end
+end
+
+-- ============================================================
+-- TERRENI NEL MOVIMENTO (regolamento, TERRENI ED EFFETTI SU
+-- MOVIMENTO E COESIONE; dati in terrain.json)
+-- ============================================================
+
+-- Categorie di terreno toccate dalle basi dell'unità (centro e
+-- angoli di ogni base): { [categoria] = true }
+function main_unitTerrainCats(unitKey)
+    local cats = {}
+    local basi = main_getUnitBases(unitKey)
+    local meta = basi[1] and main_getUnitMeta(basi[1])
+    local tol = 0.05
+    for _, b in ipairs(basi) do
+        local r = main_baseRectOfType(b, meta and meta.unitType)
+        local y = b.getPosition().y
+        local punti = { { 0, 0 }, { r.hw - tol, r.hd - tol }, { r.hw - tol, -r.hd + tol },
+                        { -r.hw + tol, r.hd - tol }, { -r.hw + tol, -r.hd + tol } }
+        for _, p in ipairs(punti) do
+            local cat = main_terrainAtPoint(r.x + r.rx * p[1] + r.fx * p[2], y, r.z + r.rz * p[1] + r.fz * p[2])
+            if cat and cat ~= "APERTO" and cat ~= "COVER" then cats[cat] = true end
+        end
+    end
+    return cats
+end
+
+-- Effetto del terreno per il tipo (FIUME: invalicabile per tutti)
+function main_terrainEffectFor(cat, tipo)
+    if cat == "FIUME" then return { movement = "NO", cohesion = "nessuno" } end
+    local t = IEF_DATA.terrain and IEF_DATA.terrain.terrain_types and IEF_DATA.terrain.terrain_types[cat]
+    return t and t.effects and t.effects[tipo]
+end
+
+-- Movimento massimo nel turno dato il terreno toccato:
+-- ritorna pollici (nil = nessun limite) oppure -1 (vietato) e
+-- la categoria che limita.
+function main_terrainMoveCap(unitKey, tipo, pieno, cats)
+    local cap, chi = nil, nil
+    for cat in pairs(cats or main_unitTerrainCats(unitKey)) do
+        local eff = main_terrainEffectFor(cat, tipo)
+        local m = eff and eff.movement
+        local v = nil
+        if m == "NO" then v = -1
+        elseif m == "dimezza" then v = pieno / 2
+        elseif m == "riduce_1_pollice" then v = 1
+        elseif m == "riduce_2_pollici" then v = 2 end
+        if v and (cap == nil or v < cap) then cap, chi = v, cat end
+    end
+    return cap, chi
+end
+
+-- Disordine da terreno a fine movimento: entra in terreno che
+-- disordina -> DISORDINATA (solo da SALDA); uscita completa da
+-- quel terreno -> riordinata automaticamente, senza test.
+IEF_TERRAIN_DISORDER = IEF_TERRAIN_DISORDER or {}
+function main_terrainCohesionAfterMove(unitKey)
+    if main_isGeneralKey(unitKey) then return end
+    local basi = main_getUnitBases(unitKey)
+    local meta = basi[1] and main_getUnitMeta(basi[1])
+    local tipo = meta and meta.unitType
+    if not tipo then return end
+    local disordina, chi = false, nil
+    for cat in pairs(main_unitTerrainCats(unitKey)) do
+        local eff = main_terrainEffectFor(cat, tipo)
+        if eff and eff.cohesion == "disordina" then disordina, chi = true, cat end
+    end
+    local coes = main_getCohesion(unitKey)
+    if disordina and coes == COHESION.SAL then
+        main_setCohesion(unitKey, COHESION.DIS)
+        IEF_TERRAIN_DISORDER[unitKey] = true
+        printToAll(string.format("[TERRENO] %s entra in terreno %s: DISORDINATA",
+            main_decodeExtendedUnitLabel(unitKey), chi), {r=1,g=0.6,b=0.3})
+    elseif not disordina and IEF_TERRAIN_DISORDER[unitKey] then
+        IEF_TERRAIN_DISORDER[unitKey] = nil
+        if coes == COHESION.DIS then
+            main_setCohesion(unitKey, COHESION.SAL)
+            printToAll(string.format("[TERRENO] %s esce dal terreno: riordinata automaticamente",
+                main_decodeExtendedUnitLabel(unitKey)), {r=0.6,g=0.9,b=0.6})
+        end
+    end
+end
+
+-- ============================================================
+-- FUNZIONE: main_unitInCover(unitKey)
+-- Regolamento: il terreno DIFFICILE "dà copertura a unità
+-- interamente dentro il terreno" (terrain.json provides_cover):
+-- tutti i punti (centro e angoli) di tutte le basi su terreno
+-- che dà copertura.
+-- ============================================================
+function main_unitInCover(unitKey)
+    local tipi = IEF_DATA.terrain and IEF_DATA.terrain.terrain_types or {}
+    local basi = main_getUnitBases(unitKey)
+    if #basi == 0 then return false end
+    local meta = main_getUnitMeta(basi[1])
+    local tol = 0.05
+    for _, b in ipairs(basi) do
+        local r = main_baseRectOfType(b, meta and meta.unitType)
+        local y = b.getPosition().y
+        local punti = { { 0, 0 }, { r.hw - tol, r.hd - tol }, { r.hw - tol, -r.hd + tol },
+                        { -r.hw + tol, r.hd - tol }, { -r.hw + tol, -r.hd + tol } }
+        for _, p in ipairs(punti) do
+            local cat = main_terrainAtPoint(r.x + r.rx * p[1] + r.fx * p[2], y, r.z + r.rz * p[1] + r.fz * p[2])
+            if not (tipi[cat] and tipi[cat].provides_cover) then return false end
+        end
+    end
+    return true
+end

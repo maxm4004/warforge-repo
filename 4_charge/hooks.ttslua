@@ -12,6 +12,7 @@ function before_charge_declare(phaseName, phase)
     IEF_CHARGE_TEST_FAILED = {}
     IEF_CHARGE_PENDING_TESTS = {}
     IEF_CHARGE_TEST_PASSED = {}
+    IEF_CHARGE_MOVED = {}
 
     UI.setAttribute("charge_attack_list_army1", "active", "true")
     UI.setAttribute("charge_attack_list_army2", "active", "true")
@@ -51,6 +52,7 @@ function before_charge_react(phaseName, phase)
     callHandler("engine_diceClearLastRoll", 1)
     callHandler("engine_diceClearLastRoll", 2)
     charge_autoResolveResponses()
+    charge_chargedTests()
     callHandler("buildUI")
     callHandler("updateCenterPanel")
 end

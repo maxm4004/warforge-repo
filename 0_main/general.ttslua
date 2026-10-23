@@ -538,3 +538,146 @@ end
 function debug_generalDetach(genKey)
     main_generalDetach(genKey)
 end
+
+-- ============================================================
+-- MORTE DEI GENERALI (regolamento, p. 25-26)
+-- 1) unità con il Generale perde una base (tiro o mischia):
+--    2D6, con 12 il Generale muore;
+-- 2) unità con il Generale sfondata e mandata in rotta da
+--    IMPETO: 2D6, muore con 11 o 12;
+-- 3) unità in ROTTA con il Generale raggiunta da nemici: 2D6,
+--    muore con 10, 11 o 12; se sopravvive si sgancia e scappa
+--    verso le unità amiche più vicine.
+-- Il proprietario tira 2D6 dal suo sacchetto (automatico, uno
+-- alla volta). Generale morto: tolto dal tavolo (BP: 2 punti) e
+-- test di morale per le unità amiche entro 6" (tabella
+-- GENERALE_UCCISO).
+-- ============================================================
+IEF_GENERAL_RISK_QUEUE = IEF_GENERAL_RISK_QUEUE or {}
+
+function main_unitSlot(unitKey)
+    local b = main_getUnitBases(unitKey)[1]
+    if not b then return nil end
+    return b.hasTag("Army1") and 1 or (b.hasTag("Army2") and 2 or nil)
+end
+
+-- soglia: risultato minimo che uccide; fuga: caso 3 (se sopravvive scappa)
+function main_generalRisk(unitKey, soglia, motivo, fuga)
+    local genKey = main_generalAttachedTo(unitKey)
+    if not genKey then return end
+    table.insert(IEF_GENERAL_RISK_QUEUE, { genKey = genKey, unitKey = unitKey, slot = main_unitSlot(genKey),
+        soglia = soglia, motivo = motivo, fuga = fuga })
+    printToAll(string.format("[GENERALE] %s rischia la vita (%s): 2D6, muore con %d+",
+        main_decodeExtendedUnitLabel(genKey), motivo, soglia), {r=1,g=0.7,b=0.3})
+    if not IEF_GENERAL_RISK_BUSY then
+        IEF_GENERAL_RISK_BUSY = true
+        Wait.time(main_generalRiskNext, 2)
+    end
+end
+
+function main_generalRiskNext()
+    local r = table.remove(IEF_GENERAL_RISK_QUEUE, 1)
+    if not r then IEF_GENERAL_RISK_BUSY = false; return end
+    IEF_GENERAL_RISK_BUSY = true
+    if #main_getUnitBases(r.genKey) == 0 or not r.slot then
+        main_generalRiskNext(); return
+    end
+    engine_diceClearLastRoll(r.slot)
+    IEF_DICE_ROLL_TRY[r.slot] = { dadi = 2, soglia = nil }
+    engine_diceThrowFromBag(r.slot, nil, function(risultati)
+        local a, b = risultati and risultati[1], risultati and risultati[2]
+        if not a or not b then
+            printToAll("[GENERALE] Tiro non leggibile, si ritira", {r=1,g=0.6,b=0.3})
+            table.insert(IEF_GENERAL_RISK_QUEUE, 1, r)
+            Wait.time(main_generalRiskNext, 1)
+            return
+        end
+        local somma = a + b
+        if somma >= r.soglia then
+            printToAll(string.format("[GENERALE] %d+%d = %d: %s e' UCCISO", a, b, somma,
+                main_decodeExtendedUnitLabel(r.genKey)), {r=1,g=0.3,b=0.3})
+            main_generalKilled(r.genKey, r.slot)
+        else
+            printToAll(string.format("[GENERALE] %d+%d = %d: %s sopravvive", a, b, somma,
+                main_decodeExtendedUnitLabel(r.genKey)), {r=0.6,g=0.9,b=0.6})
+            if r.fuga then main_generalFlee(r.genKey, r.slot) end
+        end
+        Wait.time(main_generalRiskNext, 2)
+    end)
+end
+
+function main_generalKilled(genKey, slot)
+    local gen = main_getUnitBases(genKey)[1]
+    if not gen then return end
+    local pos = gen.getPosition()
+    main_generalDetach(genKey)
+    IEF_GENERAL_KILLED = IEF_GENERAL_KILLED or {}
+    IEF_GENERAL_KILLED[genKey] = true
+
+    -- Test delle unità amiche entro il raggio (tabella GENERALE_UCCISO)
+    for _, s in ipairs(main_moraleSituationsFor("GENERAL_KILLED", {})) do
+        if s.def.testa == "AMICHE_IN_RAGGIO" then
+            for key, basi in pairs(main_unitsOfSlot(slot)) do
+                if key ~= genKey and not main_isGeneralKey(key) and main_getCohesion(key) ~= COHESION.ROT then
+                    local vicino = false
+                    for _, b in ipairs(basi) do
+                        local d = main_distanceInchesToPoint(b, pos)
+                        if d and d <= (s.def.raggio or 6) then vicino = true; break end
+                    end
+                    if vicino then
+                        local item = { key = key, slot = slot, motivo = s.nome, effetto = s.def.effetto }
+                        if s.def.quando == "FINE_FASE" then
+                            table.insert(IEF_MORALE_END_QUEUE, item)
+                        else
+                            main_runMoraleQueue({ item })
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    main_removeBases(genKey, { gen })
+end
+
+-- Caso 3 sopravvissuto: si sgancia e va dietro l'unità amica più vicina
+function main_generalFlee(genKey, slot)
+    local gen = main_getUnitBases(genKey)[1]
+    if not gen then return end
+    main_generalDetach(genKey)
+    local gp = gen.getPosition()
+    local meglio, dMin = nil, nil
+    for key, basi in pairs(main_unitsOfSlot(slot)) do
+        if not main_isGeneralKey(key) and main_getCohesion(key) ~= COHESION.ROT and #basi > 0 then
+            for _, b in ipairs(basi) do
+                local d = main_distanceInchesToPoint(b, gp)
+                if d and (not dMin or d < dMin) then meglio, dMin = key, d end
+            end
+        end
+    end
+    if not meglio then
+        printToAll(string.format("[GENERALE] %s si sgancia: nessuna unita' amica a cui riparare",
+            main_decodeExtendedUnitLabel(genKey)), {r=1,g=0.7,b=0.3})
+        return
+    end
+    local basi = main_getUnitBases(meglio)
+    local cx, cz = 0, 0
+    for _, b in ipairs(basi) do local p = b.getPosition(); cx = cx + p.x; cz = cz + p.z end
+    cx, cz = cx / #basi, cz / #basi
+    local fwd = charge_getFrontLine(basi)
+    local dietro = -math.huge
+    for _, b in ipairs(basi) do
+        local p = b.getPosition()
+        dietro = math.max(dietro, -((p.x - cx) * fwd.x + (p.z - cz) * fwd.z))
+    end
+    local off = dietro + 2 * INCH_TO_TTS
+    main_setPositionOnGround(gen, cx - fwd.x * off, cz - fwd.z * off)
+    printToAll(string.format("[GENERALE] %s si sgancia e ripara dietro la %s",
+        main_decodeExtendedUnitLabel(genKey), main_decodeExtendedUnitLabel(meglio)), {r=0.6,g=0.8,b=1})
+end
+
+-- Caso 3: unità in rotta raggiunta da nemici
+function main_generalRoutCaught(unitKey)
+    if main_getCohesion(unitKey) ~= COHESION.ROT then return end
+    main_generalRisk(unitKey, 10, "unita' in rotta raggiunta dal nemico", true)
+end

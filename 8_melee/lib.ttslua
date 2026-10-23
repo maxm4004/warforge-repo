@@ -12,6 +12,20 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
 
     local player = Player[player_color]
     local unitKey = main_getUnitKey(obj)
+
+    -- Sfondamento in attesa (IMPETO): il click sulla base lo apre
+    if IEF_MELEE_BREAKTHROUGH[unitKey] then
+        local bt, motivo = melee_breakthroughFor(unitKey)
+        if bt then
+            if engine_subOpen("SFONDAMENTO", bt.slot, { key = unitKey, slot = bt.slot, nemico = bt.nemico, player = player_color }, "melee_btDone") then
+                return
+            end
+        elseif motivo then
+            warningToColor(motivo, player, "Yellow", 5, true)
+            return
+        end
+    end
+
     if IEF_MELEE_INFO_HOST[unitKey] then
         melee_infoCloseUnit(unitKey)
         return
@@ -45,6 +59,9 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
             det.fianco and " - caricata sul fianco: non combatte" or "") })
         table.insert(righe, { testo = string.format("Basi in contatto %d - ranghi posteriori %d - overlap %d",
             det.contatto, det.posteriori, det.overlap) })
+        if det.picca > 0 then table.insert(righe, { testo = string.format("Picca: %d basi di 3° e 4° rango", det.picca) }) end
+        if det.perDue then table.insert(righe, { testo = "1D6 ogni 2 basi (FL/CL contro questo nemico)" }) end
+        if det.elefanti then table.insert(righe, { testo = "Elefanti: 2D6 per base in primo rango" }) end
         local motivi = {}
         if det.mista then table.insert(motivi, "mista") end
         if det.dimezzati then table.insert(motivi, "disordinata") end
@@ -670,7 +687,7 @@ function melee_computeGroup(gruppo)
         local w, d = melee_unitDims(key)
         local usate = {}
         local grezzi = {}
-        local det = { contatto = 0, posteriori = 0, overlap = 0, fianco = false, primoTurno = false, dimezzati = false }
+        local det = { contatto = 0, posteriori = 0, overlap = 0, picca = 0, fianco = false, primoTurno = false, dimezzati = false }
 
         local function aggiungi(b, categoria)
             if b and not usate[b] then
@@ -680,6 +697,10 @@ function melee_computeGroup(gruppo)
             end
             return 0
         end
+
+        local myProf = melee_unitProfile(key, info.slot)
+        local myTipo = myProf.tipo
+        det.picca, det.perDue, det.elefanti = 0, false, false
 
         for _, e in ipairs(gruppo.elementi) do
             if melee_elementoUnitKey(e, info.slot) == key then
@@ -696,12 +717,46 @@ function melee_computeGroup(gruppo)
                 info.mods[enemyKey] = { tot = tot, voci = voci }
 
                 if not fianco then
-                    local contatto = melee_contactBases(key, main_getUnitBases(enemyKey))
+                    local enemyBases = main_getUnitBases(enemyKey)
+                    local enemyMeta = enemyBases[1] and main_getUnitMeta(enemyBases[1])
+                    local enemyTipo = enemyMeta and enemyMeta.unitType
+
+                    local contatto = melee_contactBases(key, enemyBases)
                     local overlap = primo and {} or melee_overlapBases(contatto, myBases, w, d)
-                    for _, b in ipairs(contatto) do n = n + aggiungi(b, "contatto") end
-                    for _, b in ipairs(overlap)  do n = n + aggiungi(b, "overlap") end
-                    for _, b in ipairs(contatto) do n = n + aggiungi(melee_rearBase(b, myBases, w, d), "posteriori") end
-                    for _, b in ipairs(overlap)  do n = n + aggiungi(melee_rearBase(b, myBases, w, d), "posteriori") end
+                    local primoRango, secondo, terzoQuarto = 0, 0, 0
+                    local rango1 = {}
+                    for _, b in ipairs(contatto) do
+                        local k = aggiungi(b, "contatto"); primoRango = primoRango + k
+                        if k > 0 then table.insert(rango1, b) end
+                    end
+                    for _, b in ipairs(overlap) do
+                        local k = aggiungi(b, "overlap"); primoRango = primoRango + k
+                        if k > 0 then table.insert(rango1, b) end
+                    end
+                    for _, b in ipairs(rango1) do
+                        local r2 = melee_rearBase(b, myBases, w, d)
+                        secondo = secondo + aggiungi(r2, "posteriori")
+                        -- PICCA: anche 3° e 4° rango
+                        if r2 and myProf.armi["PICCA"] then
+                            local r3 = melee_rearBase(r2, myBases, w, d)
+                            local r4 = r3 and melee_rearBase(r3, myBases, w, d)
+                            terzoQuarto = terzoQuarto + aggiungi(r3, "picca") + aggiungi(r4, "picca")
+                        end
+                    end
+
+                    -- Dadi per tipo (regolamento, COME SI COMBATTE)
+                    if myTipo == "EL" then
+                        -- 2D6 per ogni base in primo rango
+                        n = primoRango * 2
+                        det.elefanti = true
+                    else
+                        n = primoRango + secondo + terzoQuarto
+                        if (myTipo == "FL" and enemyTipo ~= "FL" and enemyTipo ~= "EL")
+                           or (myTipo == "CL" and enemyTipo ~= "CL" and enemyTipo ~= "FL") then
+                            n = math.floor(n / 2)
+                            det.perDue = true
+                        end
+                    end
                 end
                 grezzi[enemyKey] = (grezzi[enemyKey] or 0) + n
             end
@@ -937,6 +992,7 @@ function melee_markLosses(unitKey, hits)
 
     printToAll(string.format("[PERDITE] %s: %d colpi -> %d basi perse (rimosse a fine fase)",
         main_decodeExtendedUnitLabel(unitKey), hits, marcate), {r=1,g=0.4,b=0.4})
+    if marcate > 0 then main_generalRisk(unitKey, 12, "l'unita' ha perso una base") end
     return marcate
 end
 
@@ -1058,8 +1114,22 @@ function melee_resolveOutcome(ctx)
         perse[key] = melee_markLosses(key, ricevuti[key])
     end
 
+    -- IMPETO (primo turno): chi infligge al nemico almeno il doppio
+    -- dei colpi ricevuti da lui lo manda direttamente in ROTTA,
+    -- salvo MURO DI SCUDI (capacità effettive: le disordinate le
+    -- perdono, tranne SPADA).
+    local travolte = melee_impetoRouts(ctx)
+
     for _, key in ipairs(chiavi) do
-        if ricevuti[key] > inflitti[key] then
+        local vincitore = travolte[key]
+        if vincitore and main_getCohesion(key) ~= COHESION.ROT then
+            printToAll(string.format("[MISCHIA] IMPETO: la %s infligge il doppio dei colpi, la %s va in ROTTA",
+                main_decodeExtendedUnitLabel(vincitore), main_decodeExtendedUnitLabel(key)), {r=1,g=0.3,b=0.3})
+            main_setCohesion(key, COHESION.ROT)
+            melee_onRout(ctx, key, unita[key].slot)
+            main_generalRisk(key, 11, "unita' sfondata dall'IMPETO")
+            melee_offerBreakthrough(vincitore, unita[vincitore].slot, key)
+        elseif ricevuti[key] > inflitti[key] then
             printToAll("[MISCHIA] Sconfitta: " .. main_decodeExtendedUnitLabel(key), {r=1,g=0.4,b=0.4})
             melee_lowerAndCheckRout(ctx, key, unita[key].slot)
         end
@@ -1120,4 +1190,207 @@ function melee_infoCloseAll()
     local chiavi = {}
     for k, _ in pairs(IEF_MELEE_INFO_HOST) do table.insert(chiavi, k) end
     for _, k in ipairs(chiavi) do melee_infoCloseUnit(k) end
+end
+
+-- ============================================================
+-- FUNZIONE: melee_hasCap(unitKey, nome)
+-- Capacità effettiva (disordinata: solo SPADA).
+-- ============================================================
+function melee_hasCap(unitKey, nome)
+    for _, c in ipairs(main_capabilitiesOf(unitKey)) do
+        if c == nome then return true end
+    end
+    return false
+end
+
+-- ============================================================
+-- FUNZIONE: melee_impetoRouts(ctx)
+-- Regolamento, EFFETTI DELL'IMPETO: "Unità con capacità IMPETO,
+-- che nel primo turno di mischia infliggano il doppio dei colpi
+-- ricevuti all'unità nemica, la mandano direttamente in ROTTA".
+-- "La capacità IMPETO viene annullata dalla capacità MURO DI
+-- SCUDI". Confronto per coppia (colpi esatti dei tiri separati),
+-- solo coppie al primo turno. Ritorna { [nemicoTravolto] = vincitore }.
+-- ============================================================
+function melee_impetoRouts(ctx)
+    local out = {}
+    local colpi = {}
+    for slot = 1, 2 do
+        for _, t in ipairs(ctx["tiri" .. slot] or {}) do
+            colpi[t.unita] = colpi[t.unita] or {}
+            colpi[t.unita][t.nemico] = (colpi[t.unita][t.nemico] or 0) + (t.colpi or 0)
+        end
+    end
+
+    local gruppo = melee_getGroupById(ctx.groupId)
+    if not gruppo then return out end
+    for _, e in ipairs(gruppo.elementi) do
+        if melee_elementoIsFirstTurn(e) then
+            for slot = 1, 2 do
+                local a = melee_elementoUnitKey(e, slot)
+                local b = melee_elementoOtherKey(e, slot)
+                if melee_hasCap(a, "IMPETO") and not melee_hasCap(b, "MURO_DI_SCUDI") then
+                    local inflitti = (colpi[a] or {})[b] or 0
+                    local ricevuti = (colpi[b] or {})[a] or 0
+                    if inflitti > 0 and inflitti >= 2 * ricevuti and not out[b] then
+                        out[b] = a
+                    end
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- ============================================================
+-- SFONDAMENTO (regolamento, EFFETTI DELL'IMPETO)
+-- "L'unità vincitrice può eseguire un ulteriore movimento come
+-- sfondamento e se è in grado di raggiungere (effettuando, se
+-- necessario, un perno di massimo 2 pollici) altre unità nemiche,
+-- può effettuare una nuova carica, la mischia derivante verrà
+-- subito risolta applicando i fattori di primo turno; se invece
+-- raggiunge l'unità in ROTTA in fuga, la distruggerà
+-- immediatamente. Qualsiasi unità può effettuare un solo
+-- sfondamento per turno."
+-- Si apre cliccando una base del vincitore in fase MISCHIA,
+-- dopo il movimento di rotta del nemico travolto.
+-- ============================================================
+function melee_offerBreakthrough(vincitore, slot, travolta)
+    local turno = melee_currentTurn()
+    if IEF_MELEE_BREAKTHROUGH_DONE[vincitore] == turno then return end
+    IEF_MELEE_BREAKTHROUGH[vincitore] = { slot = slot, nemico = travolta, turno = turno }
+    printToAll(string.format("[MISCHIA] La %s può fare lo SFONDAMENTO: dopo la rotta della %s clicca una sua base",
+        main_decodeExtendedUnitLabel(vincitore), main_decodeExtendedUnitLabel(travolta)), {r=1,g=0.8,b=0.3})
+end
+
+-- Sfondamento disponibile ora per l'unità (o nil + motivo)
+function melee_breakthroughFor(unitKey)
+    local bt = IEF_MELEE_BREAKTHROUGH[unitKey]
+    if not bt or bt.turno ~= melee_currentTurn() then return nil end
+    if melee_getGroupOfUnit(unitKey) then
+        return nil, "L'unità è ancora in mischia: niente sfondamento"
+    end
+    for _, item in ipairs(IEF_ROUT_PENDING[melee_elementoOtherSlot(bt.slot)] or {}) do
+        if item.key == bt.nemico then
+            return nil, string.format("Prima esegui il movimento di rotta della %s", main_decodeExtendedUnitLabel(bt.nemico))
+        end
+    end
+    return bt
+end
+
+-- Corridoio del possibile sfondamento (stesse regole della carica)
+function melee_btRedraw(ctx)
+    local targetKey, _, _, frontLeft, sL, sR, eL, eR = charge_findLineTarget(ctx.key, ctx.slot)
+    charge_drawCorridor(frontLeft, sL, sR, eL, eR)
+    ctx.bersaglio = targetKey
+    if ctx.player then
+        warningToColor(targetKey and ("Sfondamento: raggiunge la " .. main_decodeExtendedUnitLabel(targetKey))
+            or "Sfondamento: nessun nemico raggiungibile", Player[ctx.player], "Yellow", 4, true)
+    end
+end
+
+function melee_btEnter(ctx, slot, rec)
+    ctx.pivotUsed = ctx.pivotUsed or 0
+    melee_btRedraw(ctx)
+end
+
+function melee_btClear(ctx)
+    local basi = main_getUnitBases(ctx.key)
+    if #basi > 0 then
+        local _, _, frontLeft = charge_getFrontLine(basi)
+        if frontLeft then frontLeft.setVectorLines({}) end
+    end
+end
+
+function melee_btPivot(ctx, direzione, player)
+    local basi = main_getUnitBases(ctx.key)
+    local residuo = 2 - (ctx.pivotUsed or 0)
+    if residuo <= 0.001 then
+        warningToColor("Perno massimo (2\") già usato", player, "Yellow", 4, true); return
+    end
+    if #basi < 2 then
+        warningToColor("Unità a base singola: perno non applicabile", player, "Yellow", 4, true); return
+    end
+    melee_btClear(ctx)
+    local dist = math.min(1, residuo)
+    local _, _, frontLeft, frontRight = charge_getFrontLine(basi)
+    local p1, p2 = frontLeft.getPosition(), frontRight.getPosition()
+    local radius = Vector(p2.x - p1.x, 0, p2.z - p1.z):magnitude()
+    if radius <= 0.01 then return end
+    local segno = (direzione == "left") and -1 or 1
+    charge_applyPivot(basi, (direzione == "left") and frontLeft or frontRight, segno * (dist * INCH_TO_TTS) / radius)
+    ctx.pivotUsed = (ctx.pivotUsed or 0) + dist
+    melee_btRedraw(ctx)
+end
+
+function melee_btTranslate(basi, distInch)
+    if distInch <= 0 then return end
+    local fwd = charge_getFrontLine(basi)
+    local delta = distInch * INCH_TO_TTS
+    for _, o in ipairs(basi) do
+        local p = o.getPosition()
+        main_setPositionOnGround(o, p.x + fwd.x * delta, p.z + fwd.z * delta)
+    end
+    main_syncGeneralsOfBases(basi)
+end
+
+function melee_btGo(ctx, player)
+    local key, slot = ctx.key, ctx.slot
+    local basi = main_getUnitBases(key)
+    melee_btClear(ctx)
+    local targetKey, _, dist = charge_findLineTarget(key, slot)
+    local turno = melee_currentTurn()
+    IEF_MELEE_BREAKTHROUGH[key] = nil
+    IEF_MELEE_BREAKTHROUGH_DONE[key] = turno
+    IEF_UNIT_NO_MOVE_NEXT_TURN[key] = true
+
+    if not targetKey then
+        local pieno = main_unitFullMove(key)
+        melee_btTranslate(basi, pieno)
+        printToAll(string.format("[MISCHIA] Sfondamento della %s: avanza di %d\", nessun nemico raggiunto",
+            main_decodeExtendedUnitLabel(key), pieno), {r=1,g=0.8,b=0.3})
+        return
+    end
+
+    melee_btTranslate(basi, dist or 0)
+    if charge_alignToEnemy then charge_alignToEnemy(key, targetKey) end
+
+    if main_getCohesion(targetKey) == COHESION.ROT then
+        printToAll(string.format("[MISCHIA] Sfondamento: la %s raggiunge la %s in rotta e la DISTRUGGE",
+            main_decodeExtendedUnitLabel(key), main_decodeExtendedUnitLabel(targetKey)), {r=1,g=0.3,b=0.3})
+        main_generalRoutCaught(targetKey)
+        main_removeBases(targetKey, main_getUnitBases(targetKey))
+        return
+    end
+
+    local k1 = (slot == 1) and key or targetKey
+    local k2 = (slot == 1) and targetKey or key
+    local e = melee_findOrCreateElement(k1, k2)
+    e.turnStart = turno
+    e.resolvedTurn = nil
+    if slot == 1 then e.chargedArmy1 = true else e.chargedArmy2 = true end
+    printToAll(string.format("[MISCHIA] Sfondamento: la %s carica la %s, mischia da risolvere subito (fattori di primo turno)",
+        main_decodeExtendedUnitLabel(key), main_decodeExtendedUnitLabel(targetKey)), {r=1,g=0.8,b=0.3})
+end
+
+-- onClick del pannello SFONDAMENTO
+function melee_btClick(ctx, slot, player, rec, value)
+    ctx.player = player.color
+    if value == "SX" then melee_btPivot(ctx, "left", player)
+    elseif value == "DX" then melee_btPivot(ctx, "right", player)
+    elseif value == "GO" then
+        melee_btGo(ctx, player)
+        engine_subClose("SFONDAMENTO", slot, { fatto = true })
+    else
+        melee_btClear(ctx)
+        IEF_MELEE_BREAKTHROUGH[ctx.key] = nil
+        IEF_MELEE_BREAKTHROUGH_DONE[ctx.key] = melee_currentTurn()
+        printToAll(string.format("[MISCHIA] La %s rinuncia allo sfondamento", main_decodeExtendedUnitLabel(ctx.key)), {r=0.8,g=0.8,b=0.8})
+        engine_subClose("SFONDAMENTO", slot, { fatto = false })
+    end
+end
+
+function melee_btDone(ctx, result, slot)
+    callHandler("buildUI")
+    melee_hideChargeLists()
 end

@@ -9,3 +9,8 @@ IEF_MELEE_MARKED = IEF_MELEE_MARKED or {}
 
 -- Pannelli 3D INFO MISCHIA aperti: [unitKey] = base ospite
 IEF_MELEE_INFO_HOST = IEF_MELEE_INFO_HOST or {}
+
+-- Sfondamenti (IMPETO) disponibili: [unitKey] = { slot, nemico, turno }
+IEF_MELEE_BREAKTHROUGH = IEF_MELEE_BREAKTHROUGH or {}
+-- Sfondamento già fatto/rinunciato: [unitKey] = turno (uno per turno)
+IEF_MELEE_BREAKTHROUGH_DONE = IEF_MELEE_BREAKTHROUGH_DONE or {}

@@ -142,7 +142,7 @@ function charge_reactionChoose(ctx, slot, player, rec, value)
     if value == REACTION_TYPE.COC then
         local myMeta = charge_getUnitMeta(charge_getUnitBases(myKey)[1])
         local myTipo = myMeta and myMeta.unitType
-        local myCapabilities = myMeta and myMeta.capabilities or {}
+        local myCapabilities = main_capabilitiesOf(myKey, myMeta)
         local otherMeta = charge_getUnitMeta(charge_getUnitBases(otherKey)[1])
         local otherTipo = otherMeta and otherMeta.unitType
 
@@ -230,7 +230,7 @@ function charge_stopfireCalc(ctx)
 
     local defenderMeta = charge_getUnitMeta(defenderBases[1])
     local armi = defenderMeta and defenderMeta.armi or {}
-    local capabilities = defenderMeta and defenderMeta.capabilities or {}
+    local capabilities = main_capabilitiesOf(defenderKey, defenderMeta)
 
     local weaponsDict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
     local weapon = nil

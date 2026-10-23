@@ -399,6 +399,7 @@ function main_markLosses(unitKey, hits)
 
     printToAll(string.format("[PERDITE] %s: %d colpi -> %d basi perse (rimosse a fine fase)",
         main_decodeExtendedUnitLabel(unitKey), hits, marcate), {r=1,g=0.4,b=0.4})
+    if marcate > 0 then main_generalRisk(unitKey, 12, "l'unita' ha perso una base") end
     return marcate
 end
 
