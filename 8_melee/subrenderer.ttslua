@@ -47,8 +47,8 @@ end)
 registerSubRenderer("meleeSfondamento", function(rec, def, step, slot, isActor)
     if not isActor then return false end
     return { title = def.title, buttons = {
-        { label = "Perno Sx",  icon = "default", value = "SX" },
-        { label = "Perno Dx",  icon = "default", value = "DX" },
+        { label = "Perno Sn",  icon = "default", value = "SN" },
+        { label = "Perno Ds",  icon = "default", value = "DS" },
         { label = "Sfonda",    icon = "carica",  value = "GO" },
         { label = "Rinuncia",  icon = "chiudi",  value = "NO" },
     } }

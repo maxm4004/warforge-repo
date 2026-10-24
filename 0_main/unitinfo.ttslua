@@ -12,22 +12,29 @@
 -- Stato non salvato.
 -- ============================================================
 
-UNITINFO = UNITINFO or {
+-- Stessa grafica di pannello dadi / liste (DICEPANEL, LISTPANEL)
+UNITINFO = {
     rectAlignment = "MiddleLeft",
     offsetXY      = "20 0",
-    width         = 380,
-    bg            = "rgba(0,0,0,0.85)",
+    width         = 400,
+    bg            = "rgba(0,0,0,0.70)",
+    rowBg         = "rgba(1,1,1,0.06)",
+    font          = "warforge_font",
     padding       = 12,
-    spacing       = 4,
+    spacing       = 2,
     titleHeight   = 24,
-    subHeight     = 18,
+    subHeight     = 16,
     rowHeight     = 18,
-    sectionHeight = 22,
-    maxRows       = 24,
-    titleColor    = "#FFD833",
-    sectionColor  = "#B8902E",
+    sectionHeight = 24,
+    maxRows       = 30,
+    titleColor    = "#FFD833",   -- titolo e intestazioni di sezione
+    sectionColor  = "#FFD833",
     textColor     = "White",
-    valueWidth    = 150,
+    subColor      = "#BBBBBB",   -- sottotitolo e voci secondarie
+    okColor       = "#5BD35B",
+    warnColor     = "#FFB347",
+    koColor       = "#FF6B6B",
+    valueWidth    = 190,
 }
 
 -- unitKey mostrata per slot del giocatore che guarda
@@ -43,6 +50,29 @@ local function uiEsc(t)
 end
 
 local function uiSiNo(v) return v and "si" or "no" end
+
+-- Colore del valore: r[3] esplicito, altrimenti +N verde / -N rosso
+local function uiValueColor(r)
+    if r[3] then return r[3] end
+    local v = tostring(r[2] or "")
+    if v:match("^%+%d") then return UNITINFO.okColor end
+    if v:match("^%-%d") then return UNITINFO.koColor end
+    return UNITINFO.textColor
+end
+-- Voce secondaria (rientrata con due spazi): grigia
+local function uiLabelColor(r)
+    if tostring(r[1] or ""):match("^  ") then return UNITINFO.subColor end
+    return UNITINFO.textColor
+end
+local function uiCohesionColor(c)
+    if c == COHESION.SAL then return UNITINFO.okColor end
+    if c == COHESION.DIS then return UNITINFO.warnColor end
+    return UNITINFO.koColor
+end
+local function uiBool(v, buono)
+    -- buono = valore "positivo" (verde); l'altro grigio
+    return (v == buono) and UNITINFO.okColor or UNITINFO.subColor
+end
 
 local function uiWeaponLabel(arma)
     local dict = IEF_DATA.weapons and (IEF_DATA.weapons.weapons or IEF_DATA.weapons)
@@ -85,7 +115,8 @@ function main_unitInfoFixedRows(unitKey)
     end
 
     if not generale then
-        table.insert(righe, { "Coesione", main_getCohesion(unitKey) })
+        local coes = main_getCohesion(unitKey)
+        table.insert(righe, { "Coesione", coes, uiCohesionColor(coes) })
         local classe = meta.morale
         local moraleData = classe and classe ~= "" and main_getMorale(classe)
         if moraleData then
@@ -106,9 +137,19 @@ function main_unitInfoFixedRows(unitKey)
     table.insert(righe, { "Armi", (#armi > 0) and table.concat(armi, ", ") or "nessuna" })
     if gittata then table.insert(righe, { "Gittata", gittata }) end
 
-    local caps = {}
-    for _, c in ipairs(meta.capabilities or {}) do table.insert(caps, uiCapabilityLabel(c)) end
+    local caps, perse = {}, {}
+    local attive = {}
+    for _, c in ipairs(main_capabilitiesOf(unitKey, meta)) do attive[c] = true end
+    for _, c in ipairs(meta.capabilities or {}) do
+        table.insert(attive[c] and caps or perse, uiCapabilityLabel(c))
+    end
     if #caps > 0 then table.insert(righe, { "Capacita'", table.concat(caps, ", ") }) end
+    if #perse > 0 then
+        table.insert(righe, { "  Perse (disordinata)", table.concat(perse, ", "), UNITINFO.koColor })
+    end
+    if not generale then
+        table.insert(righe, { "Unita' chiave", uiSiNo(meta.chiave == true), uiBool(meta.chiave == true, true) })
+    end
 
     if tipoData and tipoData.move_inches then
         table.insert(righe, { "Movimento", string.format('%d"', tipoData.move_inches) })
@@ -121,9 +162,19 @@ function main_unitInfoFixedRows(unitKey)
     else
         local gen = main_getAttachedGeneral(unitKey)
         local inRaggio = slot and main_isInCommandRange(bases[1], slot)
-        table.insert(righe, { "Generale aggregato", gen and "si" or "no" })
-        table.insert(righe, { "In raggio di comando", uiSiNo(inRaggio) })
+        table.insert(righe, { "Generale aggregato", gen and main_decodeExtendedUnitLabel(gen) or "no", uiBool(gen ~= nil, true) })
+        table.insert(righe, { "In raggio di comando", uiSiNo(inRaggio), inRaggio and UNITINFO.okColor or UNITINFO.koColor })
         table.insert(righe, { "Terreno", main_getUnitTerrain(unitKey) or "APERTO" })
+        if main_unitInCover(unitKey) then
+            table.insert(righe, { "  In copertura", "si (-1 al tiro nemico)", UNITINFO.okColor })
+        end
+    end
+
+    -- Breakpoint dell'esercito (condizioni di vittoria)
+    if slot and IEF_ARMY_START and IEF_ARMY_START[slot] then
+        local punti, bp = main_victoryPoints(slot)
+        local colore = (punti >= bp * 0.75) and UNITINFO.koColor or ((punti >= bp / 2) and UNITINFO.warnColor or UNITINFO.textColor)
+        table.insert(righe, { "Punti rottura esercito", string.format("%d / %d", punti, bp), colore })
     end
     return righe
 end
@@ -141,8 +192,10 @@ function main_unitInfoChargeRows(unitKey)
             local nome = main_decodeExtendedUnitLabel(otherKey)
             if charge_elementoRequest(e, mySlot) then
                 table.insert(righe, { "Carica contro", nome })
+            elseif charge_elementoFlanked(e, mySlot) then
+                table.insert(righe, { "Caricata sul fianco da", nome, UNITINFO.koColor })
             else
-                table.insert(righe, { "Caricata da", nome })
+                table.insert(righe, { "Caricata da", nome, UNITINFO.warnColor })
             end
             local r = charge_elementoResponse(e, mySlot)
             if r then
@@ -160,7 +213,12 @@ end
 -- ============================================================
 function main_unitInfoMeleeRows(unitKey)
     local gruppo = melee_getGroupOfUnit(unitKey)
-    if not gruppo then return { { "Mischia", "non in mischia" } } end
+    if not gruppo then
+        if IEF_MELEE_BREAKTHROUGH and IEF_MELEE_BREAKTHROUGH[unitKey] then
+            return { { "Sfondamento", "disponibile: clicca la base", UNITINFO.okColor } }
+        end
+        return { { "Mischia", "non in mischia", UNITINFO.subColor } }
+    end
 
     local calc = melee_computeGroup(gruppo)
     local info = calc.unita[unitKey]
@@ -176,16 +234,32 @@ function main_unitInfoMeleeRows(unitKey)
     local righe = {}
     table.insert(righe, { "Contro", table.concat(nemici, ", ") })
     table.insert(righe, { "Turno di mischia", det.primoTurno and "primo" or "successivo" })
-    if det.fianco then table.insert(righe, { "Caricata sul fianco", "si" }) end
+    if det.fianco then table.insert(righe, { "Caricata sul fianco", "non tira dadi", UNITINFO.koColor }) end
     table.insert(righe, { "Basi in contatto", tostring(det.contatto or 0) })
     table.insert(righe, { "Ranghi posteriori", tostring(det.posteriori or 0) })
     table.insert(righe, { "Overlap", tostring(det.overlap or 0) })
-    if det.dimezzati then
-        table.insert(righe, { "Dadi", string.format("%d (disordinata, da %d)", info.dadi, det.dadiGrezzi or 0) })
+    if (det.picca or 0) > 0 then table.insert(righe, { "  Picca (3° e 4° rango)", tostring(det.picca) }) end
+    if det.perDue then table.insert(righe, { "  FL/CL", "1D6 ogni 2 basi", UNITINFO.warnColor }) end
+    if det.elefanti then table.insert(righe, { "  Elefanti", "2D6 per base in 1° rango" }) end
+    local motivi = {}
+    if det.mista then table.insert(motivi, "mista") end
+    if det.dimezzati then table.insert(motivi, "disordinata") end
+    if #motivi > 0 then
+        table.insert(righe, { "Dadi", string.format("%d (%s, da %d)", info.dadi, table.concat(motivi, " e "), det.dadiGrezzi or 0), UNITINFO.warnColor })
     else
         table.insert(righe, { "Dadi", tostring(info.dadi or 0) })
     end
-    table.insert(righe, { "Per colpire", string.format("%d+", (calc[info.slot] and calc[info.slot].soglia) or 5) })
+    local base = main_getMeleeThreshold() or 5
+    table.insert(righe, { "Per colpire", string.format("%d+", base) })
+    for _, v in ipairs(info.modVoci or {}) do
+        table.insert(righe, { "  " .. tostring(v[1]), tostring(v[2]) })
+    end
+    if info.modDiversi then
+        table.insert(righe, { "  Bersagli diversi", "un tiro per bersaglio", UNITINFO.subColor })
+    end
+    if melee_hasCap(unitKey, "IMPETO") and det.primoTurno then
+        table.insert(righe, { "IMPETO", "doppio dei colpi = nemico in rotta", UNITINFO.okColor })
+    end
     return righe
 end
 
@@ -219,7 +293,7 @@ function main_unitInfoRecoveryRows(unitKey)
         motivo = "Generale aggregato"
     end
 
-    local righe = { { "Puo' tentare il recupero", uiSiNo(puo) }, { "  Motivo", motivo } }
+    local righe = { { "Puo' tentare il recupero", uiSiNo(puo), puo and UNITINFO.okColor or UNITINFO.koColor }, { "  Motivo", motivo } }
     if puo then
         local mod = main_moraleCurrentModifier(unitKey)
         table.insert(righe, { "  Modificatore", string.format("%+d", mod or 0) })
@@ -241,7 +315,8 @@ function main_unitInfoPhaseRows(unitKey)
         if not generale then extra = main_unitInfoChargeRows(unitKey) end
     elseif fase == PHASE.SHOOT then
         if not generale then
-            extra = { { "Ha gia' tirato", uiSiNo(IEF_FIRED and IEF_FIRED[unitKey]) } }
+            local fatto = IEF_FIRED and IEF_FIRED[unitKey]
+            extra = { { "Ha gia' tirato", uiSiNo(fatto), fatto and UNITINFO.subColor or UNITINFO.okColor } }
         end
     elseif fase == PHASE.MELEE then
         if not generale then extra = main_unitInfoMeleeRows(unitKey) end
@@ -347,7 +422,7 @@ function main_unitInfoRedraw(slot)
     local righe = main_unitInfoRows(key)
     UI.setAttribute(pre, "height", tostring(uiHeight(righe)))
     UI.setAttribute(pre .. "_title", "text", main_decodeExtendedUnitLabel(key))
-    UI.setAttribute(pre .. "_sub", "text", key)
+    UI.setAttribute(pre .. "_sub", "text", main_unitInfoSub(key))
 
     for i = 1, UNITINFO.maxRows do
         local r = righe[i]
@@ -357,9 +432,11 @@ function main_unitInfoRedraw(slot)
             local sezione = r.sezione ~= nil
             UI.setAttribute(id, "preferredHeight", tostring(sezione and UNITINFO.sectionHeight or UNITINFO.rowHeight))
             UI.setAttribute(id .. "_l", "text", sezione and r.sezione or (r[1] or ""))
-            UI.setAttribute(id .. "_l", "color", sezione and UNITINFO.sectionColor or UNITINFO.textColor)
+            UI.setAttribute(id .. "_l", "color", sezione and UNITINFO.sectionColor or uiLabelColor(r))
             UI.setAttribute(id .. "_l", "fontStyle", sezione and "Bold" or "Normal")
+            UI.setAttribute(id .. "_l", "fontSize", sezione and "13" or "12")
             UI.setAttribute(id .. "_v", "text", sezione and "" or (r[2] or ""))
+            UI.setAttribute(id .. "_v", "color", sezione and UNITINFO.textColor or uiValueColor(r))
         end
     end
 
@@ -371,7 +448,15 @@ end
 -- XML delle due schede (una per giocatore), già con lo stato
 -- corrente. Da aggiungere in getRulesetUiXml.
 -- ============================================================
+-- Sottotitolo: esercito e chiave unità
+function main_unitInfoSub(key)
+    if not key then return "" end
+    local slot = main_unitSlot(key)
+    return string.format("%s  -  %s", (slot and ARMY[slot] and ARMY[slot].name) or "?", key)
+end
+
 function main_unitInfoPanelsXml()
+    local U = UNITINFO
     local xml = ""
     for slot = 1, 2 do
         local pre = "unit_info_army" .. slot
@@ -379,39 +464,40 @@ function main_unitInfoPanelsXml()
         local righe = key and main_unitInfoRows(key) or {}
 
         local rowsXml = ""
-        for i = 1, UNITINFO.maxRows do
+        for i = 1, U.maxRows do
             local r = righe[i]
             local sezione = r and r.sezione ~= nil
             rowsXml = rowsXml .. string.format(
                 '<HorizontalLayout id="%s_row%d" preferredHeight="%d" childForceExpandWidth="true" active="%s">' ..
-                    '<Text id="%s_row%d_l" text="%s" fontSize="12" fontStyle="%s" color="%s" alignment="MiddleLeft"/>' ..
-                    '<Text id="%s_row%d_v" text="%s" fontSize="12" fontStyle="Bold" color="%s" alignment="MiddleRight" preferredWidth="%d" flexibleWidth="0"/>' ..
+                    '<Text id="%s_row%d_l" text="%s" font="%s" fontSize="%d" fontStyle="%s" color="%s" alignment="MiddleLeft"/>' ..
+                    '<Text id="%s_row%d_v" text="%s" font="%s" fontSize="12" fontStyle="Bold" color="%s" alignment="MiddleRight" preferredWidth="%d" flexibleWidth="0"/>' ..
                 '</HorizontalLayout>',
-                pre, i, sezione and UNITINFO.sectionHeight or UNITINFO.rowHeight, r and "true" or "false",
-                pre, i, uiEsc(r and (r.sezione or r[1])), sezione and "Bold" or "Normal",
-                sezione and UNITINFO.sectionColor or UNITINFO.textColor,
-                pre, i, uiEsc(r and not sezione and r[2] or ""), UNITINFO.textColor, UNITINFO.valueWidth)
+                pre, i, sezione and U.sectionHeight or U.rowHeight, r and "true" or "false",
+                pre, i, uiEsc(r and (r.sezione or r[1])), U.font, sezione and 13 or 12, sezione and "Bold" or "Normal",
+                sezione and U.sectionColor or (r and uiLabelColor(r) or U.textColor),
+                pre, i, uiEsc(r and not sezione and r[2] or ""), U.font,
+                (r and not sezione) and uiValueColor(r) or U.textColor, U.valueWidth)
         end
 
         xml = xml .. string.format(
             '<Panel id="%s" rectAlignment="%s" offsetXY="%s" width="%d" height="%d" color="%s" visibility="%s" active="%s">' ..
                 '<VerticalLayout padding="%d %d %d %d" spacing="%d" childAlignment="UpperLeft" childForceExpandHeight="false" childForceExpandWidth="true">' ..
                     '<HorizontalLayout preferredHeight="%d" childForceExpandWidth="false" childForceExpandHeight="false">' ..
-                        '<Text id="%s_title" text="%s" fontSize="16" fontStyle="Bold" color="%s" alignment="MiddleLeft" preferredWidth="%d"/>' ..
-                        '<Button id="%s_close" text="X" fontSize="14" fontStyle="Bold" textColor="White" color="rgba(0.5,0.5,0.5,0.8)" preferredWidth="%d" preferredHeight="%d" onClick="main_unitInfoCloseClick"/>' ..
+                        '<Text id="%s_title" text="%s" font="%s" fontSize="16" fontStyle="Bold" color="%s" alignment="MiddleLeft" preferredWidth="%d"/>' ..
+                        '<Button id="%s_close" text="X" font="%s" fontSize="13" fontStyle="Bold" textColor="White" color="%s" preferredWidth="%d" preferredHeight="%d" onClick="main_unitInfoCloseClick"/>' ..
                     '</HorizontalLayout>' ..
-                    '<Text id="%s_sub" text="%s" fontSize="10" color="rgba(0.8,0.8,0.8,1)" alignment="MiddleLeft" preferredHeight="%d"/>' ..
+                    '<Text id="%s_sub" text="%s" font="%s" fontSize="10" color="%s" alignment="MiddleLeft" preferredHeight="%d"/>' ..
                     '%s' ..
                 '</VerticalLayout>' ..
             '</Panel>',
-            pre, UNITINFO.rectAlignment, UNITINFO.offsetXY, UNITINFO.width, uiHeight(righe), UNITINFO.bg,
+            pre, U.rectAlignment, U.offsetXY, U.width, uiHeight(righe), U.bg,
             slot == 1 and COLOR.ARMY1 or COLOR.ARMY2, key and "true" or "false",
-            UNITINFO.padding, UNITINFO.padding, UNITINFO.padding, UNITINFO.padding, UNITINFO.spacing,
-            UNITINFO.titleHeight,
-            pre, uiEsc(key and main_decodeExtendedUnitLabel(key)), UNITINFO.titleColor,
-            UNITINFO.width - UNITINFO.padding * 2 - UNITINFO.titleHeight,
-            pre, UNITINFO.titleHeight, UNITINFO.titleHeight,
-            pre, uiEsc(key), UNITINFO.subHeight,
+            U.padding, U.padding, U.padding, U.padding, U.spacing,
+            U.titleHeight,
+            pre, uiEsc(key and main_decodeExtendedUnitLabel(key)), U.font, U.titleColor,
+            U.width - U.padding * 2 - U.titleHeight,
+            pre, U.font, U.rowBg, U.titleHeight, U.titleHeight,
+            pre, uiEsc(main_unitInfoSub(key)), U.font, U.subColor, U.subHeight,
             rowsXml)
     end
     return xml

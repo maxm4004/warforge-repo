@@ -125,7 +125,7 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
     GEN = "Generale",
 }
 
-ARMIES_LABELS = {
+ARMIES_UNIT_LABELS = {
 ["ANG"] = "AngloSassone",					
 ["VIK"] = "Vichinga",				
 ["NOR"] = "Normanna",				
@@ -140,6 +140,23 @@ ARMIES_LABELS = {
 ["SEL"] = "Turca", 			
 ["TEU"] = "Teutonica", 				
 ["RUS"] = "Russa",	
+}
+
+ARMIES_LABELS = {
+["ANG"] = "AngloSassone",					
+["VIK"] = "Vichingo",				
+["NOR"] = "Normanno",				
+["FRA"] = "Franco Carolingio",			
+["IRL"] = "Irlandese",		
+["COM"] = "Italiano",			
+["LON"] = "Longobardo",				
+["BIZ"] = "Bizantino",			
+["CRO"] = "Crociato", 				
+["SAS"] = "Sassanida", 				
+["TED"] = "Tedesco",
+["SEL"] = "Turco", 			
+["TEU"] = "Teutonico", 				
+["RUS"] = "Russo",	
 }
 
 IEF_RANGE_CIRCLE_SHOWN = IEF_RANGE_CIRCLE_SHOWN or {}

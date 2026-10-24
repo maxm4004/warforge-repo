@@ -1928,6 +1928,21 @@ function charge_closestBasePair(basesA, basesB)
     return migliorA, migliorB, migliorDist
 end
 -- ============================================================
+-- FUNZIONE: charge_angolo(y, x)
+-- Angolo (radianti, -pi..pi) del vettore (x, y): sostituisce
+-- math.atan2, deprecata, usando solo math.atan a un argomento.
+-- ============================================================
+function charge_angolo(y, x)
+    if x > 0 then return math.atan(y / x) end
+    if x < 0 then
+        if y >= 0 then return math.atan(y / x) + math.pi end
+        return math.atan(y / x) - math.pi
+    end
+    if y > 0 then return math.pi / 2 end
+    if y < 0 then return -math.pi / 2 end
+    return 0
+end
+-- ============================================================
 -- FUNZIONE: charge_alignToEnemy(myKey, enemyKey)
 -- Regolamento, MOVIMENTO DI CARICA: "Quando l'unità che carica
 -- contatterà il nemico dovrà mettere le basi a contatto,
@@ -1992,7 +2007,7 @@ function charge_alignToEnemy(myKey, enemyKey)
     -- 2) rotazione rigida verso il lato (stessa convenzione di charge_applyPivot)
     local f1 = mie[1].getTransformForward()
     local mf = Vector(f1.x, 0, f1.z):normalized()
-    local ang = math.atan2(mf.x * dir.z - mf.z * dir.x, mf.x * dir.x + mf.z * dir.z)
+    local ang = charge_angolo(mf.x * dir.z - mf.z * dir.x, mf.x * dir.x + mf.z * dir.z)
     if math.abs(ang) > 0.001 then
         local perno = charge_closestBaseToPoint(mie, Vector(centro.x, 0, centro.z)) or mie[1]
         charge_applyPivot(mie, perno, ang)

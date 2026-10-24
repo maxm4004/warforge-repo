@@ -40,7 +40,6 @@ function getRulesetUiXml()
 
     return 
     [[
-
     <Panel id="panelTop"
            rectAlignment="UpperCenter"
            width="450" height="150"

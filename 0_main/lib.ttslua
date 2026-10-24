@@ -932,7 +932,9 @@ function main_formationAfter(unitKey, manovraMuovi, tipo)
     if not main_canManeuver(manovraMuovi, tipo) then
         IEF_MOVE_BUDGET[unitKey]  = 0
         IEF_PIVOT_BUDGET[unitKey] = 0
-        if IEF_MOVE_UNITS and IEF_MOVE_UNITS[unitKey] then move_close(unitKey) end
+        -- Pannello unico: resta aperto (si può annullare); i
+        -- bottoni di movimento si spengono (mossa consumata).
+        if IEF_MOVE_UNITS and IEF_MOVE_UNITS[unitKey] then IEF_MOVE_UNITS[unitKey].consumata = true end
     end
 end
 -- ============================================================
@@ -1182,6 +1184,11 @@ end
 -- ============================================================
 function main_formationRedraw(unitKey)
     main_syncAttachedGeneral(unitKey)
+    -- Pannello unico Movimento + Formazione (fase MOVE)
+    if IEF_MOVE_UNITS and IEF_MOVE_UNITS[unitKey] then
+        move_redraw(unitKey)
+        return
+    end
     local state = IEF_FORM_UNITS[unitKey]
     if not state or not state.panel3DObj or not state.basiObjs then return end
     if state.panel3DObj.isDestroyed() then
@@ -1447,33 +1454,73 @@ end
 -- Wrapper pulsanti UI 3D — TTS passa (player, value, id);
 -- l'unitKey si estrae dall'id del pulsante (unico per unità).
 -- ============================================================
+-- Nel pannello unico ogni manovra riuscita entra nella cronologia
+-- di Annulla (fotografia presa PRIMA della manovra).
+local function formOp(unitKey, fn)
+    local state = IEF_MOVE_UNITS and IEF_MOVE_UNITS[unitKey]
+    local snap = state and move_snapshot(unitKey)
+    if fn() and snap then
+        state.history = state.history or {}
+        table.insert(state.history, snap)
+        move_redraw(unitKey)
+    end
+end
 function main_frontMinus2(player, value, id)
     local unitKey = id:match("^btn_(.+)_FrontMinus2$")
-    if unitKey then main_espandiContraiCore(unitKey, -2) end
+    if unitKey then formOp(unitKey, function() return main_espandiContraiCore(unitKey, -2) end) end
 end
 function main_frontMinus1(player, value, id)
     local unitKey = id:match("^btn_(.+)_FrontMinus1$")
-    if unitKey then main_espandiContraiCore(unitKey, -1) end
+    if unitKey then formOp(unitKey, function() return main_espandiContraiCore(unitKey, -1) end) end
 end
 function main_frontPlus1(player, value, id)
     local unitKey = id:match("^btn_(.+)_FrontPlus1$")
-    if unitKey then main_espandiContraiCore(unitKey, 1) end
+    if unitKey then formOp(unitKey, function() return main_espandiContraiCore(unitKey, 1) end) end
 end
 function main_frontPlus2(player, value, id)
     local unitKey = id:match("^btn_(.+)_FrontPlus2$")
-    if unitKey then main_espandiContraiCore(unitKey, 2) end
+    if unitKey then formOp(unitKey, function() return main_espandiContraiCore(unitKey, 2) end) end
 end
 function main_cambioFronte90Sx(player, value, id)
     local unitKey = id:match("^btn_(.+)_Cambio90Sx$")
-    if unitKey then main_cambioFronte90Core(unitKey, "left") end
+    if unitKey then formOp(unitKey, function() return main_cambioFronte90Core(unitKey, "left") end) end
 end
 function main_cambioFronte90Dx(player, value, id)
     local unitKey = id:match("^btn_(.+)_Cambio90Dx$")
-    if unitKey then main_cambioFronte90Core(unitKey, "right") end
+    if unitKey then formOp(unitKey, function() return main_cambioFronte90Core(unitKey, "right") end) end
 end
 function main_cambioFronte180(player, value, id)
     local unitKey = id:match("^btn_(.+)_Cambio180$")
-    if unitKey then main_cambioFronte180Core(unitKey) end
+    if unitKey then formOp(unitKey, function() return main_cambioFronte180Core(unitKey) end) end
+end
+
+-- ============================================================
+-- FUNZIONE: main_formationButtonStates(unitKey, basiObjs)
+-- Quali manovre di formazione sono consentite ora (stesse regole
+-- di main_formationRedraw / main_formationCanStart).
+-- ============================================================
+function main_formationButtonStates(unitKey, basiObjs)
+    local baseInfo = main_parseNickname(basiObjs[1].getName())
+    local tipo = baseInfo and baseInfo.unitType
+    local inMovePhase = (TURN.phase == "MOVE")
+    local function canDo(manovra)
+        if not inMovePhase then return true end
+        return tipo and main_canManeuver(manovra, tipo)
+    end
+    local turnOk = (not inMovePhase) or IEF_FORM_TEST_MODE
+        or (not IEF_REFORM_USED[unitKey] and not main_unitHasMoved(unitKey))
+    local fronte = main_detectFormation(basiObjs)
+    local inRotta = inMovePhase and main_getCohesion(unitKey) == COHESION.ROT
+    local multi = #basiObjs >= 2
+    local contraiOk = multi and ((canDo("espandi_contrai_1_2_basi_fermi") and turnOk) or inRotta)
+    return {
+        contrai   = contraiOk,
+        espandi   = contraiOk and not inRotta,
+        fronte90  = multi and canDo("cambio_fronte_90_fermi") and (#basiObjs % fronte == 0) and turnOk and not inRotta,
+        fronte180 = canDo("cambio_fronte_180_fermi") and turnOk and not inRotta,
+        usata     = IEF_REFORM_USED[unitKey] == true,
+        fronte    = fronte,
+    }
 end
 function main_formationClose(player, value, id)
     local unitKey = id:match("^btn_(.+)_Close$")
@@ -1564,9 +1611,9 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
     main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
 
     local startPos, startRot = {}, {}
-    for i, b in ipairs(basiObjs) do
-        startPos[i] = b.getPosition()
-        startRot[i] = b.getRotation()
+    for _, b in ipairs(basiObjs) do
+        startPos[b.getGUID()] = b.getPosition()
+        startRot[b.getGUID()] = b.getRotation()
     end
 
     IEF_MOVE_UNITS[unitKey] = {
@@ -1578,9 +1625,18 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
         startRot     = startRot,
         startBudget      = IEF_MOVE_BUDGET[unitKey],
         startPivotBudget = IEF_PIVOT_BUDGET[unitKey],
+        startReformUsed  = IEF_REFORM_USED[unitKey] or false,
+        startFrontWidth  = IEF_FRONT_WIDTH and IEF_FRONT_WIDTH[unitKey],
         history      = {},
         rotta        = inRotta or nil,
         amicheRotta  = inRotta and {} or nil,
+    }
+    -- Pannello unico: le manovre di formazione lavorano sulle
+    -- stesse basi e sullo stesso pannello
+    IEF_FORM_UNITS[unitKey] = {
+        basiObjs     = basiObjs,
+        activePlayer = Player[player_color],
+        panel3DObj   = obj,
     }
 
     move_redraw(unitKey)
@@ -1743,30 +1799,58 @@ function main_buildFormationPanel3DXml(unitKey, x, y, z, colore, labelText)
 end
 
 -- ============================================================
--- FUNZIONE: main_buildMovementPanel3DXml(unitKey, x, z, colore, labelText)
--- Pannello 3D Movimento: 5 pulsanti in riga + Chiudi. ID unici
--- per unitKey.
+-- FUNZIONE: main_buildMovementPanel3DXml(unitKey, x, y, z, colore, titolo, info)
+-- Pannello 3D unico MOVIMENTO + FORMAZIONE (grafica nuova:
+-- sfondo 70%, oro per titolo e sezioni). ID pulsanti unici per
+-- unitKey; lo stato (attivo/spento) lo imposta move_redraw.
 -- ============================================================
-function main_buildMovementPanel3DXml(unitKey, x, y, z, colore, labelText)
+MOVEPANEL = {
+    width   = 760,
+    bg      = "rgba(0,0,0,0.70)",
+    font    = "warforge_font",
+    gold    = "#FFD833",
+    grey    = "#BBBBBB",
+    btnOn   = "#B8902E",
+    btnOff  = "rgba(0.25,0.25,0.25,0.6)",
+    undo1   = "#8A5A1E",
+    undo2   = "#8A2E2E",
+    close   = "rgba(0.35,0.35,0.35,1)",
+}
+function main_buildMovementPanel3DXml(unitKey, x, y, z, colore, titolo, info)
+    local P = MOVEPANEL
+    local function btn(suffisso, testo, onClick, larghezza, colore2)
+        return string.format('<Button id="btn_%s_%s" text="%s" font="%s" fontStyle="Bold" fontSize="16" color="%s" textColor="White" preferredWidth="%d" preferredHeight="34" onClick="Global/%s"/>',
+            unitKey, suffisso, testo, P.font, colore2 or P.btnOn, larghezza, onClick)
+    end
+    local function sezione(testo)
+        return string.format('<Text text="%s" font="%s" fontStyle="Bold" fontSize="15" color="%s" alignment="MiddleLeft" preferredHeight="22"/>', testo, P.font, P.gold)
+    end
+    local function riga(contenuto)
+        return '<HorizontalLayout spacing="8" childAlignment="MiddleCenter" childForceExpandWidth="false" preferredHeight="34">' .. contenuto .. '</HorizontalLayout>'
+    end
     return string.format([[
-        <Panel id="panelMove_%s" active="true" color="rgba(0,0,0,0.85)" width="700" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
-             <VerticalLayout spacing="10" padding="20 20 20 20" childAlignment="MiddleCenter">
-                <Text text="%s" fontStyle="Bold" font="warforge_font" fontSize="20" color="Orange" alignment="MiddleCenter" width="660" height="35"/>
-                <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
-                    <Button id="btn_%s_Move1"   text="Avanti 1&quot;" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnMove1"/>
-                    <Button id="btn_%s_Move2"   text="Avanti 2&quot;" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnMove2"/>
-                    <Button id="btn_%s_MoveMax" text="Avanti Max"     font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnMoveMax"/>
-                    <Button id="btn_%s_PivotSx" text="Perno Sx"      font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnPivotSx"/>
-                    <Button id="btn_%s_PivotDx" text="Perno Dx"      font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="120" height="30" onClick="Global/move_btnPivotDx"/>
-                </HorizontalLayout>
-                <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
-                    <Button id="btn_%s_UndoLast" text="Annulla Ultimo" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.55,0.35,0.1,1)"  textColor="White" width="320" height="30" onClick="Global/move_btnUndoLast"/>
-                    <Button id="btn_%s_UndoAll"  text="Annulla Tutto"  font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.55,0.15,0.15,1)" textColor="White" width="320" height="30" onClick="Global/move_btnUndoAll"/>
-                </HorizontalLayout>
-                <Button id="btn_%s_Close" text="Chiudi" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/move_btnClose"/>
+        <Panel id="panelMove_%s" active="true" color="%s" width="%d" height="470" offsetXY="0 385" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+            <VerticalLayout spacing="6" padding="20 20 16 16" childAlignment="UpperCenter" childForceExpandHeight="false">
+                <Text text="%s" font="%s" fontStyle="Bold" fontSize="22" color="%s" alignment="MiddleCenter" preferredHeight="30"/>
+                <Text text="%s" font="%s" fontSize="15" color="%s" alignment="MiddleCenter" preferredHeight="22"/>
+                %s %s %s %s %s %s
+                <Button id="btn_%s_Close" text="Chiudi" font="%s" fontStyle="Bold" fontSize="18" color="%s" textColor="White" preferredHeight="34" onClick="Global/move_btnClose"/>
             </VerticalLayout>
         </Panel>
-        ]], unitKey, x, y, z, colore, labelText, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey)
+        ]], unitKey, P.bg, P.width, x, y, z, colore,
+        titolo, P.font, P.gold,
+        info, P.font, P.grey,
+        sezione("MOVIMENTO"),
+        riga(btn("Move1", "Avanti 1&quot;", "move_btnMove1", 128) .. btn("Move2", "Avanti 2&quot;", "move_btnMove2", 128)
+          .. btn("MoveMax", "Avanti Max", "move_btnMoveMax", 128) .. btn("PivotSx", "Perno Sx", "move_btnPivotSx", 128)
+          .. btn("PivotDx", "Perno Dx", "move_btnPivotDx", 128)),
+        sezione("FORMAZIONE"),
+        riga(btn("FrontMinus2", "Fronte -2", "main_frontMinus2", 120) .. btn("FrontMinus1", "Fronte -1", "main_frontMinus1", 120)
+          .. btn("FrontPlus1", "Fronte +1", "main_frontPlus1", 120) .. btn("FrontPlus2", "Fronte +2", "main_frontPlus2", 120)),
+        riga(btn("Cambio90Sx", "90° Sx", "main_cambioFronte90Sx", 160) .. btn("Cambio90Dx", "90° Dx", "main_cambioFronte90Dx", 160)
+          .. btn("Cambio180", "180°", "main_cambioFronte180", 160)),
+        riga(btn("UndoLast", "Annulla Ultimo", "move_btnUndoLast", 330, P.undo1) .. btn("UndoAll", "Annulla Tutto", "move_btnUndoAll", 330, P.undo2)),
+        unitKey, P.font, P.close)
 end
 -- ============================================================
 -- FUNZIONE: main_getChildOffsets()
@@ -2075,7 +2159,7 @@ function main_createBaseButtons(obj, phase, unit)
         [PHASE.CHARGE_DECLARE]   = {tidy, info, charge},
         [PHASE.CHARGE_REACT]     = {tidy, info},
         [PHASE.CHARGE_AUTO]      = {tidy, info},
-        [PHASE.MOVE]             = {tidy, info, form, move},
+        [PHASE.MOVE]             = {tidy, info, move},   -- formazione nel pannello movimento
         [PHASE.SHOOT]            = {tidy, info, shoot},
         [PHASE.MELEE]            = {tidy, info},
         [PHASE.RECOVERY]         = {tidy, info, recovery}

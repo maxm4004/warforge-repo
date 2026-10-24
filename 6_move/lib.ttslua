@@ -86,7 +86,10 @@ function move_redraw(unitKey)
     local moveResiduo  = IEF_MOVE_BUDGET[unitKey]  or 0
     local pivotResiduo = IEF_PIVOT_BUDGET[unitKey] or 0
 
-    if moveResiduo <= 0.001 and not IEF_MOVE_TEST_MODE then
+    -- Mossa consumata da una manovra di formazione: il pannello
+    -- resta aperto per poter annullare; i bottoni di movimento sono spenti.
+    local soloFormazione = state.consumata and not state.rotta
+    if moveResiduo <= 0.001 and not IEF_MOVE_TEST_MODE and not soloFormazione then
         if state.rotta then main_routContinueDone(unitKey, state) end
         if state.activePlayer then
             warningToColor("Movimento esaurito: l'unita' ha completato la mossa", state.activePlayer, "Yellow", 5, true)
@@ -129,22 +132,43 @@ function move_redraw(unitKey)
     local fronte = main_detectFormation(basiObjs)
     local x, y, z = main_calcolaPosizionePannello(fronte, #basiObjs)
     local panel3D = state.panel3DObj
-    local labelText = string.format("%s - Movimento: %.0f&quot;   Perno: %.0f&quot;", unitKey, moveResiduo, pivotResiduo)
-    panel3D.UI.setXml(main_buildMovementPanel3DXml(unitKey, x, y, z, state.activePlayer.color, labelText))
+    local form = main_formationButtonStates(unitKey, basiObjs)
+    local titolo = (state.rotta and "ROTTA - " or "") .. main_decodeExtendedUnitLabel(unitKey)
+    local infoText = string.format("Movimento %.1f&quot;   Perno %.0f&quot;   Fronte %d   Formazione: %s",
+        moveResiduo, pivotResiduo, form.fronte,
+        soloFormazione and "mossa consumata" or (form.usata and "usata" or "disponibile"))
+    panel3D.UI.setXml(main_buildMovementPanel3DXml(unitKey, x, y, z, state.activePlayer.color, titolo, infoText))
 
     local function canDo(manovra)
         return tipo and main_canManeuver(manovra, tipo)
     end
 
-    local COLOR_ON  = "rgba(0.45,0.45,0.45,1)"
-    local COLOR_OFF = "rgba(0.2,0.2,0.2,0.5)"
+    local COLOR_ON  = MOVEPANEL.btnOn
+    local COLOR_OFF = MOVEPANEL.btnOff
 
     Wait.frames(function()
         if panel3D.isDestroyed() then return end
         local function setBtn(id, ok)
             panel3D.UI.setAttribute(id, "interactable", ok and "true" or "false")
             panel3D.UI.setAttribute(id, "color", ok and COLOR_ON or COLOR_OFF)
+            panel3D.UI.setAttribute(id, "textColor", ok and "White" or MOVEPANEL.grey)
         end
+        local hist = state.history and #state.history > 0
+        setBtn("btn_" .. unitKey .. "_UndoLast", hist)
+        setBtn("btn_" .. unitKey .. "_UndoAll",  hist)
+        if hist then
+            panel3D.UI.setAttribute("btn_" .. unitKey .. "_UndoLast", "color", MOVEPANEL.undo1)
+            panel3D.UI.setAttribute("btn_" .. unitKey .. "_UndoAll",  "color", MOVEPANEL.undo2)
+        end
+
+        -- Formazione (stesse regole del vecchio pannello)
+        setBtn("btn_" .. unitKey .. "_FrontMinus2", form.contrai)
+        setBtn("btn_" .. unitKey .. "_FrontMinus1", form.contrai)
+        setBtn("btn_" .. unitKey .. "_FrontPlus1",  form.espandi)
+        setBtn("btn_" .. unitKey .. "_FrontPlus2",  form.espandi)
+        setBtn("btn_" .. unitKey .. "_Cambio90Sx",  form.fronte90)
+        setBtn("btn_" .. unitKey .. "_Cambio90Dx",  form.fronte90)
+        setBtn("btn_" .. unitKey .. "_Cambio180",   form.fronte180)
 
         -- "Perno e restare fermi" (senza "perno e movimento
         -- restante"): o perni o avanti, non entrambi.
@@ -152,7 +176,7 @@ function move_redraw(unitKey)
         local avanzato = (main_unitFullMove(unitKey) - moveResiduo) > perniUsati + 0.001
         local soloPerno = not canDo("perno_max3_e_muovi") and not IEF_MOVE_TEST_MODE and not state.rotta
 
-        local avantiOk = canDo("avanti") and not (soloPerno and perniUsati > 0)
+        local avantiOk = canDo("avanti") and not (soloPerno and perniUsati > 0) and not soloFormazione
         -- Avanti 1": attivo con qualsiasi residuo (se < 1" muove il
         -- residuo, move_avanti_apply limita al budget). Tolleranza
         -- sui decimali dei budget (rotta, carica).
@@ -162,7 +186,7 @@ function move_redraw(unitKey)
 
         local pivotOk = canDo("perno_max3_fermi") and pivotResiduo >= 1 - 0.001 and moveResiduo >= 1 - 0.001
                         and #basiObjs >= 2
-                        and not (soloPerno and avanzato)
+                        and not (soloPerno and avanzato) and not soloFormazione
         setBtn("btn_" .. unitKey .. "_PivotSx", pivotOk)
         setBtn("btn_" .. unitKey .. "_PivotDx", pivotOk)
 
@@ -183,10 +207,11 @@ function move_snapshot(unitKey)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state or not state.basiObjs then return nil end
 
+    -- Per GUID: le manovre riordinano state.basiObjs
     local pos, rot = {}, {}
-    for i, b in ipairs(state.basiObjs) do
-        pos[i] = b.getPosition()
-        rot[i] = b.getRotation()
+    for _, b in ipairs(state.basiObjs) do
+        pos[b.getGUID()] = b.getPosition()
+        rot[b.getGUID()] = b.getRotation()
     end
 
     local amiche = nil
@@ -201,6 +226,9 @@ function move_snapshot(unitKey)
         pivotBudget = IEF_PIVOT_BUDGET[unitKey],
         amiche      = amiche,
         bloccata    = state.bloccata,
+        reformUsed  = IEF_REFORM_USED[unitKey] or false,
+        frontWidth  = IEF_FRONT_WIDTH and IEF_FRONT_WIDTH[unitKey],
+        consumata   = state.consumata or false,
     }
 end
 
@@ -212,13 +240,22 @@ function move_restoreSnapshot(unitKey, snap)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state or not state.basiObjs or not snap then return end
 
-    for i, b in ipairs(state.basiObjs) do
-        if snap.pos[i] then b.setPosition(snap.pos[i]) end
-        if snap.rot[i] then b.setRotation(snap.rot[i]) end
+    for _, b in ipairs(state.basiObjs) do
+        local g = b.getGUID()
+        if snap.pos[g] then b.setPosition(snap.pos[g]) end
+        if snap.rot[g] then b.setRotation(snap.rot[g]) end
     end
 
     IEF_MOVE_BUDGET[unitKey]  = snap.budget
     IEF_PIVOT_BUDGET[unitKey] = snap.pivotBudget
+    -- Formazione: Annulla vale anche per le manovre (la manovra
+    -- annullata torna disponibile)
+    if snap.reformUsed ~= nil then
+        IEF_REFORM_USED[unitKey] = snap.reformUsed or nil
+        if IEF_FRONT_WIDTH then IEF_FRONT_WIDTH[unitKey] = snap.frontWidth end
+        state.consumata = snap.consumata or nil
+    end
+    main_riposizionaPulsanteFormazione(unitKey, state.basiObjs)
     if state.rotta then
         state.amicheRotta = snap.amiche or {}
         state.bloccata = snap.bloccata
@@ -250,6 +287,9 @@ function move_undoAll(unitKey)
     move_restoreSnapshot(unitKey, {
         pos = state.startPos, rot = state.startRot,
         budget = state.startBudget, pivotBudget = state.startPivotBudget,
+        reformUsed = state.startReformUsed or false,
+        frontWidth = state.startFrontWidth,
+        consumata = false,
     })
     state.history = {}
     move_redraw(unitKey)
@@ -429,6 +469,7 @@ function move_close(unitKey)
     end
 
     IEF_MOVE_UNITS[unitKey] = nil
+    if IEF_FORM_UNITS then IEF_FORM_UNITS[unitKey] = nil end
 end
 
 -- ============================================================

@@ -5,22 +5,9 @@
 function getEngineUiXml()
 
     local panels = [[
-        <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="true">
+        <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="false">
             <Image image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/warforge.png" preserveAspect="1"/>
-        </Panel>
-        <Panel rectAlignment="LowerCenter" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="0 300">
-            <Text id="playerGameMessage" text="" fontStyle="Bold" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
-            outlineSize="1" alignment="LeftCenter"/>
-        </Panel>
-        <Panel id="panelVersion" active="true">
-            rectAlignment="UpperCenter"
-            width="420"
-            height="30"
-            color="rgba(0,0,0,0.35)"
-            offsetXY="-700 -320">
-            <Text id="versione" text="" font="warforge_font" fontSize="13" color="Yellow" alignment="MiddleCenter" outline="#000000" outlineSize="1"/>
-        </Panel> 
-        
+        </Panel>      
         <Panel id="measure_cancel_panel"
         rectAlignment="LowerCenter"
         width="150" height="50"
@@ -39,6 +26,14 @@ function getEngineUiXml()
                         onClick="engine_measure_cancel"/>
             </HorizontalLayout>
      </Panel>
+        <Panel rectAlignment="UpperLeft" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="-200 0">
+            <Text id="versione" text="" fontStyle="Bold" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
+            outlineSize="1" alignment="LeftCenter"/>
+        </Panel>
+     <Panel rectAlignment="LowerCenter" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="0 300">
+            <Text id="playerGameMessage" text="" fontStyle="Bold" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
+            outlineSize="1" alignment="LeftCenter"/>
+        </Panel>
     ]]
     return panels
 end

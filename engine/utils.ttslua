@@ -117,8 +117,6 @@ end
 -- ============================================================
 -- FUNZIONE: warning()
 -- ============================================================
-
-
 function warning(warning, textColor)
 
     local color = textColor == "Yellow" and "#FFD833" or textColor
@@ -133,6 +131,12 @@ function warning(warning, textColor)
     Wait.time(function()
         engine_hideGameMessage(gen)
     end, 5)
+end
+-- ============================================================
+-- FUNZIONE: printLog(message, color)
+-- ============================================================
+function printLog(message, color)
+    printToAll("[LOG] " .. message, color)
 end
 -- ============================================================
 -- FUNZIONE: clear()
