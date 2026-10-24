@@ -1174,6 +1174,26 @@ function main_formationOpenFromButton(obj, player_color, alt_click)
         panel3DObj   = obj,
     }
 
+    -- Schieramento: stesso pannello unico Movimento + Formazione,
+    -- con i bottoni di movimento spenti (Annulla vale anche qui).
+    local startPos, startRot = {}, {}
+    for _, b in ipairs(basiObjs) do
+        startPos[b.getGUID()] = b.getPosition()
+        startRot[b.getGUID()] = b.getRotation()
+    end
+    IEF_MOVE_UNITS[unitKey] = {
+        basiObjs        = basiObjs,
+        activePlayer    = Player[player_color],
+        panel3DObj      = obj,
+        startPos        = startPos,
+        startRot        = startRot,
+        startReformUsed = IEF_REFORM_USED[unitKey] or false,
+        startFrontWidth = IEF_FRONT_WIDTH and IEF_FRONT_WIDTH[unitKey],
+        history         = {},
+        schieramento    = true,
+    }
+    IEF_FORM_UNITS[unitKey].basiObjs = IEF_MOVE_UNITS[unitKey].basiObjs
+
     main_formationRedraw(unitKey)
 end
 

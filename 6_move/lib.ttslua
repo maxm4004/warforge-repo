@@ -88,7 +88,7 @@ function move_redraw(unitKey)
 
     -- Mossa consumata da una manovra di formazione: il pannello
     -- resta aperto per poter annullare; i bottoni di movimento sono spenti.
-    local soloFormazione = state.consumata and not state.rotta
+    local soloFormazione = (state.consumata and not state.rotta) or state.schieramento
     if moveResiduo <= 0.001 and not IEF_MOVE_TEST_MODE and not soloFormazione then
         if state.rotta then main_routContinueDone(unitKey, state) end
         if state.activePlayer then
@@ -122,7 +122,7 @@ function move_redraw(unitKey)
     local endLeft    = Vector(startLeft.x  + fwdXZ.x*rangeUnits, y1, startLeft.z  + fwdXZ.z*rangeUnits)
     local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, y1, startRight.z + fwdXZ.z*rangeUnits)
 
-    mover.setVectorLines({
+    mover.setVectorLines(state.schieramento and {} or {
         {points = {mover.positionToLocal(startLeft),  mover.positionToLocal(endLeft)},  color={0.2,0.6,1}, thickness=0.03},
         {points = {mover.positionToLocal(startRight), mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.03},
         {points = {mover.positionToLocal(endLeft),    mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.03},
@@ -134,9 +134,11 @@ function move_redraw(unitKey)
     local panel3D = state.panel3DObj
     local form = main_formationButtonStates(unitKey, basiObjs)
     local titolo = (state.rotta and "ROTTA - " or "") .. main_decodeExtendedUnitLabel(unitKey)
-    local infoText = string.format("Movimento %.1f&quot;   Perno %.0f&quot;   Fronte %d   Formazione: %s",
-        moveResiduo, pivotResiduo, form.fronte,
-        soloFormazione and "mossa consumata" or (form.usata and "usata" or "disponibile"))
+    local infoText = state.schieramento
+        and string.format("Schieramento: solo formazione   Fronte %d", form.fronte)
+        or string.format("Movimento %.1f&quot;   Perno %.0f&quot;   Fronte %d   Formazione: %s",
+            moveResiduo, pivotResiduo, form.fronte,
+            soloFormazione and "mossa consumata" or (form.usata and "usata" or "disponibile"))
     panel3D.UI.setXml(main_buildMovementPanel3DXml(unitKey, x, y, z, state.activePlayer.color, titolo, infoText))
 
     local function canDo(manovra)
