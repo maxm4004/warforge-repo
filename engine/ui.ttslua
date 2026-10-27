@@ -5,35 +5,32 @@
 function getEngineUiXml()
 
     local panels = [[
-        <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="false">
+        <Panel id="logo_panel" rectAlignment="UpperCenter" width="650" height="500" offsetXY="-700 80" active="true">
             <Image image="https://raw.githubusercontent.com/maxm4004/warforge-ief/refs/heads/main/images/warforge.png" preserveAspect="1"/>
-        </Panel>      
-        <Panel id="measure_cancel_panel"
-        rectAlignment="LowerCenter"
-        width="150" height="50"
-        color="rgba(0,0,0,0.00)"
-        offsetXY="0 0"
-        active="false">
-            <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter">               
-                <Button id="btn_measure_cancel_panel"
-                        text="CANCEL"
-                        font="warforge_font"
-                        fontSize="11" fontStyle="Bold"
-                        image="Sprites/Layout/Button"
-                        color="rgba(0.4,0.4,0.4,1)"
-                        textColor="White"
-                        width="40"
-                        onClick="engine_measure_cancel"/>
-            </HorizontalLayout>
-     </Panel>
-        <Panel rectAlignment="UpperLeft" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="-200 0">
-            <Text id="versione" text="" fontStyle="Bold" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
-            outlineSize="1" alignment="LeftCenter"/>
         </Panel>
-     <Panel rectAlignment="LowerCenter" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="0 300">
+        <Panel rectAlignment="LowerCenter" width="1100" height="60" color="rgba(0,0,0,0)" offsetXY="0 300">
             <Text id="playerGameMessage" text="" fontStyle="Bold" font="warforge_font" fontSize="18" color="rgba(212,175,55,0.9)" outline="#000000" 
             outlineSize="1" alignment="LeftCenter"/>
         </Panel>
+        <Panel id="panelVersion" active="true">
+            rectAlignment="UpperCenter"
+            width="420"
+            height="30"
+            color="rgba(0,0,0,0.35)"
+            offsetXY="-700 -320">
+            <Text id="versione" text="" font="warforge_font" fontSize="13" color="Yellow" alignment="MiddleCenter" outline="#000000" outlineSize="1"/>
+        </Panel> 
+        
+        <Panel id="measure_cancel_panel"
+        rectAlignment="LowerCenter"
+        width="190" height="50"
+        color="rgba(0,0,0,0.00)"
+        offsetXY="0 0"
+        active="false">
+            <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter">
+                <Button id="btn_measure_cancel_panel" text="Annulla misura" font="warforge_font" fontSize="13" fontStyle="Normal" color="rgba(0.75,0.75,0.75,1)" textColor="Black" preferredHeight="34" onClick="engine_measure_cancel"/>
+            </HorizontalLayout>
+     </Panel>
     ]]
     return panels
 end

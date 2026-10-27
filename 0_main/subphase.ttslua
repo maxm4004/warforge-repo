@@ -61,7 +61,7 @@ function main_moraleTestEnter(ctx, slot, rec)
     local req, idx = main_moraleFindRequest(slot, ctx.reqId)
     if req then
         local id = string.format("morale_queue_row_%d_%d", slot, idx)
-        UI.setAttribute(id, "text", "  " .. main_moraleRowText(req, true))
+        UI.setAttribute(id, "text", main_moraleRowText(req, true))
         Wait.frames(function()
             UI.setAttribute(id, "textColor", LISTPANEL.gold)
         end, 1)

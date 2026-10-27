@@ -1,3 +1,11 @@
+-- Bottoni dei pannelli di conferma (Tiro, Dichiara, Test Morale,
+-- Annulla misura): testo normale (non grassetto), colori qui.
+CONFIRMPANEL = {
+    actionBg   = "#B8902E",                  -- bottone d'azione: oro
+    closeBg    = "rgba(0.75,0.75,0.75,1)",   -- Chiudi / Annulla: grigio chiaro
+    actionText = "Black",
+    closeText  = "Black",
+}
 -- ============================================================
 -- rulesets/imperifeudi/engine/ui.ttslua
 -- UI specifica IEF: getRulesetUiXml() + updateCenterPanel()
@@ -40,6 +48,7 @@ function getRulesetUiXml()
 
     return 
     [[
+
     <Panel id="panelTop"
            rectAlignment="UpperCenter"
            width="450" height="150"
@@ -138,90 +147,39 @@ function getRulesetUiXml()
         <!-- CONFIRM SHOOT PANEL -->
         <Panel id="confirm_panel_shoot"
         rectAlignment="LowerCenter"
-        width="260" height="50"
+        width="300" height="50"
         color="rgba(0,0,0,0.00)"
         offsetXY="0 100"
         active="false">
-        <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -100 0">
-            <Button id="btnShoot"
-                    text="Tiro"
-                    font="warforge_font"
-                    fontSize="11"
-                    image="Sprites/Layout/Button"
-                    color="rgba(0.7,0.15,0.15,1)"
-                    textColor="White"
-                    width="80"
-                    onClick="shoot_Confirm"/>
-
-            <Button id="btnShootCancel"
-                    text="Chiudi"
-                    font="warforge_font"
-                    fontSize="11"
-                    image="Sprites/Layout/Button"
-                    color="rgba(0.4,0.4,0.4,1)"
-                    textColor="White"
-                    width="80"
-                    onClick="shoot_ResetLines"/>
+        <HorizontalLayout spacing="8" padding="10 10 10 10" childAlignment="MiddleCenter" childForceExpandWidth="false" position="0 -100 0">
+            <Button id="btnShoot" text="Tiro" font="warforge_font" fontSize="13" fontStyle="Normal" color="]] .. CONFIRMPANEL.actionBg .. [[" textColor="]] .. CONFIRMPANEL.actionText .. [[" preferredWidth="130" preferredHeight="34" onClick="shoot_Confirm"/>
+            <Button id="btnShootCancel" text="Chiudi" font="warforge_font" fontSize="13" fontStyle="Normal" color="]] .. CONFIRMPANEL.closeBg .. [[" textColor="]] .. CONFIRMPANEL.closeText .. [[" preferredWidth="130" preferredHeight="34" onClick="shoot_ResetLines"/>
         </HorizontalLayout>
         </Panel>
     ]] .. shoot_infoPanelXml() .. [[
 
 <Panel id="confirm_panel_charge"
-   rectAlignment="LowerCenter"
-   width="260" height="50"
-   color="rgba(0,0,0,0.00)"
-   offsetXY="0 100"
-   active="false">
-   <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -100 0">
-    <Button id="btnActionCharge"
-            text="Dichiara"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            onClick="charge_declareConfirm"/>
-
-    <Button id="btnCancelCharge"
-            text="Chiudi"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.4,0.4,0.4,1)"
-            textColor="White"
-            width="80"
-            onClick="charge_declareCancel"/>
-</HorizontalLayout>
-</Panel>
+        rectAlignment="LowerCenter"
+        width="300" height="50"
+        color="rgba(0,0,0,0.00)"
+        offsetXY="0 100"
+        active="false">
+        <HorizontalLayout spacing="8" padding="10 10 10 10" childAlignment="MiddleCenter" childForceExpandWidth="false" position="0 -100 0">
+            <Button id="btnActionCharge" text="Dichiara" font="warforge_font" fontSize="13" fontStyle="Normal" color="]] .. CONFIRMPANEL.actionBg .. [[" textColor="]] .. CONFIRMPANEL.actionText .. [[" preferredWidth="130" preferredHeight="34" onClick="charge_declareConfirm"/>
+            <Button id="btnCancelCharge" text="Chiudi" font="warforge_font" fontSize="13" fontStyle="Normal" color="]] .. CONFIRMPANEL.closeBg .. [[" textColor="]] .. CONFIRMPANEL.closeText .. [[" preferredWidth="130" preferredHeight="34" onClick="charge_declareCancel"/>
+        </HorizontalLayout>
+        </Panel>
 
 <Panel id="confirm_panel_morale"
-   rectAlignment="LowerCenter"
-   width="260" height="50"
-   color="rgba(0,0,0,0.00)"
-   offsetXY="0 100"
-   active="false">
-   <HorizontalLayout spacing="6" padding="10 10 10 10" childAlignment="MiddleCenter" position="0 -100 0">
-    <Button id="btnActionMorale"
-            text="Test Morale"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.7,0.15,0.15,1)"
-            textColor="White"
-            width="80"
-            onClick="charge_moraleConfirm"/>
-
-    <Button id="btnCancelMorale"
-            text="Chiudi"
-            font="warforge_font"
-            fontSize="11"
-            image="Sprites/Layout/Button"
-            color="rgba(0.4,0.4,0.4,1)"
-            textColor="White"
-            width="80"
-            onClick="charge_moraleCancel"/>
-</HorizontalLayout>
-</Panel>
+        rectAlignment="LowerCenter"
+        width="300" height="50"
+        color="rgba(0,0,0,0.00)"
+        offsetXY="0 100"
+        active="false">
+        <HorizontalLayout spacing="8" padding="10 10 10 10" childAlignment="MiddleCenter" childForceExpandWidth="false" position="0 -100 0">
+            <Button id="btnActionMorale" text="Test Morale" font="warforge_font" fontSize="13" fontStyle="Normal" color="]] .. CONFIRMPANEL.actionBg .. [[" textColor="]] .. CONFIRMPANEL.actionText .. [[" preferredWidth="130" preferredHeight="34" onClick="charge_moraleConfirm"/>
+            <Button id="btnCancelMorale" text="Chiudi" font="warforge_font" fontSize="13" fontStyle="Normal" color="]] .. CONFIRMPANEL.closeBg .. [[" textColor="]] .. CONFIRMPANEL.closeText .. [[" preferredWidth="130" preferredHeight="34" onClick="charge_moraleCancel"/>
+        </HorizontalLayout>
+        </Panel>
             ]] .. chargeAttack1 .. chargeAttack2 .. chargeDefense1 .. chargeDefense2 .. meleeList1 .. meleeList2 .. moraleQueue1 .. moraleQueue2 .. main_getRoutListPanelXml(1) .. main_getRoutListPanelXml(2) .. main_unitInfoPanelsXml()
 end

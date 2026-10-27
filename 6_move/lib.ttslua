@@ -331,6 +331,26 @@ function move_avanti_apply(unitKey, distanzaInch)
         end
     end
     
+    -- Percorso (non in rotta): ci si ferma a contatto dell'amica
+    -- che non si può attraversare e a 1/2" dal nemico.
+    if not state.rotta and not state.carica and not IEF_MOVE_TEST_MODE and not main_isGeneralKey(unitKey) then
+        local passo = main_pathCheck(unitKey, distanzaInch, { margineNemico = IEF_MOVE_ENEMY_GAP_INCHES })
+        if passo.avanza < distanzaInch - 0.01 then
+            local p = state.activePlayer
+            local chi = passo.chi and main_decodeExtendedUnitLabel(passo.chi) or ""
+            local msg = (passo.motivo == "nemico") and ("Nemico davanti (" .. chi .. "): ci si ferma a 1/2\"")
+                     or (passo.motivo == "amica") and ("Unita' amica davanti (" .. chi .. ") che non si puo' attraversare")
+                     or "Terreno intransitabile davanti"
+            if passo.avanza <= 0.01 then
+                if p then warningToColor(msg, p, "Yellow", 5, true) end
+                move_redraw(unitKey)
+                return false
+            end
+            if p then warningToColor(string.format("%s: avanza solo %.1f\"", msg, passo.avanza), p, "Yellow", 5, true) end
+            distanzaInch = passo.avanza
+        end
+    end
+
     state.history = state.history or {}
     table.insert(state.history, move_snapshot(unitKey))
 
@@ -354,7 +374,7 @@ function move_avanti_apply(unitKey, distanzaInch)
     -- passo si annulla se finisce in terreno vietato o supera il
     -- movimento consentito dal terreno toccato; se c'è ancora
     -- margine si rifà più corto.
-    if not state.rotta and not IEF_MOVE_TEST_MODE and not main_isGeneralKey(unitKey) then
+    if not state.rotta and not state.carica and not IEF_MOVE_TEST_MODE and not main_isGeneralKey(unitKey) then
         local meta = main_getUnitMeta(basiObjs[1])
         local tipo = meta and meta.unitType
         local pieno = main_unitFullMove(unitKey)
@@ -393,33 +413,13 @@ function move_perno_apply(unitKey, direction)
     local moveResiduo  = IEF_MOVE_BUDGET[unitKey]  or 0
     local pivotResiduo = IEF_PIVOT_BUDGET[unitKey] or 0
 
-    move_getGroupAxis(basiObjs)
-
-    local pivotBase, farBase
-    if direction == "left" then
-        pivotBase, farBase = basiObjs[1], basiObjs[#basiObjs]
-    else
-        pivotBase, farBase = basiObjs[#basiObjs], basiObjs[1]
-    end
-
-    local pivotPos = pivotBase.getPosition()
-    local farPos   = farBase.getPosition()
-    local radius = (Vector(farPos.x - pivotPos.x, 0, farPos.z - pivotPos.z)):magnitude()
-    if radius <= 0 then return false end
-
-    -- Angolo FISSO allo snap di TTS (15°), non più calcolato da
-    -- distanzaInch/radius — elimina la discrepanza che causava il
-    -- soft-snap al tocco: il nostro perno e quello di TTS coincidono.
-    local angoloGradi = (direction == "left") and -ROTATION_SNAP_DEGREES or ROTATION_SNAP_DEGREES
-    local angoloSigned = math.rad(angoloGradi)
-
-    -- Regolamento: ogni perno costa 1" di movimento, massimo 3
-    -- perni per mossa (IEF_PIVOT_BUDGET parte da 3). L'angolo resta
-    -- quello dello snap di TTS.
+    -- Regolamento: ogni perno costa 1" di movimento (massimo 3"),
+    -- misurato sull'angolo anteriore esterno che ruota attorno
+    -- all'angolo anteriore del lato del perno (main_pivotFrontCorner).
     local distanzaInch = 1
 
     if not IEF_MOVE_TEST_MODE then
-        if distanzaInch > moveResiduo or distanzaInch > pivotResiduo then
+        if distanzaInch > moveResiduo + 0.001 or distanzaInch > pivotResiduo + 0.001 then
             return false
         end
     end
@@ -427,23 +427,28 @@ function move_perno_apply(unitKey, direction)
     state.history = state.history or {}
     table.insert(state.history, move_snapshot(unitKey))
 
-    for _, obj in ipairs(basiObjs) do
-        if obj ~= pivotBase then
-            local p = obj.getPosition()
-            local rel = Vector(p.x - pivotPos.x, 0, p.z - pivotPos.z)
-            local rx = rel.x * math.cos(angoloSigned) - rel.z * math.sin(angoloSigned)
-            local rz = rel.x * math.sin(angoloSigned) + rel.z * math.cos(angoloSigned)
-            main_setPositionOnGround(obj, pivotPos.x + rx, pivotPos.z + rz, angoloSigned)
-        else
-            main_setPositionOnGround(obj, pivotPos.x, pivotPos.z, angoloSigned)
-        end
-        local rot = obj.getRotation()
-        obj.setRotation(Vector(rot.x, rot.y - angoloGradi, rot.z))
+    if not main_pivotFrontCorner(basiObjs, direction, distanzaInch) then
+        table.remove(state.history)
+        return false
     end
 
     if not IEF_MOVE_TEST_MODE then
         IEF_MOVE_BUDGET[unitKey]  = moveResiduo  - distanzaInch
         IEF_PIVOT_BUDGET[unitKey] = pivotResiduo - distanzaInch
+    end
+
+    -- Il perno non può finire sopra un'altra unità (non attraversabile)
+    if not state.rotta and not IEF_MOVE_TEST_MODE then
+        local sopra = main_unitOverlapKey(unitKey)
+        if sopra then
+            move_restoreSnapshot(unitKey, table.remove(state.history))
+            if state.activePlayer then
+                warningToColor("Perno impossibile: l'unita' finirebbe sopra la " .. main_decodeExtendedUnitLabel(sopra),
+                    state.activePlayer, "Yellow", 5, true)
+            end
+            move_redraw(unitKey)
+            return false
+        end
     end
 
     move_redraw(unitKey)

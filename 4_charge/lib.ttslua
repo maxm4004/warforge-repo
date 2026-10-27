@@ -440,23 +440,31 @@ end
 -- attaccato a un oggetto, non alla UI globale). ID pulsanti
 -- unici per unitKey.
 -- ============================================================
-function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText)
+function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText, infoText)
+    local P = MOVEPANEL
+    local function btn(suffisso, testo, onClick, larghezza, c)
+        return string.format('<Button id="btn_%s_%s" text="%s" font="%s" fontStyle="Bold" fontSize="16" color="%s" textColor="White" preferredWidth="%d" preferredHeight="34" onClick="Global/%s"/>',
+            unitKey, suffisso, testo, P.font, c or P.btnOn, larghezza, onClick)
+    end
+    local function riga(contenuto)
+        return '<HorizontalLayout spacing="8" childAlignment="MiddleCenter" childForceExpandWidth="false" preferredHeight="34">' .. contenuto .. '</HorizontalLayout>'
+    end
     return string.format([[
-        <Panel id="panelCharge_%s" active="true" color="rgba(0,0,0,0.99)" width="700" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
-            <VerticalLayout spacing="10" padding="20 20 20 20" childAlignment="MiddleCenter">
-                <Text text="%s" fontStyle="Bold" font="warforge_font" fontSize="20" color="Orange" alignment="MiddleCenter" width="660" height="35"/>
-                <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
-                    <Button id="btn_%s_ChargePivotSx" text="Perno Destro"   font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotSx"/>
-                    <Button id="btn_%s_ChargePivotDx" text="Perno Sinistro" font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="150" height="30" onClick="Global/charge_btnPivotDx"/>
-                    <Button id="btn_%s_ChargeCheck"   text="Controlla"      font="warforge_font" fontStyle="Bold" fontSize="16" color="rgba(0.6,0.45,0.1,1)"  textColor="White" width="150" height="30" onClick="Global/charge_btnCheck"/>
-                </HorizontalLayout>
-                <HorizontalLayout spacing="10" childAlignment="MiddleCenter">
-                    <Button id="btn_%s_ChargeAbort" text="Annulla" font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/charge_btnAbort"/>
-                    <Button id="btn_%s_ChargeClose" text="Chiudi"  font="warforge_font" fontStyle="Bold" fontSize="18" color="rgba(0.45,0.45,0.45,1)" textColor="White" width="660" height="30" onClick="Global/charge_btnClose"/>
-                </HorizontalLayout>
-                </VerticalLayout>
+        <Panel id="panelCharge_%s" active="true" color="%s" width="%d" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+            <VerticalLayout spacing="8" padding="20 20 16 16" childAlignment="UpperCenter" childForceExpandHeight="false">
+                <Text text="%s" font="%s" fontStyle="Bold" fontSize="22" color="%s" alignment="MiddleCenter" preferredHeight="30"/>
+                <Text text="%s" font="%s" fontSize="15" color="%s" alignment="MiddleCenter" preferredHeight="22"/>
+                <Text text="DICHIARAZIONE DI CARICA" font="%s" fontStyle="Bold" fontSize="15" color="%s" alignment="MiddleLeft" preferredHeight="22"/>
+                %s %s
+            </VerticalLayout>
         </Panel>
-    ]], unitKey, x, y, z, colore, labelText, unitKey, unitKey, unitKey, unitKey, unitKey, unitKey)
+    ]], unitKey, P.bg, P.width, x, y, z, colore,
+        labelText, P.font, P.gold,
+        infoText or "", P.font, P.grey,
+        P.font, P.gold,
+        riga(btn("ChargePivotSx", "Perno Destro", "charge_btnPivotSx", 210) .. btn("ChargePivotDx", "Perno Sinistro", "charge_btnPivotDx", 210)
+          .. btn("ChargeCheck", "Controlla", "charge_btnCheck", 210, "#C8642A")),
+        riga(btn("ChargeAbort", "Annulla", "charge_btnAbort", 330, P.undo2) .. btn("ChargeClose", "Chiudi", "charge_btnClose", 330, P.close)))
 end
 -- ============================================================
 -- FUNZIONE: charge_redraw(unitKey)
@@ -482,8 +490,9 @@ function charge_redraw(unitKey)
     local fronte = main_detectFormation(session.myBases)
     local x, y, z = main_calcolaPosizionePannello(fronte, #session.myBases)
 
-    local labelText = string.format("%s - Carica: Perno %.1f&quot;/2.0&quot;", session.attackerKey, session.pivotUsed)
-    session.panel3DObj.UI.setXml(charge_buildDeclarePanel3DXml(session.attackerKey, x, y, z, session.activePlayer.color, labelText))
+    local labelText = main_decodeExtendedUnitLabel(session.attackerKey)
+    local infoText = string.format("Perno usato %.1f&quot; su 2.0&quot;   -   Controlla il bersaglio, poi Dichiara", session.pivotUsed)
+    session.panel3DObj.UI.setXml(charge_buildDeclarePanel3DXml(session.attackerKey, x, y, z, session.activePlayer.color, labelText, infoText))
 end
 
 -- ============================================================
@@ -619,16 +628,9 @@ function charge_pivotApply(player, unitKey, direzione)
 
     local distanzaInch = math.min(1, residuo)
 
-    local fwdXZ, right, frontLeft, frontRight = charge_getFrontLine(myBases)
-    local p1, p2 = frontLeft.getPosition(), frontRight.getPosition()
-    local radius = Vector(p2.x - p1.x, 0, p2.z - p1.z):magnitude()
-    if radius <= 0.01 then return end
-
-    local dirSegno = (direzione == "left") and -1 or 1
-    local angoloSigned = dirSegno * (distanzaInch * INCH_TO_TTS) / radius
-
-    local pivotBase = (direzione == "left") and frontLeft or frontRight
-    charge_applyPivot(myBases, pivotBase, angoloSigned)
+    -- Perno sull'angolo anteriore: l'angolo esterno percorre
+    -- esattamente distanzaInch (main_pivotFrontCorner)
+    if not main_pivotFrontCorner(myBases, direzione, distanzaInch) then return end
 
     session.pivotUsed = session.pivotUsed + distanzaInch
     charge_redraw(unitKey)
@@ -674,7 +676,7 @@ function charge_checkTarget(player, unitKey)
 
     local function setTextColor(id)
         Wait.frames(function()
-            UI.setAttribute(id, "textColor", "White")
+            UI.setAttribute(id, "textColor", (id == "btnActionCharge") and CONFIRMPANEL.actionText or CONFIRMPANEL.closeText)
         end, 1)
     end
 
@@ -893,8 +895,8 @@ function charge_openMoralePanel(player)
     UI.setAttribute("confirm_panel_morale", "visibility", player.color)
     UI.setAttribute("confirm_panel_morale", "active", "true")
     Wait.frames(function()
-        UI.setAttribute("btnActionMorale", "textColor", "White")
-        UI.setAttribute("btnCancelMorale", "textColor", "White")
+        UI.setAttribute("btnActionMorale", "textColor", CONFIRMPANEL.actionText)
+        UI.setAttribute("btnCancelMorale", "textColor", CONFIRMPANEL.closeText)
     end, 1)
 end
 
@@ -1068,6 +1070,7 @@ LISTPANEL = LISTPANEL or {
     todo      = "White",     -- riga da fare
     done      = "#5BD35B",   -- riga fatta / scelta
     font      = "warforge_font",
+    rowFont   = 10,          -- testo delle righe (piccolo: la riga si legge per intero)
 }
 
 -- ============================================================
@@ -1087,8 +1090,8 @@ function ui_listPanelXml(o)
     local rows = ""
     for _, r in ipairs(righe) do
         rows = rows .. string.format(
-            '<Button id="%s" text="  %s" font="%s" fontSize="12" color="%s" textColor="%s" textAlignment="MiddleLeft" preferredHeight="%d" onClick="%s"/>',
-            r.id, esc(r.testo), S.font, S.rowBg, r.colore or S.todo, S.rowH, r.onClick)
+            '<Button id="%s" text="%s" font="%s" fontSize="%d" color="%s" textColor="%s" textAlignment="MiddleCenter" preferredHeight="%d" onClick="%s"/>',
+            r.id, esc(r.testo), S.font, S.rowFont or 10, S.rowBg, r.colore or S.todo, S.rowH, r.onClick)
     end
     local n = #righe
     if n == 0 and o.vuoto then
@@ -1590,7 +1593,7 @@ function charge_refreshDefenseRowText(slot, elemento)
     local rowId = string.format("charge_defense_row_%d_%d", slot, elemento.id)
     local scelta = charge_elementoResponse(elemento, slot) ~= nil
 
-    UI.setAttribute(rowId, "text", "  " .. charge_defenseRowText(slot, elemento))
+    UI.setAttribute(rowId, "text", charge_defenseRowText(slot, elemento))
     Wait.frames(function()
         UI.setAttribute(rowId, "textColor", scelta and LISTPANEL.done or LISTPANEL.todo)
     end, 1)
@@ -1632,7 +1635,7 @@ function charge_refreshAttackRowText(slot, elemento)
     local otherKey = charge_elementoOtherKey(elemento, slot)
     local rowId = string.format("charge_attack_row_%d_%d", slot, elemento.id)
 
-    UI.setAttribute(rowId, "text", string.format("  La %s %s %s",
+    UI.setAttribute(rowId, "text", string.format("La %s %s %s",
         main_decodeExtendedUnitLabel(myKey),
         charge_attackVerb(slot, elemento),
         main_decodeExtendedUnitLabel(otherKey)))
@@ -1692,6 +1695,23 @@ function charge_executeEvade(evadingSlot, elemento)
         local fleeXZ = Vector(-oldFwd.x, 0, -oldFwd.z):normalized()
 
         charge_turnAround180(defenderBases)
+
+        -- Regolamento: "Se incontrano ostacoli insuperabili (terreni
+        -- non transitabili o truppe che non possono interpenetrare)
+        -- si fermeranno, a loro rischio e pericolo"; le amiche si
+        -- attraversano "se hanno abbastanza movimento".
+        -- Decisione Max 27/10: l'evasione RIESCE SEMPRE (chi carica
+        -- percorre solo la distanza dichiarata, quindi non la tocca);
+        -- può solo essere più corta. Anche ferma sul posto: niente
+        -- mischia, chi carica si ferma a filo.
+        local passo = main_pathCheck(evadingKey, moveInches, { margineNemico = 0, nonFermarsiSopra = true })
+        if passo.avanza < moveInches - 0.01 then
+            printToAll(string.format("[CARICA] L'evasione della %s si ferma dopo %.1f\" (%s)",
+                main_decodeExtendedUnitLabel(evadingKey), passo.avanza,
+                (passo.motivo == "terreno") and "terreno intransitabile"
+                or (passo.chi and main_decodeExtendedUnitLabel(passo.chi)) or "ostacolo"), {r=1,g=0.6,b=0.2})
+            moveInches = passo.avanza
+        end
 
         local deltaUnits = moveInches * INCH_TO_TTS
         for _, obj in ipairs(defenderBases) do
@@ -1928,21 +1948,6 @@ function charge_closestBasePair(basesA, basesB)
     return migliorA, migliorB, migliorDist
 end
 -- ============================================================
--- FUNZIONE: charge_angolo(y, x)
--- Angolo (radianti, -pi..pi) del vettore (x, y): sostituisce
--- math.atan2, deprecata, usando solo math.atan a un argomento.
--- ============================================================
-function charge_angolo(y, x)
-    if x > 0 then return math.atan(y / x) end
-    if x < 0 then
-        if y >= 0 then return math.atan(y / x) + math.pi end
-        return math.atan(y / x) - math.pi
-    end
-    if y > 0 then return math.pi / 2 end
-    if y < 0 then return -math.pi / 2 end
-    return 0
-end
--- ============================================================
 -- FUNZIONE: charge_alignToEnemy(myKey, enemyKey)
 -- Regolamento, MOVIMENTO DI CARICA: "Quando l'unità che carica
 -- contatterà il nemico dovrà mettere le basi a contatto,
@@ -1958,7 +1963,20 @@ end
 -- Ritorna il lato: "FRONTE" | "FIANCO" | "RETRO" (nil se non fatto).
 -- ============================================================
 CHARGE_ALIGN_TOL = 0.1
-function charge_alignToEnemy(myKey, enemyKey)
+
+-- Angolo (radianti, -pi..pi) del vettore (x, y): sostituisce
+-- math.atan2, deprecata, usando solo math.atan a un argomento.
+function charge_angolo(y, x)
+    if x > 0 then return math.atan(y / x) end
+    if x < 0 then
+        if y >= 0 then return math.atan(y / x) + math.pi end
+        return math.atan(y / x) - math.pi
+    end
+    if y > 0 then return math.pi / 2 end
+    if y < 0 then return -math.pi / 2 end
+    return 0
+end
+function charge_alignToEnemy(myKey, enemyKey, sulFianco)
     local mie, sue = charge_getUnitBases(myKey), charge_getUnitBases(enemyKey)
     if #mie == 0 or #sue == 0 then return nil end
     local mioTipo = (charge_getUnitMeta(mie[1]) or {}).unitType
@@ -1998,9 +2016,18 @@ function charge_alignToEnemy(myKey, enemyKey)
         { "FIANCO", sx - u,     Vector(tr.x, 0, tr.z) },
         { "FIANCO", u - dx,     Vector(-tr.x, 0, -tr.z) },
     }
+    -- Carica che NON si qualifica sul fianco: il contatto è sempre
+    -- sul fronte (regolamento: "il contatto si qualificherà comunque
+    -- come carica sul fronte"). Sul fianco: fianco o retro, secondo
+    -- la posizione.
     local migliore = nil
-    for _, o in ipairs(fuori) do
-        if not migliore or o[2] > migliore[2] then migliore = o end
+    if sulFianco then
+        for i = 2, 4 do
+            local o = fuori[i]
+            if not migliore or o[2] > migliore[2] then migliore = o end
+        end
+    else
+        migliore = fuori[1]
     end
     lato, dir = migliore[1], migliore[3]
 
@@ -2054,6 +2081,48 @@ function charge_alignToEnemy(myKey, enemyKey)
     end
     main_syncGeneralsOfBases(mie)
     return lato
+end
+
+-- ============================================================
+-- MOVIMENTO DI CARICA IN LINEA RETTA (regolamento: "sempre in
+-- linea retta ed è permesso un solo perno di massimo 2 pollici ad
+-- inizio mossa"; il perno è già applicato in dichiarazione).
+-- charge_straightContactInches: pollici che l'unità percorre lungo
+-- il SUO fronte prima di toccare l'unità bersaglio (rettangoli
+-- reali delle basi); nil se andando dritta non la tocca.
+-- ============================================================
+function charge_straightContactInches(myKey, targetKey)
+    local mie, sue = charge_getUnitBases(myKey), charge_getUnitBases(targetKey)
+    if #mie == 0 or #sue == 0 then return nil end
+    local tm = (charge_getUnitMeta(mie[1]) or {}).unitType
+    local ts = (charge_getUnitMeta(sue[1]) or {}).unitType
+    local f = mie[1].getTransformForward()
+    local dir = Vector(f.x, 0, f.z):normalized()
+    local tol = 0.01
+    local migliore = nil
+    for _, a in ipairs(mie) do
+        local ra = main_baseRectOfType(a, tm)
+        for _, b in ipairs(sue) do
+            local rb = main_baseRectOfType(b, ts)
+            local t1, t2 = main_rectSweepInterval(ra, dir.x, dir.z, rb, tol)
+            if t1 and t2 > 0 then
+                local d = math.max(0, t1)
+                if not migliore or d < migliore then migliore = d end
+            end
+        end
+    end
+    return migliore and (migliore / INCH_TO_TTS) or nil, dir
+end
+
+-- Trasla tutte le basi lungo dir (versore XZ) di "pollici"
+function charge_moveStraight(basi, dir, pollici)
+    if pollici <= 0 then return end
+    local d = pollici * INCH_TO_TTS
+    for _, o in ipairs(basi) do
+        local p = o.getPosition()
+        main_setPositionOnGround(o, p.x + dir.x * d, p.z + dir.z * d)
+    end
+    main_syncGeneralsOfBases(basi)
 end
 
 -- ============================================================
@@ -2136,7 +2205,7 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         -- fisso, ignorando dove è finita l'unità evasa.
         local distanzaDichiarata = charge_elementoDistInches(elemento, slot) or 0
 
-        IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {} }
+        IEF_MOVE_UNITS[unitKey] = { basiObjs = myBases, history = {}, carica = true }
         IEF_MOVE_BUDGET[unitKey] = distanzaDichiarata
         move_avanti_apply(unitKey, distanzaDichiarata)
         main_syncAttachedGeneral(unitKey)
@@ -2174,7 +2243,11 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         return
     end
 
-    local distanzaTotaleInch = main_distanceInchesAlongCenters(myBase, otherBase)
+    -- In linea retta lungo il proprio fronte se così tocca il
+    -- bersaglio; altrimenti (bersaglio spostato: contro-carica verso
+    -- un altro, evasione bloccata) verso la base nemica più vicina.
+    local dritto, dirDritto = charge_straightContactInches(unitKey, otherKey)
+    local distanzaTotaleInch = dritto or main_distanceInchesAlongCenters(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
     -- print(string.format("[DEBUG CHARGEMOVE] myBase.rot=%.1f otherBase.rot=%.1f distanzaTotaleInch=%.3f",
@@ -2212,7 +2285,11 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
     -- print(string.format("[DEBUG CHARGEMOVE] distanzaTotaleInch(da myBase fissata)=%.3f distanzaVerificaOra(da myOriginBase)=%.3f",
     --     distanzaTotaleInch, main_distanceInches(myOriginBase, otherBase) or -1))
 
-    charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
+    if dritto then
+        charge_moveStraight(myBases, dirDritto, distanzaDaPercorrere)
+    else
+        charge_moveTowardPoint(myBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
+    end
     IEF_CHARGE_MOVED[unitKey] = true
 
     if nonRaggiunge then
@@ -2241,7 +2318,7 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
     if elemento.step == CHARGE_STEP.CLO and elemento.outcome == CHARGE_OUTCOME.OK then
         -- Base contro base sul lato contattato; il fianco vale solo
         -- se il contatto è davvero sul fianco o sul retro.
-        local lato = charge_alignToEnemy(unitKey, otherKey)
+        local lato = charge_alignToEnemy(unitKey, otherKey, charge_elementoFlanked(elemento, otherSlot))
         -- Unità in rotta raggiunta: rischio per il Generale aggregato
         main_generalRoutCaught(otherKey)
         if lato == "FRONTE" and charge_elementoFlanked(elemento, otherSlot) then
@@ -2348,15 +2425,21 @@ function charge_stopfireMoveToRange(elemento, defenderSlot)
     local otherBase = getObjectFromGUID(otherBaseGUID)
     if not myBase or not otherBase then return end
 
-    local distanzaTotaleInch = main_distanceInchesAlongCenters(myBase, otherBase)
+    local defenderKey = charge_elementoUnitKey(elemento, defenderSlot)
+    local dritto, dirDritto = charge_straightContactInches(chargingKey, defenderKey)
+    local distanzaTotaleInch = dritto or main_distanceInchesAlongCenters(myBase, otherBase)
     if not distanzaTotaleInch then return end
 
     local distanzaDaPercorrere = math.max(0, distanzaTotaleInch - 2)
     if distanzaDaPercorrere <= 0 then return end
 
-    local myOriginBase = charge_closestBaseToPoint(chargingBases, otherBase.getPosition())
-    if not myOriginBase then return end
-    charge_moveTowardPoint(chargingBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
+    if dritto then
+        charge_moveStraight(chargingBases, dirDritto, distanzaDaPercorrere)
+    else
+        local myOriginBase = charge_closestBaseToPoint(chargingBases, otherBase.getPosition())
+        if not myOriginBase then return end
+        charge_moveTowardPoint(chargingBases, myOriginBase, otherBase.getPosition(), distanzaDaPercorrere)
+    end
     -- Ha già fatto parte del movimento di carica: in manovra non muove
     -- (anche se poi fallisce il morale dopo il tiro)
     IEF_UNIT_NO_MOVE_NEXT_TURN[chargingKey] = true

@@ -604,7 +604,7 @@ function main_routMoveEnter(ctx, slot, rec)
     local item, idx = main_routFind(slot, ctx.routId)
     if item then
         local id = string.format("rout_row_%d_%d", slot, idx)
-        UI.setAttribute(id, "text", "  " .. main_routRowText(item, true))
+        UI.setAttribute(id, "text", main_routRowText(item, true))
         Wait.frames(function()
             UI.setAttribute(id, "textColor", LISTPANEL.gold)
         end, 1)
@@ -841,4 +841,108 @@ function main_unitInCover(unitKey)
         end
     end
     return true
+end
+
+-- ============================================================
+-- PERCORSO LIBERO (manovra ed evasione)
+-- Regolamento: FL attraversa chiunque, CL attraversa KN/CP/CL
+-- (IEF_INTERPENETRATION); le altre unità amiche non si
+-- attraversano. Il nemico si tocca solo caricando.
+-- Decisioni Max 24/10: in manovra ci si ferma a contatto
+-- dell'amica che non si può attraversare e a ½" dal nemico;
+-- l'evasione si ferma davanti a terreno intransitabile o a truppe
+-- che non può attraversare.
+-- ============================================================
+IEF_MOVE_ENEMY_GAP_INCHES = 0.5
+
+-- Quanto l'unità può avanzare lungo il suo fronte, fino a distInches.
+-- opts.margineNemico: pollici da lasciare davanti al nemico.
+-- Ritorna { avanza, motivo = "nemico"|"amica"|"terreno"|nil, chi = unitKey }
+function main_pathCheck(unitKey, distInches, opts)
+    opts = opts or {}
+    local basi = main_getUnitBases(unitKey)
+    local res = { avanza = distInches }
+    if #basi == 0 or distInches <= 0 then res.avanza = 0; return res end
+
+    local meta = main_getUnitMeta(basi[1])
+    local tipo = meta and meta.unitType
+    local f = basi[1].getTransformForward()
+    local dir = Vector(f.x, 0, f.z):normalized()
+    local rects = main_unitRects(unitKey)
+
+    local tTerreno = main_routTerrainFirstBlock(rects, tipo, dir.x, dir.z, distInches)
+    if tTerreno then
+        local a = math.max(0, tTerreno - IEF_ROUT_TERRAIN_STEP_INCHES)
+        if a < res.avanza then res.avanza, res.motivo, res.chi = a, "terreno", nil end
+    end
+
+    local contatti = main_routSweep(unitKey, rects, dir.x, dir.z, distInches, true)
+    for _, c in ipairs(contatti) do
+        if not c.generale then
+            local limite = nil
+            if c.nemico then
+                limite = c.inizio - (opts.margineNemico or 0)
+            elseif not main_canInterpenetrate(tipo, c.tipo) then
+                limite = c.inizio
+            end
+            if limite and limite < res.avanza then
+                res.avanza = math.max(0, limite)
+                res.motivo = c.nemico and "nemico" or "amica"
+                res.chi = c.key
+            end
+        end
+    end
+
+    -- opts.nonFermarsiSopra (evasione): un'amica attraversabile si
+    -- attraversa solo se il movimento basta per uscirne del tutto
+    -- (regolamento: "se hanno abbastanza movimento"); altrimenti ci
+    -- si ferma prima di toccarla. Si ripete: fermarsi prima di
+    -- un'amica può far finire dentro una precedente.
+    if opts.nonFermarsiSopra then
+        local cambiato = true
+        while cambiato do
+            cambiato = false
+            for _, c in ipairs(contatti) do
+                if not c.generale and not c.nemico and c.inizio >= 0
+                   and c.inizio < res.avanza - 0.001 and c.fine > res.avanza + 0.001 then
+                    res.avanza = math.max(0, c.inizio)
+                    res.motivo, res.chi = "amica", c.key
+                    cambiato = true
+                end
+            end
+        end
+    end
+    return res
+end
+
+-- Prima unità (non Generale) sovrapposta all'unità nella posizione
+-- attuale, escluse le amiche che si possono attraversare; nil se libera.
+function main_unitOverlapKey(unitKey)
+    local basi = main_getUnitBases(unitKey)
+    if #basi == 0 then return nil end
+    local meta = main_getUnitMeta(basi[1])
+    local tipo = meta and meta.unitType
+    local rects = main_unitRects(unitKey)
+    local f = basi[1].getTransformForward()
+    local dir = Vector(f.x, 0, f.z):normalized()
+    local tol = IEF_ROUT_TOLERANCE_INCHES * INCH_TO_TTS
+    local mySlot = main_unitSlot(unitKey)
+    for slot = 1, 2 do
+        for key, altre in pairs(main_unitsOfSlot(slot)) do
+            if key ~= unitKey and not main_isGeneralKey(key) then
+                local m2 = main_getUnitMeta(altre[1])
+                local passabile = (slot == mySlot) and main_canInterpenetrate(tipo, m2 and m2.unitType)
+                if not passabile then
+                    for _, b in ipairs(altre) do
+                        local rb = main_baseRect(b)
+                        for _, ra in ipairs(rects) do
+                            local t1, t2 = main_rectSweepInterval(ra, dir.x, dir.z, rb, tol)
+                            if t1 and t1 < 0 and t2 > 0 then return key end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
 end

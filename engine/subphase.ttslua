@@ -37,11 +37,11 @@ SUBPHASES    = SUBPHASES    or {}
 SUBRENDERERS = SUBRENDERERS or {}
 
 -- Grafica dei pannelli sottofase (sotto il pannello centrale)
-SUBPANEL = SUBPANEL or {
+SUBPANEL = {
     offsetXY  = "0 -280",
     width     = 450,
     height    = 55,
-    bg        = "rgba(0,0,0,0.25)",
+    bg        = "rgba(0,0,0,0.70)",
     btnColor  = "#B8902E",
     btnWidth  = 200,
     btnHeight = 40,
@@ -394,7 +394,7 @@ function engine_subPanelsXml()
         for n = 1, SUBPANEL.btnMax do
             local b = bottoni[n]
             righe = righe .. string.format(
-                '<Button id="sub_btn_army%d_%d" text="%s" icon="%s" iconAlignment="Right" iconWidth="30" padding="6 15 4 4" fontSize="13" fontStyle="Bold" color="%s" textAlignment="MiddleRight" textColor="White" outline="#000000" outlineSize="1" preferredWidth="%d" preferredHeight="%d" onClick="engine_subButtonClick" active="%s"/>',
+                '<Button id="sub_btn_army%d_%d" text="%s" icon="%s" iconAlignment="Right" iconWidth="30" padding="6 15 4 4" font="warforge_font" fontSize="13" fontStyle="Bold" color="%s" textAlignment="MiddleRight" textColor="White" outline="#000000" outlineSize="1" preferredWidth="%d" preferredHeight="%d" onClick="engine_subButtonClick" active="%s"/>',
                 slot, n, xmlEsc(b and b.label), xmlEsc((b and b.icon) or "default"), SUBPANEL.btnColor,
                 SUBPANEL.btnWidth, SUBPANEL.btnHeight, b and "true" or "false")
         end

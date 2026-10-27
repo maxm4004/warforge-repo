@@ -44,8 +44,8 @@ function shoot_range_and_target(player, selection)
     UI.setAttribute("btnAction", "Text", "Fire")
     UI.setAttribute("btnAction", "onClick", "shoot_shootConfirm")
     UI.setAttribute("btnCancelShoot", "onClick", "shoot_shootResetLines")
-    UI.setAttribute("btnAction", "textColor", "White")
-    UI.setAttribute("btnCancelShoot", "textColor", "White")
+    UI.setAttribute("btnAction", "textColor", CONFIRMPANEL.actionText)
+    UI.setAttribute("btnCancelShoot", "textColor", CONFIRMPANEL.closeText)
 
     local shooter = selected[1]
     local shooterSlot = nil
@@ -539,6 +539,160 @@ function shoot_losLibera(mioRect, poly, ostacoli, escludi)
     return false
 end
 -- ============================================================
+-- CORRIDOIO DI TIRO (risposta dell'autore, 26/10): "una base per
+-- essere pronta al tiro ci deve essere un corridoio libero di
+-- 4 cm; se c'è qualcosa in mezzo l'unità non può tirare".
+-- Il corridoio è largo quanto il fronte della base (4 cm): è il
+-- fronte della base fatto scorrere in linea retta fino a un punto
+-- della parte di base nemica dentro il cono. La base è pronta se
+-- almeno un corridoio è libero da basi di altre unità (le basi
+-- della stessa unità tiratrice non bloccano: il 2° rango tira
+-- sopra il 1°; la base bersaglio non blocca).
+-- Punti provati sul bersaglio: centro, vertici e metà dei lati
+-- della parte nel cono.
+-- ============================================================
+
+-- Proiezione di un poligono su un asse
+local function proietta(poly, ax, az)
+    local mn, mx = math.huge, -math.huge
+    for _, v in ipairs(poly) do
+        local d = v.x * ax + v.z * az
+        if d < mn then mn = d end
+        if d > mx then mx = d end
+    end
+    return mn, mx
+end
+
+-- Due poligoni convessi si sovrappongono (assi separatori)?
+function shoot_polyOverlap(a, b)
+    for _, poly in ipairs({ a, b }) do
+        local n = #poly
+        for i = 1, n do
+            local p1, p2 = poly[i], poly[(i % n) + 1]
+            local ax, az = -(p2.z - p1.z), p2.x - p1.x
+            local l = math.sqrt(ax * ax + az * az)
+            if l > 1e-9 then
+                ax, az = ax / l, az / l
+                local a1, a2 = proietta(a, ax, az)
+                local b1, b2 = proietta(b, ax, az)
+                if a2 <= b1 or b2 <= a1 then return false end
+            end
+        end
+    end
+    return true
+end
+
+-- Rettangolo ostacolo ristretto di un margine (basi solo a contatto non bloccano)
+local function rettangoloRistretto(r)
+    local M = 0.02
+    local hw, hd = r.hw - M, r.hd - M
+    if hw <= 0 or hd <= 0 then return nil end
+    local out = {}
+    for _, s in ipairs({ { -1, -1 }, { -1, 1 }, { 1, 1 }, { 1, -1 } }) do
+        table.insert(out, { x = r.x + r.rx * hw * s[1] + r.fx * hd * s[2], z = r.z + r.rz * hw * s[1] + r.fz * hd * s[2] })
+    end
+    return out
+end
+
+-- Corridoi dalla base (mioRect) verso il poligono bersaglio.
+-- Ritorna una lista { punto, poligono, libero, blocca = rect }.
+-- Ostacoli preparati una volta per tiro: rettangoli ristretti con
+-- riquadro (bbox), solo quelli dentro l'area utile (area = bbox di
+-- tiratrici e bersaglio). Toglie quasi tutte le basi del tavolo
+-- dai controlli: il click sul tiro resta veloce.
+function shoot_preparaOstacoli(ostacoli, escludi, area)
+    local out = {}
+    for _, r in ipairs(ostacoli) do
+        if not escludi[r.key] then
+            local rr = rettangoloRistretto(r)
+            if rr then
+                local x1, x2, z1, z2 = math.huge, -math.huge, math.huge, -math.huge
+                for _, v in ipairs(rr) do
+                    if v.x < x1 then x1 = v.x end
+                    if v.x > x2 then x2 = v.x end
+                    if v.z < z1 then z1 = v.z end
+                    if v.z > z2 then z2 = v.z end
+                end
+                if not area or not (x2 < area.x1 or x1 > area.x2 or z2 < area.z1 or z1 > area.z2) then
+                    table.insert(out, { r = r, poly = rr, x1 = x1, x2 = x2, z1 = z1, z2 = z2 })
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- Riquadro che contiene rettangoli (corners) e poligoni
+function shoot_area(rects, polys)
+    local a = { x1 = math.huge, x2 = -math.huge, z1 = math.huge, z2 = -math.huge }
+    local function add(v)
+        if v.x < a.x1 then a.x1 = v.x end
+        if v.x > a.x2 then a.x2 = v.x end
+        if v.z < a.z1 then a.z1 = v.z end
+        if v.z > a.z2 then a.z2 = v.z end
+    end
+    for _, r in ipairs(rects or {}) do for _, c in ipairs(r.corners) do add(c) end end
+    for _, p in ipairs(polys or {}) do for _, v in ipairs(p) do add(v) end end
+    -- margine: gli angoli dei corridoi sporgono di mezza base oltre i punti
+    local m = 3 * CM_TO_TTS
+    a.x1, a.x2, a.z1, a.z2 = a.x1 - m, a.x2 + m, a.z1 - m, a.z2 + m
+    return a
+end
+
+function shoot_corridoi(mioRect, poly, ostacoli, escludi, prep, soloUno)
+    local out = {}
+    if not poly or #poly == 0 then return out end
+    local k = mioRect.corners          -- fronte = 2 e 4
+    local fl, fr = k[2], k[4]
+    local mx, mz = (fl.x + fr.x) / 2, (fl.z + fr.z) / 2
+
+    local punti = {}
+    local cx, cz = 0, 0
+    for _, v in ipairs(poly) do cx, cz = cx + v.x, cz + v.z end
+    table.insert(punti, { x = cx / #poly, z = cz / #poly })
+    for i, v in ipairs(poly) do
+        local w = poly[(i % #poly) + 1]
+        table.insert(punti, v)
+        table.insert(punti, { x = (v.x + w.x) / 2, z = (v.z + w.z) / 2 })
+    end
+
+    local ristretti = prep or shoot_preparaOstacoli(ostacoli, escludi, nil)
+
+    for _, q in ipairs(punti) do
+        local vx, vz = q.x - mx, q.z - mz
+        -- solo in avanti rispetto al fronte della base
+        if vx * mioRect.fx + vz * mioRect.fz > 0 then
+            local corr = { { x = fl.x, z = fl.z }, { x = fr.x, z = fr.z },
+                           { x = fr.x + vx, z = fr.z + vz }, { x = fl.x + vx, z = fl.z + vz } }
+            local cx1, cx2, cz1, cz2 = math.huge, -math.huge, math.huge, -math.huge
+            for _, v in ipairs(corr) do
+                if v.x < cx1 then cx1 = v.x end
+                if v.x > cx2 then cx2 = v.x end
+                if v.z < cz1 then cz1 = v.z end
+                if v.z > cz2 then cz2 = v.z end
+            end
+            local blocca = nil
+            for _, o in ipairs(ristretti) do
+                if not (o.x2 < cx1 or o.x1 > cx2 or o.z2 < cz1 or o.z1 > cz2)
+                   and shoot_polyOverlap(corr, o.poly) then
+                    blocca = o.r; break
+                end
+            end
+            table.insert(out, { punto = q, poligono = corr, libero = (blocca == nil), blocca = blocca })
+            if soloUno and blocca == nil then return out end
+        end
+    end
+    return out
+end
+
+function shoot_corridoioLibero(mioRect, poly, ostacoli, escludi, prep)
+    for _, c in ipairs(shoot_corridoi(mioRect, poly, ostacoli, escludi, prep, true)) do
+        if c.libero then return true end
+    end
+    return false
+end
+
+-- ============================================================
 -- FUNZIONE: shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
 -- Regolamento: "si deve sempre tirare al bersaglio più vicino".
 -- Candidate = unità nemiche (non Generali, non in mischia) con
@@ -591,9 +745,13 @@ function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
     for _, u in ipairs(lista) do
         table.sort(u.basi, function(a, b) return a.dist < b.dist end)
         local escludi = { [main_getUnitKey(basiObjs[1])] = true, [u.key] = true }
+        local polys = {}
+        for _, bn in ipairs(u.basi) do table.insert(polys, bn.poly) end
+        local prep = shoot_preparaOstacoli(ostacoli, escludi, shoot_area(mieRect, polys))
         for _, bn in ipairs(u.basi) do
             for i, _ in ipairs(basiObjs) do
-                if shoot_losLibera(mieRect[i], bn.poly, ostacoli, escludi) then
+                -- stessa regola delle basi pronte: corridoio libero di 4 cm
+                if shoot_corridoioLibero(mieRect[i], bn.poly, ostacoli, escludi, prep) then
                     return bn.obj, nil
                 end
             end
@@ -807,6 +965,7 @@ end
 -- IEF_SHOOTING.angle (45°).
 -- Ritorna: numero, basi pronte, basi nemiche raggiunte.
 -- ============================================================
+IEF_SHOOT_GITTATA_UNITA = true   -- marcatore di versione (F13), letto da debug_shootBasi
 function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits, angoloGradi)
     if not basiObjs or #basiObjs == 0 then return 0, {}, {} end
     if not basiNemiche or #basiNemiche == 0 then return 0, {}, {} end
@@ -833,15 +992,37 @@ function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits, angoloGradi)
     local ostacoli = shoot_ostacoli()
     local escludi = { [main_getUnitKey(tiratrici[1])] = true }
     if basiNemiche[1] then escludi[main_getUnitKey(basiNemiche[1])] = true end
+    if IEF_SHOOT_DEBUG then
+        local e = {}
+        for k in pairs(escludi) do table.insert(e, tostring(k)) end
+        print("[TIRO-DBG] gioco: unita' escluse dagli ostacoli: " .. table.concat(e, ", ") .. " - tiratrici " .. #tiratrici .. ", basi nemiche nel cono " .. #nemRect)
+    end
+
+    -- Gittata dell'UNITA' (regolamento: le gittate sono "delle
+    -- unità"): una base nemica è in gittata se lo è dalla base
+    -- tiratrice più vicina; il 2° rango tira se l'unità è in
+    -- gittata, anche se lui da solo sarebbe qualche cm più lontano.
+    for _, nr in ipairs(nemRect) do
+        local m = math.huge
+        for i = 1, #tiratrici do
+            local d = shoot_distRectToPoly(mieRect[i], nr.poly)
+            if d < m then m = d end
+        end
+        nr.distUnita = m
+    end
+
+    local polys = {}
+    for _, nr in ipairs(nemRect) do table.insert(polys, nr.poly) end
+    local prep = shoot_preparaOstacoli(ostacoli, escludi, shoot_area(mieRect, polys))
 
     local pronte, raggiunte, visti = {}, {}, {}
     local fuoriGittata, senzaVista = 0, 0
     for i, b in ipairs(tiratrici) do
         local ok, inGittata = false, false
         for _, nr in ipairs(nemRect) do
-            if shoot_distRectToPoly(mieRect[i], nr.poly) <= rangeUnits then
+            if nr.distUnita <= rangeUnits then
                 inGittata = true
-                if shoot_losLibera(mieRect[i], nr.poly, ostacoli, escludi) then
+                if shoot_corridoioLibero(mieRect[i], nr.poly, ostacoli, escludi, prep) then
                     ok = true
                     if not visti[nr.obj] then
                         visti[nr.obj] = true
@@ -854,6 +1035,27 @@ function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits, angoloGradi)
             table.insert(pronte, b)
         elseif inGittata then
             senzaVista = senzaVista + 1
+            if IEF_SHOOT_DEBUG then
+                -- Diagnostica: chi blocca le linee di questa base
+                local chi = {}
+                local k = mieRect[i].corners
+                for _, nr in ipairs(nemRect) do
+                    if nr.distUnita <= rangeUnits then
+                        for _, q in ipairs(nr.poly) do
+                            local mid = { x = (k[2].x + k[4].x) / 2, z = (k[2].z + k[4].z) / 2 }
+                            for _, r in ipairs(ostacoli) do
+                                if not escludi[r.key] and shoot_segInRect(mid.x, mid.z, q.x, q.z, r) then
+                                    chi[(r.obj and r.obj.getName() or "?") .. " [" .. tostring(r.key) .. "]"] = true
+                                end
+                            end
+                        end
+                    end
+                end
+                local nomi = {}
+                for n in pairs(chi) do table.insert(nomi, n) end
+                print(string.format("[TIRO-DBG] gioco: %s senza vista, bloccata da: %s", b.getName(),
+                    (#nomi > 0) and table.concat(nomi, ", ") or "nessuna (linee centrali libere)"))
+            end
         else
             fuoriGittata = fuoriGittata + 1
         end

@@ -52,7 +52,7 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
         end
         table.sort(nemici)
         table.insert(righe, { testo = string.format("%s - %s - %s",
-            ARMY[info.slot].name, main_decodeExtendedUnitLabel(unitKey), main_getCohesion(unitKey)), titolo = true, colore = ARMY[info.slot].color })
+            ARMY[info.slot].name, main_decodeExtendedUnitLabel(unitKey), main_getCohesion(unitKey)), titolo = true, colore = "#FFD833" })
         table.insert(righe, { testo = "In mischia contro: " .. table.concat(nemici, ", ") })
         table.insert(righe, { testo = string.format("%s%s",
             det.primoTurno and "Primo turno di mischia" or "Turno di mischia successivo",
@@ -85,16 +85,16 @@ function melee_buttonBaseClick(obj, slot, player_color, alt_click)
     local testi = ""
     for _, r in ipairs(righe) do
         testi = testi .. string.format(
-            '<Text text="%s" font="warforge_font" fontSize="%d" fontStyle="%s" color="%s" alignment="MiddleLeft" width="660" height="30"/>',
-            r.testo, r.titolo and 18 or 15, r.titolo and "Bold" or "Normal", r.colore or "White")
+            '<Text text="%s" font="warforge_font" fontSize="%d" fontStyle="%s" color="%s" alignment="%s" preferredHeight="30"/>',
+            r.testo, r.titolo and 20 or 15, r.titolo and "Bold" or "Normal", r.colore or "White", r.titolo and "MiddleCenter" or "MiddleLeft")
     end
 
     local bases = main_getUnitBases(unitKey)
     local x, y, z = main_calcolaPosizionePannello(main_detectFormation(bases), #bases)
 
     obj.UI.setXml(string.format([[
-        <Panel id="panelMeleeInfo_%s" active="true" color="rgba(0,0,0,0.95)" width="700" height="%d" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0">
-            <VerticalLayout spacing="6" padding="20 20 20 20" childAlignment="UpperLeft"> %s</VerticalLayout>
+        <Panel id="panelMeleeInfo_%s" active="true" color="rgba(0,0,0,0.70)" width="760" height="%d" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0">
+            <VerticalLayout spacing="4" padding="20 20 16 16" childAlignment="UpperLeft" childForceExpandHeight="false"> %s</VerticalLayout>
         </Panel>
     ]], unitKey, 90 + 36 * #righe, x, y, z, testi, unitKey))
 
@@ -411,7 +411,7 @@ function melee_rowRefresh(gruppo)
     for slot = 1, 2 do
         local id = string.format("melee_row_%d_%s", slot, gruppo.id)
         local testo, colore = melee_rowText(gruppo, slot)
-        UI.setAttribute(id, "text", "  " .. testo)
+        UI.setAttribute(id, "text", testo)
         Wait.frames(function()
             UI.setAttribute(id, "textColor", colore)
         end, 1)
@@ -551,6 +551,26 @@ function melee_contactBases(myKey, enemyBases)
         end
     end
     return result
+end
+
+-- ============================================================
+-- FUNZIONE: melee_touchingBases(myKey, enemyBases)
+-- Basi di myKey che toccano una base nemica su QUALSIASI lato
+-- (rettangoli reali, distanza bordo-bordo entro 0,05").
+-- ============================================================
+MELEE_TOUCH_INCHES = 0.05
+function melee_touchingBases(myKey, enemyBases)
+    local out = {}
+    for _, b in ipairs(main_getUnitBases(myKey)) do
+        for _, n in ipairs(enemyBases) do
+            local d = main_distanceInches(b, n)
+            if d and d <= MELEE_TOUCH_INCHES then
+                table.insert(out, b)
+                break
+            end
+        end
+    end
+    return out
 end
 
 -- ============================================================
@@ -722,6 +742,14 @@ function melee_computeGroup(gruppo)
                     local enemyTipo = enemyMeta and enemyMeta.unitType
 
                     local contatto = melee_contactBases(key, enemyBases)
+                    -- Contatto non sul fianco (carica frontale arrivata di
+                    -- lato, mischie che si allargano): contano anche le basi
+                    -- che toccano il nemico su un altro lato.
+                    for _, b in ipairs(melee_touchingBases(key, enemyBases)) do
+                        local gia = false
+                        for _, c in ipairs(contatto) do if c == b then gia = true break end end
+                        if not gia then table.insert(contatto, b) end
+                    end
                     local overlap = primo and {} or melee_overlapBases(contatto, myBases, w, d)
                     local primoRango, secondo, terzoQuarto = 0, 0, 0
                     local rango1 = {}
@@ -1313,12 +1341,7 @@ function melee_btPivot(ctx, direzione, player)
     end
     melee_btClear(ctx)
     local dist = math.min(1, residuo)
-    local _, _, frontLeft, frontRight = charge_getFrontLine(basi)
-    local p1, p2 = frontLeft.getPosition(), frontRight.getPosition()
-    local radius = Vector(p2.x - p1.x, 0, p2.z - p1.z):magnitude()
-    if radius <= 0.01 then return end
-    local segno = (direzione == "left") and -1 or 1
-    charge_applyPivot(basi, (direzione == "left") and frontLeft or frontRight, segno * (dist * INCH_TO_TTS) / radius)
+    if not main_pivotFrontCorner(basi, direzione, dist) then return end
     ctx.pivotUsed = (ctx.pivotUsed or 0) + dist
     melee_btRedraw(ctx)
 end
@@ -1352,8 +1375,9 @@ function melee_btGo(ctx, player)
         return
     end
 
+    local fianco = charge_isFlankCharge(key, targetKey)
     melee_btTranslate(basi, dist or 0)
-    if charge_alignToEnemy then charge_alignToEnemy(key, targetKey) end
+    charge_alignToEnemy(key, targetKey, fianco)
 
     if main_getCohesion(targetKey) == COHESION.ROT then
         printToAll(string.format("[MISCHIA] Sfondamento: la %s raggiunge la %s in rotta e la DISTRUGGE",
@@ -1369,6 +1393,9 @@ function melee_btGo(ctx, player)
     e.turnStart = turno
     e.resolvedTurn = nil
     if slot == 1 then e.chargedArmy1 = true else e.chargedArmy2 = true end
+    if fianco then
+        if slot == 1 then e.flankedArmy2 = true else e.flankedArmy1 = true end
+    end
     printToAll(string.format("[MISCHIA] Sfondamento: la %s carica la %s, mischia da risolvere subito (fattori di primo turno)",
         main_decodeExtendedUnitLabel(key), main_decodeExtendedUnitLabel(targetKey)), {r=1,g=0.8,b=0.3})
 end

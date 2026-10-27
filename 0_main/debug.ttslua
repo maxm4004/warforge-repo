@@ -683,3 +683,237 @@ function debug_flank(color, attivo)
         main_decodeExtendedUnitLabel(chargerKey), main_decodeExtendedUnitLabel(targetKey),
         d.dietro, #d.basiC, d.dietro >= 2 and "CARICA SUL FIANCO" or "carica frontale"))
 end
+
+-- ============================================================
+-- FUNZIONE DI TEST: debug_metti(color, pollici)
+-- Avvicina (o allontana) un'unità nemica a una distanza esatta da
+-- una tua unità muovendola IN LINEA RETTA lungo il suo fronte:
+-- niente rotazioni né spostamenti laterali (come una carica).
+-- Il giocatore color seleziona una base della SUA unità
+-- (riferimento, non si muove) e una base dell'unità NEMICA (quella
+-- che viene spostata), poi:
+--   /execute debug_metti("Red", 5)
+-- Distanza bordo-bordo minima fra le basi (rettangoli reali), la
+-- stessa del gioco. Variante con le chiavi:
+--   /execute debug_mettiKeys("ANG_HUSCARL_FP_1", "VIK_HUSCARL_FP_2", 5)
+-- ============================================================
+function debug_metti(color, pollici)
+    local player = Player[color]
+    local mySlot = player and main_getArmyByColor(player)
+    if not mySlot then print("[METTI] colore non associato a un esercito: " .. tostring(color)); return end
+    local fermaKey, muoviKey
+    for _, o in ipairs(player.getSelectedObjects() or {}) do
+        local key = main_parseNickname(o.getName()) and main_getUnitKey(o)
+        if key then
+            if o.hasTag("Army" .. mySlot) then fermaKey = fermaKey or key
+            elseif o.hasTag("Army1") or o.hasTag("Army2") then muoviKey = muoviKey or key end
+        end
+    end
+    if not fermaKey or not muoviKey then
+        print("[METTI] Seleziona una base della tua unita' (riferimento) e una base dell'unita' nemica (da spostare)")
+        return
+    end
+    debug_mettiKeys(fermaKey, muoviKey, pollici)
+end
+
+function debug_mettiKeys(fermaKey, muoviKey, pollici)
+    pollici = tonumber(pollici) or 0
+    local ferme, mobili = main_getUnitBases(fermaKey), main_getUnitBases(muoviKey)
+    if #ferme == 0 or #mobili == 0 then print("[METTI] basi non trovate"); return end
+    local tipoF = (main_getUnitMeta(ferme[1]) or {}).unitType
+    local tipoM = (main_getUnitMeta(mobili[1]) or {}).unitType
+
+    local rF, rM = {}, {}
+    for _, b in ipairs(ferme) do table.insert(rF, main_baseRectOfType(b, tipoF)) end
+    for _, b in ipairs(mobili) do table.insert(rM, main_baseRectOfType(b, tipoM)) end
+
+    -- Direzione: il fronte dell'unità che si sposta
+    local f = mobili[1].getTransformForward()
+    local dir = Vector(f.x, 0, f.z):normalized()
+
+    -- Distanza (pollici) se l'unità mobile fosse traslata di t pollici
+    local function distanza(t)
+        local dx, dz = dir.x * t * INCH_TO_TTS, dir.z * t * INCH_TO_TTS
+        local m = math.huge
+        for _, a in ipairs(rM) do
+            local sp = { x = a.x + dx, z = a.z + dz, fx = a.fx, fz = a.fz, rx = a.rx, rz = a.rz, hw = a.hw, hd = a.hd, corners = {} }
+            for _, c in ipairs(a.corners) do table.insert(sp.corners, { x = c.x + dx, z = c.z + dz }) end
+            for _, b in ipairs(rF) do
+                local d = main_rectsDistance(sp, b)
+                if d < m then m = d end
+            end
+        end
+        return m / INCH_TO_TTS
+    end
+
+    local d0 = distanza(0)
+    local verso = (d0 > pollici) and 1 or -1      -- avanti se troppo lontana, indietro se troppo vicina
+    local passo, limite = 0.25, 72
+    local prima, dopo = 0, nil
+    local t = 0
+    while math.abs(t) < limite do
+        t = t + verso * passo
+        local d = distanza(t)
+        if (verso == 1 and d <= pollici) or (verso == -1 and d >= pollici) then dopo = t; break end
+        prima = t
+    end
+    if not dopo then
+        print(string.format("[METTI] Muovendosi dritta la %s non arriva a %.2f\" dalla %s (non e' rivolta verso di lei?). Distanza attuale %.2f\"",
+            main_decodeExtendedUnitLabel(muoviKey), pollici, main_decodeExtendedUnitLabel(fermaKey), d0))
+        return
+    end
+    -- bisezione fra prima e dopo
+    for _ = 1, 30 do
+        local mezzo = (prima + dopo) / 2
+        local d = distanza(mezzo)
+        if (verso == 1 and d <= pollici) or (verso == -1 and d >= pollici) then dopo = mezzo else prima = mezzo end
+    end
+    local sposta = dopo * INCH_TO_TTS
+    for _, b in ipairs(mobili) do
+        local p = b.getPosition()
+        main_setPositionOnGround(b, p.x + dir.x * sposta, p.z + dir.z * sposta)
+    end
+    main_syncGeneralsOfBases(mobili)
+    main_riposizionaPulsanteFormazione(muoviKey, mobili)
+
+    Wait.frames(function()
+        print(string.format("[METTI] %s %s di %.2f\" in linea retta: distanza dalla %s %.2f\" (richiesta %.2f\")",
+            main_decodeExtendedUnitLabel(muoviKey), (dopo >= 0) and "avanza" or "arretra", math.abs(dopo),
+            main_decodeExtendedUnitLabel(fermaKey), main_unitsDistanceInches(ferme, mobili) or -1, pollici))
+    end, 5)
+end
+
+-- ============================================================
+-- FUNZIONE DI TEST: debug_shootBasi(color)
+-- Perché una base tira o non tira. Il giocatore color seleziona
+-- una base della SUA unità che tira e una base dell'unità nemica
+-- bersaglio, poi: /execute debug_shootBasi("Red")
+-- Evidenzia le basi del tiratore:
+--   verde  = pronta al tiro
+--   giallo = 1°/2° rango ma bersaglio fuori gittata
+--   rosso  = 1°/2° rango in gittata ma senza linea di vista
+--   viola  = 1°/2° rango, nessuna base nemica nel cono
+--   bianco = 3° rango o oltre (non tira, regolamento)
+-- /execute debug_shootBasi("Red", false) toglie le evidenziazioni.
+-- ============================================================
+function debug_shootBasi(color, attivo)
+    local player = Player[color]
+    local mySlot = player and main_getArmyByColor(player)
+    if not mySlot then print("[TIRO-DBG] colore non associato a un esercito"); return end
+    local mioKey, suoKey
+    for _, o in ipairs(player.getSelectedObjects() or {}) do
+        local key = main_parseNickname(o.getName()) and main_getUnitKey(o)
+        if key then
+            if o.hasTag("Army" .. mySlot) then mioKey = mioKey or key
+            elseif o.hasTag("Army1") or o.hasTag("Army2") then suoKey = suoKey or key end
+        end
+    end
+    if not mioKey or not suoKey then
+        print("[TIRO-DBG] Seleziona una base dell'unita' che tira e una base del bersaglio nemico"); return
+    end
+    local mie, sue = main_getUnitBases(mioKey), main_getUnitBases(suoKey)
+    for _, b in ipairs(mie) do b.highlightOff() end
+    if attivo == false then
+        IEF_DEBUG_RECT_LINES = {}
+        callHandler("aggiornaLinee")
+        print("[TIRO-DBG] evidenziazioni tolte"); return
+    end
+
+    local weapon = shoot_getWeapon(mioKey)
+    if not weapon then print("[TIRO-DBG] l'unita' non ha armi da tiro"); return end
+    local rangeUnits = weapon.range_inches * INCH_TO_TTS
+    local tipo = (main_getUnitMeta(mie[1]) or {}).unitType
+    local angolo = (tipo == "CL" and weapon._arma_key == "ARCO") and 360 or (IEF_SHOOTING.angle or 45)
+
+    local tiratrici = shoot_basiTiratrici(mie, tipo)
+    local inRango = {}
+    for _, b in ipairs(tiratrici) do inRango[b] = true end
+
+    local mieRect = {}
+    for i, b in ipairs(tiratrici) do mieRect[i] = main_baseRectOfType(b, tipo) end
+    local cono = shoot_coneOf(mieRect, angolo)
+    local nemRect = {}
+    for _, n in ipairs(sue) do
+        local r = main_baseRectOfType(n, (main_getUnitMeta(n) or {}).unitType)
+        local poly = shoot_clipRectToCone(cono, r)
+        if #poly > 0 then r.poly = poly; table.insert(nemRect, r) end
+    end
+    local ostacoli = shoot_ostacoli()
+    local escludi = { [mioKey] = true, [suoKey] = true }
+
+    local conta = { pronta = 0, gittata = 0, vista = 0, cono = 0, rango = 0 }
+    IEF_DEBUG_RECT_LINES = {}
+    for _, b in ipairs(mie) do
+        if not inRango[b] then
+            b.highlightOn({ 1, 1, 1 }); conta.rango = conta.rango + 1
+        end
+    end
+    for _, nr in ipairs(nemRect) do
+        local m = math.huge
+        for i = 1, #tiratrici do m = math.min(m, shoot_distRectToPoly(mieRect[i], nr.poly)) end
+        nr.distUnita = m
+    end
+    for i, b in ipairs(tiratrici) do
+        local stato = "cono"
+        local minD = nil
+        local perBase, totPerBase, primo = {}, {}, {}
+        local bloccanti = {}
+        for _, nr in ipairs(nemRect) do
+            local d = shoot_distRectToPoly(mieRect[i], nr.poly)
+            if not minD or d < minD then minD = d end
+            if nr.distUnita <= rangeUnits then
+                if stato ~= "pronta" then stato = "vista" end
+                local nome = nr.obj and nr.obj.getName() or "?"
+                for _, c in ipairs(shoot_corridoi(mieRect[i], nr.poly, ostacoli, escludi)) do
+                    totPerBase[nome] = (totPerBase[nome] or 0) + 1
+                    if c.libero then
+                        stato = "pronta"
+                        perBase[nome] = (perBase[nome] or 0) + 1
+                        -- disegna il primo corridoio libero verso ogni base nemica
+                        if not primo[nome] then
+                            primo[nome] = true
+                            local pts = {}
+                            for _, v in ipairs(c.poligono) do table.insert(pts, { v.x, 1.4, v.z }) end
+                            table.insert(pts, { c.poligono[1].x, 1.4, c.poligono[1].z })
+                            table.insert(IEF_DEBUG_RECT_LINES, { points = pts, color = { 0.2, 1, 0.2 }, thickness = 0.015 })
+                        end
+                    elseif c.blocca and c.blocca.obj then
+                        bloccanti[c.blocca.obj.getName()] = true
+                    end
+                end
+            elseif stato == "cono" then
+                stato = "gittata"
+            end
+        end
+        conta[stato] = conta[stato] + 1
+        local col = ({ pronta = { 0.2, 1, 0.2 }, gittata = { 1, 0.9, 0.1 }, vista = { 1, 0.2, 0.2 }, cono = { 0.7, 0.3, 1 } })[stato]
+        b.highlightOn(col)
+        print(string.format("[TIRO-DBG] %s: %s%s", b.getName(),
+            ({ pronta = "PRONTA", gittata = "fuori gittata", vista = "nessun corridoio libero di 4 cm", cono = "nessun nemico nel cono" })[stato],
+            minD and string.format(" (bersaglio a %.2f\")", minD / INCH_TO_TTS) or ""))
+        if stato == "pronta" then
+            local nomi = {}
+            for nome in pairs(perBase) do table.insert(nomi, nome) end
+            table.sort(nomi, function(x, y) return perBase[x] > perBase[y] end)
+            for _, nome in ipairs(nomi) do
+                print(string.format("[TIRO-DBG]     -> %s: %d corridoi liberi su %d", nome, perBase[nome], totPerBase[nome]))
+            end
+        else
+            local nomi = {}
+            for n in pairs(bloccanti) do table.insert(nomi, n) end
+            if #nomi > 0 then print("[TIRO-DBG]   corridoi bloccati da: " .. table.concat(nomi, ", ")) end
+        end
+    end
+    callHandler("aggiornaLinee")
+    -- Confronto con la funzione VERA del gioco (7_shoot/lib.ttslua)
+    IEF_SHOOT_DEBUG = true
+    local nGioco, _, _, motivi = shoot_basiPronte(mie, sue, rangeUnits, angolo)
+    IEF_SHOOT_DEBUG = nil
+    motivi = motivi or {}
+    print(string.format("[TIRO-DBG] Funzione del gioco shoot_basiPronte: %d pronte (fuori gittata %d, senza vista %d) - versione %s",
+        nGioco, motivi.fuoriGittata or 0, motivi.senzaVista or 0,
+        IEF_SHOOT_GITTATA_UNITA and "NUOVA (gittata dell'unita')" or "VECCHIA (gittata per base)"))
+    print(string.format("[TIRO-DBG] %s (%d basi) -> %s: pronte %d, fuori gittata %d, senza vista %d, fuori cono %d, 3° rango e oltre %d. Gittata %d\"",
+        main_decodeExtendedUnitLabel(mioKey), #mie, main_decodeExtendedUnitLabel(suoKey),
+        conta.pronta, conta.gittata, conta.vista, conta.cono, conta.rango, weapon.range_inches))
+end

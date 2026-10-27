@@ -830,6 +830,62 @@ function main_getTerrainEffect(tipoTerreno, tipoUnita)
     return r
 end
 -- ============================================================
+-- FUNZIONE: main_pivotFrontCorner(basiObjs, direzione, pollici)
+-- Perno secondo il regolamento: l'unità ruota rigidamente attorno
+-- all'ANGOLO ANTERIORE esterno del lato del perno ("left" =
+-- angolo sinistro) e l'angolo anteriore opposto percorre
+-- esattamente "pollici" (arco). Angolo = pollici / larghezza del
+-- fronte, quindi il costo è esatto per qualsiasi fronte.
+-- Stessa convenzione di segno dei perni precedenti (left < 0).
+-- Ritorna l'angolo applicato (radianti) o nil.
+-- ============================================================
+function main_pivotFrontCorner(basiObjs, direzione, pollici)
+    if not basiObjs or #basiObjs < 2 or not pollici or pollici <= 0 then return nil end
+    local meta = main_getUnitMeta(basiObjs[1])
+    local tipo = meta and meta.unitType
+    local f0 = basiObjs[1].getTransformForward()
+    local fwd = Vector(f0.x, 0, f0.z):normalized()
+    local right = Vector(-fwd.z, 0, fwd.x)
+
+    -- angoli anteriori (rettangoli reali) di tutte le basi
+    local fronte = -math.huge
+    local angoli = {}
+    for _, b in ipairs(basiObjs) do
+        for _, c in ipairs(main_baseRectOfType(b, tipo).corners) do
+            local v = c.x * fwd.x + c.z * fwd.z
+            table.insert(angoli, { x = c.x, z = c.z, v = v, u = c.x * right.x + c.z * right.z })
+            if v > fronte then fronte = v end
+        end
+    end
+    local sx, dx = nil, nil
+    for _, c in ipairs(angoli) do
+        if c.v >= fronte - 0.05 then
+            if not sx or c.u < sx.u then sx = c end
+            if not dx or c.u > dx.u then dx = c end
+        end
+    end
+    if not sx or not dx then return nil end
+    local perno, lontano = sx, dx
+    if direzione ~= "left" then perno, lontano = dx, sx end
+    local larghezza = math.sqrt((lontano.x - perno.x) ^ 2 + (lontano.z - perno.z) ^ 2)
+    if larghezza < 0.01 then return nil end
+
+    local ang = (pollici * INCH_TO_TTS) / larghezza
+    if direzione == "left" then ang = -ang end
+    local gradi = math.deg(ang)
+    local cs, sn = math.cos(ang), math.sin(ang)
+    for _, obj in ipairs(basiObjs) do
+        local p = obj.getPosition()
+        local rx, rz = p.x - perno.x, p.z - perno.z
+        main_setPositionOnGround(obj, perno.x + rx * cs - rz * sn, perno.z + rx * sn + rz * cs, ang)
+        local rot = obj.getRotation()
+        obj.setRotation(Vector(rot.x, rot.y - gradi, rot.z))
+    end
+    main_syncGeneralsOfBases(basiObjs)
+    return ang
+end
+
+-- ============================================================
 -- FUNZIONE: main_capabilitiesOf(unitKey, meta)
 -- Capacità EFFETTIVE dell'unità: regolamento, EFFETTI DEL
 -- DISORDINE: "Perderanno tutti gli effetti delle loro CAPACITA',
@@ -1377,12 +1433,15 @@ function main_ricostruisciFormazione(basiObjs, fronte)
             col = (posizioneNelResto == 0) and 0 or (fronte - 1)
         end
 
+        -- Rotazione finale PIANA: solo l'orientamento Y della base di
+        -- riferimento (prima si copiava anche l'inclinazione presa
+        -- sulla collina, e le basi si alzavano).
         local refRot = refObj.getRotation()
         main_setPositionOnGround(obj,
             startPos.x + right.x*(col*width) - fwdXZ.x*(rank*depth),
             startPos.z + right.z*(col*width) - fwdXZ.z*(rank*depth),
             math.rad(obj.getRotation().y - refRot.y))
-        obj.setRotation(refRot)
+        obj.setRotation(Vector(0, refRot.y, 0))
     end
 
     return true
@@ -1788,7 +1847,12 @@ end
 -- ============================================================
 function main_getUnitKey(obj)
     if not obj then return nil end
-    return obj.getName():gsub("%.%d+$", "")
+    -- Tra parentesi: gsub ritorna DUE valori (stringa, numero di
+    -- sostituzioni). Senza parentesi, in TTS (MoonSharp) usata come
+    -- chiave di tabella -- es. { [main_getUnitKey(b)] = true } --
+    -- la chiave diventa una tupla e non vale più come la stringa:
+    -- così la FL non veniva esclusa dagli ostacoli del suo stesso tiro.
+    return (obj.getName():gsub("%.%d+$", ""))
 end
 
 -- ============================================================
@@ -2964,6 +3028,15 @@ end
 -- una base piatta (la rotazione è solo attorno a Y).
 -- ============================================================
 function main_baseBottomOffset(obj)
+    -- Bounds NON ruotati (getBoundsNormalized): esatti anche se la
+    -- base è inclinata. Con getBounds (allineato al mondo) una base
+    -- inclinata su una collina dava un fondo più basso del vero, e
+    -- ogni spostamento la rialzava un po' di più.
+    -- offset = posizione - centro, quindi fondo = offset.y + size.y/2.
+    local bn = obj.getBoundsNormalized()
+    if bn and bn.size and bn.offset then
+        return bn.offset.y + bn.size.y / 2
+    end
     local b = obj.getBounds()
     if not b or not b.size then return nil end
     return obj.getPosition().y - (b.center.y - b.size.y / 2)
@@ -2977,6 +3050,13 @@ end
 -- Se le misure non riescono, mantiene la Y attuale.
 -- ============================================================
 function main_setPositionOnGround(obj, x, z, deltaRad)
+    -- Le basi restano sempre piane (rotazione solo attorno a Y):
+    -- se la fisica le ha inclinate su una collina, si raddrizzano.
+    local rot = obj.getRotation()
+    local function storto(a) a = ((a + 180) % 360) - 180; return math.abs(a) > 0.05 end
+    if storto(rot.x) or storto(rot.z) then
+        obj.setRotation(Vector(0, rot.y, 0))
+    end
     local p = obj.getPosition()
     local terreno = main_baseFootprintGroundY(obj, x, z, deltaRad)
     local fondo = main_baseBottomOffset(obj)
