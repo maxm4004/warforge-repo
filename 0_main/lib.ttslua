@@ -886,6 +886,20 @@ function main_pivotFrontCorner(basiObjs, direzione, pollici)
 end
 
 -- ============================================================
+-- FUNZIONE: main_baseDims(obj, tipo)
+-- Larghezza e profondità della base in unità TTS: misure reali
+-- della mesh (centroMesh w/d, salvate al deploy) se ci sono,
+-- altrimenti quelle dichiarate in unit_types.
+-- ============================================================
+function main_baseDims(obj, tipo)
+    local c = obj and main_baseCentro(obj) or {}
+    local ut = tipo and main_getUnitType(tipo)
+    local w = (c.w and c.w > 0) and c.w or ((ut and ut.base_width_cm or 4) * CM_TO_TTS)
+    local d = (c.d and c.d > 0) and c.d or ((ut and tonumber(ut.base_depth_cm) or 3) * CM_TO_TTS)
+    return w, d
+end
+
+-- ============================================================
 -- FUNZIONE: main_capabilitiesOf(unitKey, meta)
 -- Capacità EFFETTIVE dell'unità: regolamento, EFFETTI DEL
 -- DISORDINE: "Perderanno tutti gli effetti delle loro CAPACITA',
@@ -1222,7 +1236,7 @@ function main_formationOpenFromButton(obj, player_color, alt_click)
         warningToColor(vietato, Player[player_color], "Yellow", 5, true)
         return
     end
-    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
+    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, main_unitYaw(basiObjs), 15)
 
     IEF_FORM_UNITS[unitKey] = {
         basiObjs     = basiObjs,
@@ -1247,6 +1261,7 @@ function main_formationOpenFromButton(obj, player_color, alt_click)
         startFrontWidth = IEF_FRONT_WIDTH and IEF_FRONT_WIDTH[unitKey],
         history         = {},
         schieramento    = true,
+        startYaw        = basiObjs[1].getRotation().y,
     }
     IEF_FORM_UNITS[unitKey].basiObjs = IEF_MOVE_UNITS[unitKey].basiObjs
 
@@ -1542,7 +1557,22 @@ local function formOp(unitKey, fn)
         state.history = state.history or {}
         table.insert(state.history, snap)
         move_redraw(unitKey)
+        main_formationCamera(unitKey)
     end
+end
+
+-- Telecamera dopo un cambio di fronte: ruota insieme all'unità
+-- (yaw di partenza dell'esercito + rotazione fatta dall'apertura
+-- del pannello), così il pannello resta davanti al giocatore.
+function main_formationCamera(unitKey)
+    local state = IEF_MOVE_UNITS and IEF_MOVE_UNITS[unitKey]
+    if not state or not state.activePlayer or not state.basiObjs or not state.basiObjs[1] then return end
+    local b = state.basiObjs[1]
+    local slot = b.hasTag("Army1") and 1 or (b.hasTag("Army2") and 2 or nil)
+    if not slot then return end
+    Wait.frames(function()
+        main_cameraToUnitPanel(state.activePlayer, state.basiObjs, 30, main_unitYaw(state.basiObjs), 15)
+    end, 5)
 end
 function main_frontMinus2(player, value, id)
     local unitKey = id:match("^btn_(.+)_FrontMinus2$")
@@ -1687,7 +1717,7 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
         return
     end
 
-    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
+    main_cameraToUnitPanel(Player[player_color], basiObjs, 30, main_unitYaw(basiObjs), 15)
 
     local startPos, startRot = {}, {}
     for _, b in ipairs(basiObjs) do
@@ -1706,6 +1736,7 @@ function main_movementOpenFromButton(obj, player_color, alt_click)
         startPivotBudget = IEF_PIVOT_BUDGET[unitKey],
         startReformUsed  = IEF_REFORM_USED[unitKey] or false,
         startFrontWidth  = IEF_FRONT_WIDTH and IEF_FRONT_WIDTH[unitKey],
+        startYaw         = basiObjs[1].getRotation().y,
         history      = {},
         rotta        = inRotta or nil,
         amicheRotta  = inRotta and {} or nil,
@@ -2535,6 +2566,18 @@ end
 -- ============================================================
 -- FUNZIONE: main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
 -- ============================================================
+-- ============================================================
+-- FUNZIONE: main_unitYaw(basiObjs)
+-- Orientamento dell'unità (rotazione Y della prima base). Allo
+-- schieramento è 0 per Army1 e 180 per Army2, come ArmyYaw: la
+-- telecamera con questo yaw vede il pannello della base dritto
+-- anche se l'unità è ruotata (perni, cambi di fronte).
+-- ============================================================
+function main_unitYaw(basiObjs)
+    local b = basiObjs and basiObjs[1]
+    return b and b.getRotation().y or 0
+end
+
 function main_cameraToUnitPanel(player, basiObjs, pitch, yaw, distance)
     if #basiObjs == 0 then return end
 

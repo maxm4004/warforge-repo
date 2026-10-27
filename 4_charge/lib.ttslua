@@ -591,7 +591,7 @@ function charge_declareOpenFromButton(obj, player_color, alt_click)
         activePlayer = player,
     }
 
-    main_cameraToUnitPanel(player, myBases, 30, ArmyYaw["ButtonBase"][slot], 15)
+    main_cameraToUnitPanel(player, myBases, 30, main_unitYaw(myBases), 15)
     UI.setAttribute("confirm_panel_charge", "active", "false")
     Wait.time(function ()
         charge_redraw(myKey)
@@ -947,7 +947,7 @@ function charge_declareTestDone(ctx, esito)
     local basiObjs = charge_getUnitBases(ctx.attackerKey)
 
     if player and #basiObjs > 0 then
-        main_cameraToUnitPanel(player, basiObjs, 30, ArmyYaw["ButtonBase"][slot], 15)
+        main_cameraToUnitPanel(player, basiObjs, 30, main_unitYaw(basiObjs), 15)
     end
 
     if esito == MORALE_RESULT.OK then

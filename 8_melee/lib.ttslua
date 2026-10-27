@@ -555,16 +555,40 @@ end
 
 -- ============================================================
 -- FUNZIONE: melee_touchingBases(myKey, enemyBases)
--- Basi di myKey che toccano una base nemica su QUALSIASI lato
--- (rettangoli reali, distanza bordo-bordo entro 0,05").
+-- Basi di myKey a contatto con una base nemica su QUALSIASI lato,
+-- ma lungo un LATO (non solo per uno spigolo): il punto medio di
+-- un lato di una delle due basi deve stare a meno di 0,05"
+-- dall'altra. Basi affiancate che si sfiorano solo all'angolo
+-- (es. base in overlap accanto al nemico) non contano.
 -- ============================================================
 MELEE_TOUCH_INCHES = 0.05
+local function puntiMediLati(r)
+    local k = r.corners   -- (-w,-d) (-w,+d) (+w,-d) (+w,+d)
+    local function m(a, b) return { x = (a.x + b.x) / 2, z = (a.z + b.z) / 2 } end
+    return { m(k[1], k[2]), m(k[3], k[4]), m(k[1], k[3]), m(k[2], k[4]) }
+end
+local function toccaSulLato(ra, rb, tol)
+    for _, p in ipairs(puntiMediLati(ra)) do
+        if main_pointRectDistance(p.x, p.z, rb) <= tol then return true end
+    end
+    for _, p in ipairs(puntiMediLati(rb)) do
+        if main_pointRectDistance(p.x, p.z, ra) <= tol then return true end
+    end
+    return false
+end
 function melee_touchingBases(myKey, enemyBases)
     local out = {}
-    for _, b in ipairs(main_getUnitBases(myKey)) do
-        for _, n in ipairs(enemyBases) do
-            local d = main_distanceInches(b, n)
-            if d and d <= MELEE_TOUCH_INCHES then
+    local tol = MELEE_TOUCH_INCHES * INCH_TO_TTS
+    local mie = main_getUnitBases(myKey)
+    local tm = mie[1] and (main_getUnitMeta(mie[1]) or {}).unitType
+    local nemiche = {}
+    for _, n in ipairs(enemyBases) do
+        table.insert(nemiche, main_baseRectOfType(n, (main_getUnitMeta(n) or {}).unitType))
+    end
+    for _, b in ipairs(mie) do
+        local rb = main_baseRectOfType(b, tm)
+        for _, rn in ipairs(nemiche) do
+            if toccaSulLato(rb, rn, tol) then
                 table.insert(out, b)
                 break
             end
@@ -1403,8 +1427,8 @@ end
 -- onClick del pannello SFONDAMENTO
 function melee_btClick(ctx, slot, player, rec, value)
     ctx.player = player.color
-    if value == "SX" then melee_btPivot(ctx, "left", player)
-    elseif value == "DX" then melee_btPivot(ctx, "right", player)
+    if value == "SX" or value == "SN" then melee_btPivot(ctx, "left", player)
+    elseif value == "DX" or value == "DS" then melee_btPivot(ctx, "right", player)
     elseif value == "GO" then
         melee_btGo(ctx, player)
         engine_subClose("SFONDAMENTO", slot, { fatto = true })

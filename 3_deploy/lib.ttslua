@@ -304,7 +304,9 @@ function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, ele
     end
 
     local nickname =    deployment_buildBaseNickname(unitData, baseData, unitNumber)
-    local pos =         deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
+    local utSpawn = main_getUnitType(unitData.tipo)
+    local pos =         deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ,
+                                                     utSpawn and tonumber(utSpawn.base_depth_cm))
     local rot      =    deployment_buildBaseRotation(slot)
     local params   =    deployment_buildSpawnParams(nickname, unitData, templateData, pos, rot)
 
@@ -347,7 +349,7 @@ end
 -- Army1 spawna a Z negativo (zona sopra), Army2 a Z positivo.
 -- Offset da posizione nel JSON (coordinate relative in cm * 0.7423)
 -- ============================================================
-function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
+function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ, depthCm)
 
     local VERDE_LZ  = 50
     local SPAWN_GAP = 2
@@ -358,12 +360,17 @@ function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ)
     local zSign = slot == 1 and -1 or 1
     local col = math.floor((sourcePos.x or 0) / 4)
     local horizGap = 0.01
+    -- Anche fra i ranghi un piccolo gioco (come fra le colonne):
+    -- con le mesh alla misura esatta i ranghi nascevano a contatto e
+    -- la fisica, allo sblocco, sollevava qualche base.
+    local rank = (depthCm and depthCm > 0) and math.floor((sourcePos.z or 0) / depthCm + 0.5) or 0
+    local vertGap = 0.03
 
     local x1 = ((unitOffsetX or 0) + (sourcePos.x or 0) * CM_TO_TTS + col * horizGap)
     local x2 = ((unitOffsetX or 0) - (sourcePos.x or 0) * CM_TO_TTS - col * horizGap)
 
-    local z1 = zOffset - (sourcePos.z or 0) * CM_TO_TTS + (unitOffsetZ or 0) * zSign
-    local z2 = zOffset + (unitOffsetZ or 0) + (sourcePos.z or 0) * CM_TO_TTS
+    local z1 = zOffset - (sourcePos.z or 0) * CM_TO_TTS - rank * vertGap + (unitOffsetZ or 0) * zSign
+    local z2 = zOffset + (unitOffsetZ or 0) + (sourcePos.z or 0) * CM_TO_TTS + rank * vertGap
    
     local x = slot == 1 and x1 or x2
     local z = slot == 1 and z1 or z2
