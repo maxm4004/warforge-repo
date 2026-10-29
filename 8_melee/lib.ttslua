@@ -605,7 +605,7 @@ function melee_rearBase(baseObj, myBases, w, d)
     local posA    = baseObj.getPosition()
     local fwd     = baseObj.getTransformForward()
     local fwdXZ   = Vector(fwd.x, 0, fwd.z):normalized()
-    local rightXZ = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local rightXZ = main_rightOf(fwdXZ)
 
     local projFrontA = posA.x * fwdXZ.x   + posA.z * fwdXZ.z
     local projRightA = posA.x * rightXZ.x + posA.z * rightXZ.z
@@ -641,7 +641,7 @@ function melee_overlapBases(contactBases, myBases, w, d)
 
     local fwd     = contactBases[1].getTransformForward()
     local fwdXZ   = Vector(fwd.x, 0, fwd.z):normalized()
-    local rightXZ = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local rightXZ = main_rightOf(fwdXZ)
 
     local minRight, maxRight, sumFront = math.huge, -math.huge, 0
     for _, bc in ipairs(contactBases) do

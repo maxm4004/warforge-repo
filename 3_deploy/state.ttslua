@@ -78,15 +78,15 @@ DEPLOYMENT.fogArm1 = [[
 {
   "Name": "FogOfWarTrigger",
   "Transform": {
-    "posX": -0.151100159,
+    "posX": 0.14,
     "posY": 3.95,
-    "posZ": -33.0519753,
+    "posZ": -31.89,
     "rotX": 0.0,
     "rotY": 0.0,
     "rotZ": 0.0,
-    "scaleX": 110.555443,
+    "scaleX": 109.62,
     "scaleY": 5.1,
-    "scaleZ": 22.224226
+    "scaleZ": 23.06
   },
   "Nickname": "FogOfWarTrigger_Army1",
   "Description": "",
@@ -133,15 +133,15 @@ DEPLOYMENT.fogArmy2 = [[
 {
   "Name": "FogOfWarTrigger",
   "Transform": {
-    "posX": 0.42,
+    "posX": -0.14,
     "posY": 3.95,
-    "posZ": 33.05,
+    "posZ": 32.31,
     "rotX": 0.0,
     "rotY": 0.0,
     "rotZ": 0.0,
-    "scaleX": 110.555443,
+    "scaleX": 109.43,
     "scaleY": 5.1,
-    "scaleZ": 22.224226
+    "scaleZ": 23.70
   },
   "Nickname": "FogOfWarTrigger_Army2",
   "Description": "",

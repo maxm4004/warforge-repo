@@ -306,7 +306,8 @@ function deployment_spawnBase(slot, armyTag, unitData, baseData, unitNumber, ele
     local nickname =    deployment_buildBaseNickname(unitData, baseData, unitNumber)
     local utSpawn = main_getUnitType(unitData.tipo)
     local pos =         deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ,
-                                                     utSpawn and tonumber(utSpawn.base_depth_cm))
+                                                     utSpawn and tonumber(utSpawn.base_depth_cm),
+                                                     utSpawn and tonumber(utSpawn.base_width_cm))
     local rot      =    deployment_buildBaseRotation(slot)
     local params   =    deployment_buildSpawnParams(nickname, unitData, templateData, pos, rot)
 
@@ -349,22 +350,22 @@ end
 -- Army1 spawna a Z negativo (zona sopra), Army2 a Z positivo.
 -- Offset da posizione nel JSON (coordinate relative in cm * 0.7423)
 -- ============================================================
-function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ, depthCm)
+function deployment_buildBasePosition(slot, baseData, unitOffsetX, unitOffsetZ, depthCm, widthCm)
 
     local VERDE_LZ  = 50
     local SPAWN_GAP = 2
-    local Y         = 1.18
+    local Y         = 1.18   -- quota di nascita: poi F30 la appoggia sul terreno
      local sourcePos = baseData.posizione or { x = 0, z = 0 }
 
     local zOffset   = slot == 1 and -(VERDE_LZ + SPAWN_GAP) or (VERDE_LZ + SPAWN_GAP)
     local zSign = slot == 1 and -1 or 1
-    local col = math.floor((sourcePos.x or 0) / 4)
-    local horizGap = 0.01
-    -- Anche fra i ranghi un piccolo gioco (come fra le colonne):
-    -- con le mesh alla misura esatta i ranghi nascevano a contatto e
-    -- la fisica, allo sblocco, sollevava qualche base.
+    -- Gioco fra colonne e fra ranghi: gli stessi di RIORDINA
+    -- (IEF_FILE_GAP / IEF_RANK_GAP in 0_main/lib.ttslua).
+    local wCm = (widthCm and widthCm > 0) and widthCm or 4
+    local col = math.floor((sourcePos.x or 0) / wCm + 0.5)
+    local horizGap = IEF_FILE_GAP or 0.03
     local rank = (depthCm and depthCm > 0) and math.floor((sourcePos.z or 0) / depthCm + 0.5) or 0
-    local vertGap = 0.03
+    local vertGap = IEF_RANK_GAP or 0.03
 
     local x1 = ((unitOffsetX or 0) + (sourcePos.x or 0) * CM_TO_TTS + col * horizGap)
     local x2 = ((unitOffsetX or 0) - (sourcePos.x or 0) * CM_TO_TTS - col * horizGap)
@@ -506,7 +507,15 @@ function deployment_onBaseSpawned(obj, slot, armyTag, nickname, unitData, baseDa
                 end
                 minisModel[nickname] = nil
                 Wait.frames(function()
-                    if obj then obj.setLock(false) end
+                    if obj then
+                        -- F30: la base nasce a Y = 1.18 (sopra il tavolo,
+                        -- per non compenetrarlo). Prima di sbloccarla la
+                        -- si appoggia sul terreno (figure già attaccate,
+                        -- si muovono con lei): niente caduta né rimbalzi.
+                        local p = obj.getPosition()
+                        main_setPositionOnGround(obj, p.x, p.z)
+                        obj.setLock(false)
+                    end
                     if onSpawnata then onSpawnata() end
                 end, 5)
             elseif onSpawnata then

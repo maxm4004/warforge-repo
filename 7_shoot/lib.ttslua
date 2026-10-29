@@ -25,12 +25,19 @@ function shoot_buttonBaseClick(obj, player_color, alt_click)
 
     local player = Player[ARMY[slot].color]
     main_cameraToUnitPanel(player, basiObjs, 30, main_unitYaw(basiObjs), 15)
-    shoot_range_and_target(player, basiObjs)
+    -- F38: prima il mirino da trascinare sul bersaglio, poi la
+    -- scheda e la conferma Tiro / Chiudi. Con IEF_SHOOT_USA_MIRINO
+    -- = false torna la gestione precedente (bersaglio automatico).
+    if IEF_SHOOT_USA_MIRINO == false then
+        shoot_range_and_target(player, basiObjs)
+    else
+        shoot_mirinoStart(player, basiObjs, obj)
+    end
 end
 -- ============================================================
 -- FUNZIONE: shoot_range_and_target(player, selection)
 -- ============================================================
-function shoot_range_and_target(player, selection)
+function shoot_range_and_target(player, selection, opts)
 
     local phase = ENGINE.phases[ENGINE.phase]
     if not phase then print("No phase") return false end
@@ -134,8 +141,14 @@ function shoot_range_and_target(player, selection)
     -- Coordinate MONDO: il cono si disegna sulle linee globali
     -- (main_aggiornaLinee), non sulla base, così non dipende da
     -- posizione/rotazione/scala dell'oggetto su cui era agganciato.
+    -- F38c: le linee seguono il terreno (colline), non una quota fissa
+    local function quotaLinea(x, z)
+        local g = main_groundY(x, z, 2)
+        return g and (g + 0.06) or y
+    end
     local function puntoCono(sv, tv)
-        return { cono.fx * sv + cono.rx * tv, y, cono.fz * sv + cono.rz * tv }
+        local x, z = cono.fx * sv + cono.rx * tv, cono.fz * sv + cono.rz * tv
+        return { x, quotaLinea(x, z), z }
     end
 
     local angolo   = math.rad(math.min(angoloGradi, 89))
@@ -189,9 +202,20 @@ function shoot_range_and_target(player, selection)
         local cerchio = {}
         for i = 0, 48 do
             local a = 2 * math.pi * i / 48
-            table.insert(cerchio, { cx + math.cos(a) * (rMax + rangeUnits), y, cz + math.sin(a) * (rMax + rangeUnits) })
+            local px, pz = cx + math.cos(a) * (rMax + rangeUnits), cz + math.sin(a) * (rMax + rangeUnits)
+            table.insert(cerchio, { px, quotaLinea(px, pz), pz })
         end
         conoLines = { {points = cerchio, color = {1, 0.8, 0.1}, thickness = 0.1} }
+    end
+
+    -- F38: solo cono e bersaglio regolamentare (per il mirino):
+    -- niente evidenziazioni, scheda o conferma
+    if opts and opts.soloCono then
+        -- il cono si disegna solo al rilascio del mirino (flusso pieno)
+        IEF_SHOOTING.activeLines = nil
+        callHandler("aggiornaLinee")
+        return { target = target, cono = cono, mieRect = mieRect, rangeUnits = rangeUnits,
+                 basiFronte = basiFronte, shooterSlot = shooterSlot, unitKey = unitKey }
     end
 
     if target then
@@ -826,6 +850,7 @@ end
 -- FUNZIONE: shoot_ResetLines(player, value, id)
 -- ============================================================
 function shoot_ResetLines(player, value, id, tieniInfo)
+    if shoot_mirinoStop then shoot_mirinoStop() end
 
     if IEF_SHOOTING.activeShooter then
         IEF_SHOOTING.activeShooter.setVectorLines({})
@@ -1569,4 +1594,263 @@ function shoot_infoRisultati(risultati, soglia, colpi)
     UI.setAttribute("shootinfo_esito", "color", ((colpi or 0) > 0) and S.bonus or S.malus)
     UI.setAttribute("shootinfo_esito", "active", "true")
     shoot_infoAltezza(false, true, true)
+end
+
+-- ============================================================
+-- F38: MIRINO DI TIRO
+-- Clic su TIRO: cono di tiro e una maniglia gialla (mirino)
+-- davanti all'unità. Il giocatore la trascina su un'unità
+-- nemica: verde = bersaglio valido (quello del regolamento: il
+-- più vicino con linea di vista), rosso = no, con il motivo nel
+-- pannellino. Rilasciato su un bersaglio valido si apre la scheda
+-- del tiro con la conferma Tiro / Chiudi (shoot_range_and_target);
+-- altrimenti il mirino torna al suo posto.
+-- IEF_SHOOT_MIRINO = { player, basi, host, info, giusto, obj,
+--                      start, sopra, valido, waitId }
+-- ============================================================
+function main_uiIconUrl(nome)
+    local ok, assets = pcall(function() return UI.getCustomAssets() end)
+    if not ok or type(assets) ~= "table" then return nil end
+    local cerca = string.lower(nome)
+    for _, a in ipairs(assets) do
+        if a.name and string.lower(a.name) == cerca and a.url and a.url ~= "" then return a.url end
+    end
+    return nil
+end
+
+function shoot_mirinoStart(player, basiObjs, host)
+    shoot_mirinoStop()
+    local info = shoot_range_and_target(player, basiObjs, { soloCono = true })
+    if type(info) ~= "table" then return end
+    if not info.target then
+        -- nessun bersaglio: comportamento di sempre (avviso + cono)
+        shoot_range_and_target(player, basiObjs)
+        return
+    end
+    local cx, cz, n = 0, 0, 0
+    for _, b in ipairs(info.basiFronte) do local p = b.getPosition(); cx, cz, n = cx + p.x, cz + p.z, n + 1 end
+    cx, cz = cx / n, cz / n
+    local fx, fz = info.cono.fx, info.cono.fz
+    -- F38e: il mirino nasce sopra le teste dell'unità (centro di
+    -- tutte le basi, sopra la figura più alta) e resta sospeso
+    local ux, uz, un, alto = 0, 0, 0, -math.huge
+    for _, b in ipairs(basiObjs) do
+        local p = b.getPosition()
+        ux, uz, un = ux + p.x, uz + p.z, un + 1
+        local bb = b.getBounds()
+        if bb and bb.center and bb.size then alto = math.max(alto, bb.center.y + bb.size.y / 2) end
+    end
+    local x, z = ux / un, uz / un
+    if alto == -math.huge then alto = (main_groundY(x, z, 2) or 1.0) + 1.5 end
+    local m = { player = player, basi = basiObjs, host = host or basiObjs[1], info = info,
+                giusto = main_getUnitKey(info.target), start = { x = x, y = alto + IEF_SHOOT_MIRINO_ALTEZZA, z = z } }
+    m.sospeso = IEF_SHOOT_MIRINO_SOPRA
+    local yawUnita = basiObjs[1].getRotation().y
+    m.rot = { x = IEF_SHOOT_MIRINO_ROT.x, y = yawUnita + IEF_SHOOT_MIRINO_ROT.y, z = IEF_SHOOT_MIRINO_ROT.z }
+    -- origine della linea elastica: centro del fronte delle basi tiratrici
+    local hd = 0
+    local i0 = main_parseNickname(info.basiFronte[1].getName())
+    local ut = i0 and main_getUnitType(i0.unitType)
+    hd = ((ut and ut.base_depth_cm) or 3) * CM_TO_TTS / 2
+    m.origine = { x = cx + fx * hd, z = cz + fz * hd }
+    -- F38h: a terra, il più vicino possibile al fronte dell'unità
+    if not m.sospeso then
+        local d = IEF_SHOOT_MIRINO_DAVANTI * INCH_TO_TTS
+        local gx, gz = m.origine.x + fx * d, m.origine.z + fz * d
+        m.start = { x = gx, y = (main_groundY(gx, gz, 2) or 1.0) + 0.15, z = gz }
+    end
+    IEF_SHOOT_MIRINO = m
+    local function pronto(o)
+        if IEF_SHOOT_MIRINO ~= m then o.destruct(); return end
+        o.setName("Mirino")
+        o.use_gravity = not m.sospeso
+        o.setVelocity(Vector(0, 0, 0))
+        m.obj = o
+    end
+    -- F38f: il mirino è un gettone con l'icona "Tiro" della UI
+    -- (asset personalizzati del Global); senza icona, la pedina gialla
+    local url = main_uiIconUrl("Tiro")
+    if url then
+        spawnObjectData({
+            data = {
+                Name = "Custom_Token",
+                Transform = { posX = m.start.x, posY = m.start.y, posZ = m.start.z,
+                              rotX = m.rot.x, rotY = m.rot.y, rotZ = m.rot.z,
+                              scaleX = IEF_SHOOT_MIRINO_SCALA, scaleY = 1, scaleZ = IEF_SHOOT_MIRINO_SCALA },
+                CustomImage = {
+                    ImageURL = url, ImageSecondaryURL = "", ImageScalar = 1, WidthScale = 0,
+                    CustomToken = { Thickness = 0.1, MergeDistancePixels = 15, StandUp = false, Stackable = false },
+                },
+            },
+            callback_function = pronto,
+        })
+    else
+        spawnObject({
+            type = "Checker_white", position = { m.start.x, m.start.y, m.start.z }, rotation = { m.rot.x, m.rot.y, m.rot.z },
+            scale = { 0.45, 0.45, 0.45 }, sound = false,
+            callback_function = function(o)
+                o.setColorTint({ 1, 0.8, 0.1 })
+                pronto(o)
+            end,
+        })
+    end
+    shoot_mirinoPannello(m, "Trascina il mirino sul bersaglio", "#FFFFFF")
+end
+
+function shoot_mirinoStop()
+    local m = IEF_SHOOT_MIRINO
+    if not m then return end
+    IEF_SHOOT_MIRINO = nil
+    if m.waitId then Wait.stop(m.waitId) end
+    if m.obj and not m.obj.isDestroyed() then m.obj.destruct() end
+    shoot_mirinoEvidenzia(m, nil)
+    if m.host and not m.host.isDestroyed() then m.host.UI.setXml("") end
+    IEF_SHOOTING.activeLines = nil
+    callHandler("aggiornaLinee")
+end
+
+-- Pannellino come quello della distanza del movimento
+function shoot_mirinoPannello(m, testo, colore)
+    local h = m.host
+    if not h or h.isDestroyed() then return end
+    if not m.pannello then
+        m.pannello = true
+        local P = MOVEPANEL
+        local fronte = main_detectFormation(m.basi)
+        local x, y, z = main_calcolaPosizionePannello(fronte, #m.basi)
+        h.UI.setXml(string.format([[
+            <Panel id="panelMirino" active="true" color="%s" width="760" height="90" offsetXY="0 405" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+                <HorizontalLayout spacing="10" padding="16 16 10 10" childAlignment="MiddleCenter" childForceExpandWidth="false">
+                    <Text id="txtMirino" text="%s" font="%s" fontStyle="Bold" fontSize="28" color="%s" alignment="MiddleCenter" preferredWidth="560"/>
+                    <Button id="btnMirinoChiudi" text="Chiudi" font="%s" fontSize="18" color="%s" textColor="White" preferredWidth="140" preferredHeight="50" onClick="Global/shoot_mirinoChiudi"/>
+                </HorizontalLayout>
+            </Panel>
+            ]], P.bg, x, y, z, m.player.color, testo, P.font, colore, P.font, P.close))
+        return
+    end
+    h.UI.setAttribute("txtMirino", "text", testo)
+    h.UI.setAttribute("txtMirino", "color", colore)
+end
+
+-- Unità nemica sotto il mirino (la base più vicina entro 0.3")
+function shoot_mirinoUnitaSotto(m, px, pz)
+    local tagNemico = "Army" .. (m.info.shooterSlot == 1 and 2 or 1)
+    local meglio, dMin = nil, 0.3 * INCH_TO_TTS
+    for _, o in ipairs(getAllObjects()) do
+        if o.hasTag(tagNemico) then
+            local info = main_parseNickname(o.getName())
+            if info and info.unitType ~= "GEN" then
+                local d = main_pointRectDistance(px, pz, main_baseRectOfType(o, info.unitType))
+                if d <= dMin then meglio, dMin = main_getUnitKey(o), d end
+            end
+        end
+    end
+    return meglio
+end
+
+function shoot_mirinoEvidenzia(m, key, valido)
+    if m.sopra and m.sopra ~= key then
+        for _, b in ipairs(main_getUnitBases(m.sopra)) do b.highlightOff() end
+    end
+    m.sopra = key
+    if key then
+        local col = valido and { 0.2, 0.9, 0.2 } or { 1, 0.2, 0.2 }
+        for _, b in ipairs(main_getUnitBases(key)) do b.highlightOn(col) end
+    end
+end
+
+-- Esito del bersaglio key: valido, testo
+function shoot_mirinoValuta(m, key)
+    local nome = main_decodeExtendedUnitLabel(key)
+    if key == m.giusto then
+        if not m.distGiusto then
+            m.distGiusto = shoot_mirinoDistanza(m, key)
+        end
+        return true, string.format("%s  %.2f\"", nome, m.distGiusto / INCH_TO_TTS)
+    end
+    if main_isGeneralKey(key) then return false, "Generale: non e' un bersaglio" end
+    if main_unitsInMelee()[key] then return false, nome .. ": in mischia" end
+    local d = shoot_mirinoDistanza(m, key)
+    if d == math.huge then return false, nome .. ": fuori dal cono di tiro" end
+    if d > m.info.rangeUnits then
+        return false, string.format("%s: fuori gittata (%.1f\" > %.0f\")", nome, d / INCH_TO_TTS, m.info.rangeUnits / INCH_TO_TTS)
+    end
+    m.distGiusto = m.distGiusto or shoot_mirinoDistanza(m, m.giusto)
+    if d < m.distGiusto then return false, nome .. ": nessuna linea di vista libera" end
+    return false, "Il bersaglio non è valido"
+end
+
+function shoot_mirinoDistanza(m, key)
+    local d = math.huge
+    for _, b in ipairs(main_getUnitBases(key)) do
+        local info = main_parseNickname(b.getName())
+        local dd = shoot_distInCone(m.info.cono, m.info.mieRect, main_baseRectOfType(b, info and info.unitType))
+        if dd < d then d = dd end
+    end
+    return d
+end
+
+function shoot_mirinoOnPickUp(player_color, obj)
+    local m = IEF_SHOOT_MIRINO
+    if not m or obj ~= m.obj then return end
+    if m.player.color ~= player_color then return end
+    if m.waitId then Wait.stop(m.waitId) end
+    m.waitId = Wait.time(function() shoot_mirinoTick() end, 0.1, -1)
+end
+
+function shoot_mirinoTick()
+    local m = IEF_SHOOT_MIRINO
+    if not m or not m.obj or m.obj.isDestroyed() then return end
+    local p = m.obj.getPosition()
+    local key = shoot_mirinoUnitaSotto(m, p.x, p.z)
+    -- linea elastica dal fronte al mirino (verde sul bersaglio
+    -- valido, rossa su uno non valido, gialla altrove)
+    local ok, testo = false, nil
+    if key then ok, testo = shoot_mirinoValuta(m, key) end
+    local col = key and (ok and { 0.2, 0.9, 0.2 } or { 1, 0.2, 0.2 }) or { 1, 0.8, 0.1 }
+    local o = m.origine
+    local y0 = (main_groundY(o.x, o.z, 2) or 1.2) + 0.06
+    local y1 = (main_groundY(p.x, p.z, 2) or 1.2) + 0.06
+    IEF_SHOOTING.activeLines = { { points = { { o.x, y0, o.z }, { p.x, y1, p.z } }, color = col, thickness = 0.08 } }
+    callHandler("aggiornaLinee")
+    if not key then
+        shoot_mirinoEvidenzia(m, nil)
+        m.valido = false
+        local d = math.sqrt((p.x - o.x) ^ 2 + (p.z - o.z) ^ 2) / INCH_TO_TTS
+        shoot_mirinoPannello(m, string.format('%.2f"', d), "#FFFFFF")
+        return
+    end
+    m.valido = ok
+    shoot_mirinoEvidenzia(m, key, ok)
+    shoot_mirinoPannello(m, testo, ok and "#40FF40" or "#FF4040")
+end
+
+function shoot_mirinoOnDrop(player_color, obj)
+    local m = IEF_SHOOT_MIRINO
+    if not m or obj ~= m.obj then return end
+    if m.waitId then Wait.stop(m.waitId); m.waitId = nil end
+    shoot_mirinoTick()
+    if m.valido then
+        local player, basi = m.player, m.basi
+        shoot_mirinoStop()
+        -- scheda del tiro e conferma Tiro / Chiudi (flusso di sempre)
+        shoot_range_and_target(player, basi)
+        return
+    end
+    -- non valido: il mirino torna al suo posto
+    Wait.frames(function()
+        if IEF_SHOOT_MIRINO ~= m or not m.obj or m.obj.isDestroyed() then return end
+        m.obj.setPosition(Vector(m.start.x, m.start.y, m.start.z))
+        m.obj.setRotation(Vector(m.rot.x, m.rot.y, m.rot.z))
+        m.obj.setVelocity(Vector(0, 0, 0))
+        IEF_SHOOTING.activeLines = nil
+        callHandler("aggiornaLinee")
+        shoot_mirinoEvidenzia(m, nil)
+        shoot_mirinoPannello(m, "Trascina il mirino sul bersaglio", "#FFFFFF")
+    end, 2)
+end
+
+-- Pulsante Chiudi del pannellino: annulla mirino e cono
+function shoot_mirinoChiudi(player, value, id)
+    shoot_ResetLines(player)
 end

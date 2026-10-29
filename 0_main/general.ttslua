@@ -423,9 +423,33 @@ function main_generalDragStart(genKey, player_color)
             main_generalDragStop(genKey)
             return
         end
+        main_generalDistUpdate(genKey, gen)
         main_aggiornaLinee()
     end, IEF_GENERAL_DRAG_TICK, -1)
     IEF_GENERAL_DRAG[genKey] = { waitId = id, color = player_color }
+    local gen = main_getUnitBases(genKey)[1]
+    if gen then main_generalDistShow(gen, player_color) end
+end
+
+-- ============================================================
+-- F37: pannellino della distanza sul Generale trascinato (come per
+-- le unità: stessa grafica, stessa posizione relativa)
+-- ============================================================
+function main_generalDistShow(gen, colore)
+    local P = MOVEPANEL
+    local x, y, z = main_calcolaPosizionePannello(1, 1)
+    gen.UI.setXml(string.format([[
+        <Panel id="panelDistGen" active="true" color="%s" width="420" height="90" offsetXY="0 405" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+            <Text id="txtDistGen" text="0.00&quot;" font="%s" fontStyle="Bold" fontSize="44" color="#FFFFFF" alignment="MiddleCenter"/>
+        </Panel>
+        ]], P.bg, x, y, z, colore or "Black", P.font))
+end
+
+function main_generalDistUpdate(genKey, gen)
+    local max = main_generalMoveInches()
+    local d = main_generalMoveDistance(genKey, gen.getPosition())
+    gen.UI.setAttribute("txtDistGen", "text", string.format('%.2f" / %d"', d, max))
+    gen.UI.setAttribute("txtDistGen", "color", d > max + IEF_GENERAL_MOVE_TOL and "#FF4040" or "#FFFFFF")
 end
 
 -- ============================================================
@@ -436,6 +460,8 @@ function main_generalDragStop(genKey)
     if not d then return end
     if d.waitId then Wait.stop(d.waitId) end
     IEF_GENERAL_DRAG[genKey] = nil
+    local gen = main_getUnitBases(genKey)[1]
+    if gen and not gen.isDestroyed() then gen.UI.setXml("") end
     main_aggiornaLinee()
 end
 
@@ -520,10 +546,14 @@ end
 -- ============================================================
 function onObjectPickUp(player_color, obj)
     main_generalOnPickUp(player_color, obj)
+    if move_manualOnPickUp then move_manualOnPickUp(player_color, obj) end
+    if shoot_mirinoOnPickUp then shoot_mirinoOnPickUp(player_color, obj) end
 end
 
 function onObjectDrop(player_color, obj)
     main_generalOnDrop(player_color, obj)
+    if move_manualOnDrop then move_manualOnDrop(player_color, obj) end
+    if shoot_mirinoOnDrop then shoot_mirinoOnDrop(player_color, obj) end
 end
 
 -- ============================================================

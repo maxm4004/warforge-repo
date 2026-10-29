@@ -917,3 +917,116 @@ function debug_shootBasi(color, attivo)
         main_decodeExtendedUnitLabel(mioKey), #mie, main_decodeExtendedUnitLabel(suoKey),
         conta.pronta, conta.gittata, conta.vista, conta.cono, conta.rango, weapon.range_inches))
 end
+
+-- ============================================================
+-- FUNZIONE DI TEST: debug_basi(color)   (F27)
+-- Per l'unità della base selezionata stampa, base per base:
+--   fondo = di quanto il fondo della base sta sopra il terreno (mm)
+--   L x P = larghezza e profondità REALI (base + figure) in cm,
+--           contro quelle dichiarate dal tipo unità
+--   rot   = inclinazione x/z (dovrebbe essere 0)
+-- e per ogni coppia di basi vicine se i rettangoli reali si
+-- sovrappongono. Uso:  /execute debug_basi("Red")
+-- ============================================================
+function debug_basi(color)
+    local player = Player[color]
+    local sel = player and player.getSelectedObjects() or {}
+    local unitKey
+    for _, o in ipairs(sel) do
+        if main_parseNickname(o.getName()) then unitKey = main_getUnitKey(o); break end
+    end
+    if not unitKey then print("[BASI] Seleziona una base dell'unità"); return end
+
+    local basi = {}
+    for _, o in ipairs(getAllObjects()) do
+        if main_parseNickname(o.getName()) and main_getUnitKey(o) == unitKey then table.insert(basi, o) end
+    end
+    table.sort(basi, function(a, b)
+        return (main_parseNickname(a.getName()).baseSeq or 0) < (main_parseNickname(b.getName()).baseSeq or 0)
+    end)
+
+    local meta = main_getUnitMeta(basi[1])
+    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+    local wDich = ut and ut.base_width_cm or 4
+    local dDich = ut and ut.base_depth_cm or wDich
+    print(string.format("[BASI] %s  tipo %s  dichiarata %.2f x %.2f cm  gioco ranghi %.2f mm",
+        main_decodeExtendedUnitLabel(unitKey), tostring(meta and meta.unitType), wDich, dDich,
+        (IEF_RANK_GAP or 0) / CM_TO_TTS * 10))
+
+    for _, o in ipairs(basi) do
+        local p = o.getPosition()
+        local fondoOff = main_baseBottomOffset(o)
+        local g = main_groundY(p.x, p.z, p.y)
+        local sopra = (fondoOff and g) and ((p.y - fondoOff) - g) / CM_TO_TTS * 10 or nil
+        local bn = o.getBoundsNormalized()
+        local r = o.getRotation()
+        local tx = ((r.x + 180) % 360) - 180
+        local tz = ((r.z + 180) % 360) - 180
+        print(string.format("  base %s  fondo %s mm  L x P %.2f x %.2f cm  rot x %.1f z %.1f  %s",
+            tostring(main_parseNickname(o.getName()).baseSeq),
+            sopra and string.format("%+.1f", sopra) or "?",
+            bn.size.x / CM_TO_TTS, bn.size.z / CM_TO_TTS, tx, tz,
+            (sopra and sopra > 0.5) and "<< SOLLEVATA" or ""))
+        -- Dati grezzi (F28): per capire da dove viene il sollevamento
+        local b = o.getBounds()
+        print(string.format("      pos.y %.3f | bounds centro.y %.3f alto %.3f | norm offset.y %.3f alto %.3f | fondo calcolato %s | terreno %s | bloccata %s",
+            p.y, b.center.y, b.size.y, bn.offset.y, bn.size.y,
+            fondoOff and string.format("%.3f", p.y - fondoOff) or "?",
+            g and string.format("%.3f", g) or "?", tostring(o.getLock())))
+        -- Cosa c'è sotto il centro della base (tutti gli oggetti colpiti)
+        local hits = Physics.cast({ origin = Vector(p.x, p.y + 20, p.z), direction = Vector(0, -1, 0),
+                                    type = 1, max_distance = 40 })
+        for _, h in ipairs(hits) do
+            local ho = h.hit_object
+            if ho and ho ~= o then
+                local tags = table.concat(ho.getTags() or {}, ",")
+                print(string.format("      sotto: y %.3f  %s  [%s] tag {%s}%s", h.point.y,
+                    tostring(ho.getName()), tostring(ho.type), tags,
+                    (ho.hasTag("Army1") or ho.hasTag("Army2")) and "" or "  << conta come TERRENO"))
+            end
+        end
+    end
+
+    local tocchi = 0
+    for i = 1, #basi do
+        for j = i + 1, #basi do
+            local ri = main_baseRectOfType(basi[i], meta and meta.unitType)
+            local rj = main_baseRectOfType(basi[j], meta and meta.unitType)
+            local function poly(r) local c = r.corners; return { c[1], c[2], c[4], c[3] } end
+            if ri and rj and shoot_polyOverlap and shoot_polyOverlap(poly(ri), poly(rj)) then
+                tocchi = tocchi + 1
+                print(string.format("  SOVRAPPOSTE: base %s e base %s",
+                    tostring(main_parseNickname(basi[i].getName()).baseSeq),
+                    tostring(main_parseNickname(basi[j].getName()).baseSeq)))
+            end
+        end
+    end
+    if tocchi == 0 then print("  nessuna sovrapposizione fra i rettangoli delle basi") end
+end
+
+-- ============================================================
+-- FUNZIONE DI TEST: debug_terreno(modo)   (F31)
+-- Cambia il modo di appoggio sui pendii e lo riapplica subito a
+-- tutte le basi sul tavolo:
+--   /execute debug_terreno("A")   base inclinata sul pendio
+--   /execute debug_terreno("B")   base piana + assestamento fisico
+--   /execute debug_terreno("C")   base piana sul punto più alto
+-- Senza argomento stampa il modo attuale.
+-- ============================================================
+function debug_terreno(modo)
+    if not modo then print("[TERRENO] modo attuale: " .. tostring(IEF_GROUND_MODE)); return end
+    modo = string.upper(tostring(modo))
+    if modo ~= "A" and modo ~= "B" and modo ~= "C" then
+        print("[TERRENO] modo non valido: usa \"A\", \"B\" o \"C\""); return
+    end
+    IEF_GROUND_MODE = modo
+    local n = 0
+    for _, o in ipairs(getAllObjects()) do
+        if main_parseNickname(o.getName()) and (o.hasTag("Army1") or o.hasTag("Army2")) then
+            local p = o.getPosition()
+            main_setPositionOnGround(o, p.x, p.z)
+            n = n + 1
+        end
+    end
+    print(string.format("[TERRENO] modo %s applicato a %d basi", modo, n))
+end

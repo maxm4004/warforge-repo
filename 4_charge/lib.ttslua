@@ -11,7 +11,7 @@
 function charge_getFrontLine(basiObjs)
     local fwd   = basiObjs[1].getTransformForward()
     local fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-    local right = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local right = main_rightOf(fwdXZ)
 
     local maxProj = -math.huge
     for _, obj in ipairs(basiObjs) do
@@ -462,7 +462,7 @@ function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText, info
         labelText, P.font, P.gold,
         infoText or "", P.font, P.grey,
         P.font, P.gold,
-        riga(btn("ChargePivotSx", "Perno Destro", "charge_btnPivotSx", 210) .. btn("ChargePivotDx", "Perno Sinistro", "charge_btnPivotDx", 210)
+        riga(btn("ChargePivotSx", "Perno Sn", "charge_btnPivotSx", 210) .. btn("ChargePivotDx", "Perno Ds", "charge_btnPivotDx", 210)
           .. btn("ChargeCheck", "Controlla", "charge_btnCheck", 210, "#C8642A")),
         riga(btn("ChargeAbort", "Annulla", "charge_btnAbort", 330, P.undo2) .. btn("ChargeClose", "Chiudi", "charge_btnClose", 330, P.close)))
 end
@@ -1328,7 +1328,7 @@ function charge_flankDetails(chargerKey, targetKey)
     local f = basiT[1].getTransformForward()
     local fwd = Vector(f.x, 0, f.z):normalized()
 
-    local d = { fwd = fwd, right = Vector(-fwd.z, 0, fwd.x), fronte = -math.huge,
+    local d = { fwd = fwd, right = main_rightOf(fwd), fronte = -math.huge,
                 basiT = {}, basiC = {}, dietro = 0 }
     for _, b in ipairs(basiT) do
         local r = main_baseRectOfType(b, metaT and metaT.unitType)

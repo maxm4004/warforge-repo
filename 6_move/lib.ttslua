@@ -7,7 +7,7 @@
 function move_getGroupAxis(basiObjs)
     local fwdRef0 = basiObjs[1].getTransformForward()
     local fwdXZ0  = Vector(fwdRef0.x, 0, fwdRef0.z):normalized()
-    local right0  = Vector(-fwdXZ0.z, 0, fwdXZ0.x)
+    local right0  = main_rightOf(fwdXZ0)
 
     table.sort(basiObjs, function(a, b)
         local pa, pb = a.getPosition(), b.getPosition()
@@ -20,11 +20,11 @@ function move_getGroupAxis(basiObjs)
     if #basiObjs == 1 then
         local fwd = basiObjs[1].getTransformForward()
         fwdXZ = Vector(fwd.x, 0, fwd.z):normalized()
-        right = Vector(-fwdXZ.z, 0, fwdXZ.x)
+        right = main_rightOf(fwdXZ)
     else
         local dirUnita = Vector(pos2.x - pos1.x, 0, pos2.z - pos1.z):normalized()
         right = dirUnita
-        fwdXZ = Vector(dirUnita.z, 0, -dirUnita.x)
+        fwdXZ = Vector(-dirUnita.z, 0, dirUnita.x)
     end
 
     return fwdXZ, right, pos1, pos2
@@ -39,7 +39,7 @@ function move_getFrontLine(basiObjs, unitKey)
     local anchorRef = basiObjs[1]
     local fwd    = anchorRef.getTransformForward()
     local fwdXZ  = Vector(fwd.x, 0, fwd.z):normalized()
-    local right  = Vector(-fwdXZ.z, 0, fwdXZ.x)
+    local right  = main_rightOf(fwdXZ)
 
     local maxProj = -math.huge
     for _, obj in ipairs(basiObjs) do
@@ -131,10 +131,10 @@ function move_redraw(unitKey)
     local endLeft    = Vector(startLeft.x  + fwdXZ.x*rangeUnits, y1, startLeft.z  + fwdXZ.z*rangeUnits)
     local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, y1, startRight.z + fwdXZ.z*rangeUnits)
 
-    mover.setVectorLines(state.schieramento and {} or {
-        {points = {mover.positionToLocal(startLeft),  mover.positionToLocal(endLeft)},  color={0.2,0.6,1}, thickness=0.03},
-        {points = {mover.positionToLocal(startRight), mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.03},
-        {points = {mover.positionToLocal(endLeft),    mover.positionToLocal(endRight)}, color={0.2,0.6,1}, thickness=0.03},
+    mover.setVectorLines((state.schieramento or IEF_MOVE_MANUAL[unitKey] or IEF_MOVE_PIVOT[unitKey]) and {} or {
+        {points = {mover.positionToLocal(startLeft),  mover.positionToLocal(endLeft)},  color={1,0.8,0.1}, thickness=0.03},
+        {points = {mover.positionToLocal(startRight), mover.positionToLocal(endRight)}, color={1,0.8,0.1}, thickness=0.03},
+        {points = {mover.positionToLocal(endLeft),    mover.positionToLocal(endRight)}, color={1,0.8,0.1}, thickness=0.03},
     })
     state.lineHost = mover
 
@@ -184,22 +184,31 @@ function move_redraw(unitKey)
         -- "Perno e restare fermi" (senza "perno e movimento
         -- restante"): o perni o avanti, non entrambi.
         local perniUsati = 3 - pivotResiduo
-        local avanzato = (main_unitFullMove(unitKey) - moveResiduo) > perniUsati + 0.001
+        -- F32: i perni nel terreno costano più di 1": si confronta con
+        -- il movimento davvero speso nei perni (state.costoPerni)
+        local avanzato = (main_unitFullMove(unitKey) - moveResiduo) > (state.costoPerni or perniUsati) + 0.001
         local soloPerno = not canDo("perno_max3_e_muovi") and not IEF_MOVE_TEST_MODE and not state.rotta
 
         local avantiOk = canDo("avanti") and not (soloPerno and perniUsati > 0) and not soloFormazione
         -- Avanti 1": attivo con qualsiasi residuo (se < 1" muove il
         -- residuo, move_avanti_apply limita al budget). Tolleranza
         -- sui decimali dei budget (rotta, carica).
-        setBtn("btn_" .. unitKey .. "_Move1",   avantiOk and moveResiduo > 0.001)
-        setBtn("btn_" .. unitKey .. "_Move2",   avantiOk and moveResiduo >= 2 - 0.001)
         setBtn("btn_" .. unitKey .. "_MoveMax", avantiOk and moveResiduo > 0.001)
+        setBtn("btn_" .. unitKey .. "_MoveManual", avantiOk and moveResiduo > 0.001)
+        if IEF_MOVE_MANUAL[unitKey] then
+            panel3D.UI.setAttribute("btn_" .. unitKey .. "_MoveManual", "color", MOVEPANEL.manualOn)
+        end
 
-        local pivotOk = canDo("perno_max3_fermi") and pivotResiduo >= 1 - 0.001 and moveResiduo >= 1 - 0.001
-                        and #basiObjs >= 2
-                        and not (soloPerno and avanzato) and not soloFormazione
+        -- F36: Perno Sn / Ds = perno a maniglia (anche frazioni di pollice)
+        local pivotOk = canDo("perno_max3_fermi") and pivotResiduo > 0.01 and moveResiduo > 0.01
+                        and #basiObjs >= 2 and not (soloPerno and avanzato) and not soloFormazione
         setBtn("btn_" .. unitKey .. "_PivotSx", pivotOk)
         setBtn("btn_" .. unitKey .. "_PivotDx", pivotOk)
+        local pm = IEF_MOVE_PIVOT[unitKey]
+        if pm then
+            panel3D.UI.setAttribute("btn_" .. unitKey .. "_" .. (pm.soloDir == "left" and "PivotSx" or "PivotDx"),
+                "color", MOVEPANEL.manualOn)
+        end
 
         -- Rotta: mossa obbligatoria, si chiude solo se bloccata
         if state.rotta then
@@ -240,6 +249,7 @@ function move_snapshot(unitKey)
         reformUsed  = IEF_REFORM_USED[unitKey] or false,
         frontWidth  = IEF_FRONT_WIDTH and IEF_FRONT_WIDTH[unitKey],
         consumata   = state.consumata or false,
+        costoPerni  = state.costoPerni,
     }
 end
 
@@ -259,6 +269,7 @@ function move_restoreSnapshot(unitKey, snap)
 
     IEF_MOVE_BUDGET[unitKey]  = snap.budget
     IEF_PIVOT_BUDGET[unitKey] = snap.pivotBudget
+    state.costoPerni = snap.costoPerni
     -- Formazione: Annulla vale anche per le manovre (la manovra
     -- annullata torna disponibile)
     if snap.reformUsed ~= nil then
@@ -281,6 +292,7 @@ function move_undoLast(unitKey)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state or not state.history or #state.history == 0 then return end
 
+    if move_manualOff then move_manualOff(unitKey) end
     local snap = table.remove(state.history)
     local yawPrima = state.basiObjs[1] and state.basiObjs[1].getRotation().y
     move_restoreSnapshot(unitKey, snap)
@@ -297,6 +309,7 @@ end
 function move_undoAll(unitKey)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state then return end
+    if move_manualOff then move_manualOff(unitKey) end
 
     move_restoreSnapshot(unitKey, {
         pos = state.startPos, rot = state.startRot,
@@ -317,6 +330,7 @@ function move_avanti_apply(unitKey, distanzaInch)
     if not state or not state.basiObjs then return false end
     local basiObjs = state.basiObjs
 
+    if move_manualOff then move_manualOff(unitKey) end
     local residuo = IEF_MOVE_BUDGET[unitKey] or 0
     if residuo <= 0 and not IEF_MOVE_TEST_MODE then return false end
     if distanzaInch > residuo and not IEF_MOVE_TEST_MODE then distanzaInch = residuo end
@@ -364,6 +378,39 @@ function move_avanti_apply(unitKey, distanzaInch)
         end
     end
 
+    -- F32: terreno lungo il percorso (non in rotta: la rotta ignora
+    -- le penalità; non in carica: F33). Ogni pollice dentro un
+    -- terreno lento costa il suo fattore; davanti al vietato ci si
+    -- ferma. costo = movimento consumato.
+    local costo = distanzaInch
+    if not state.rotta and not state.carica and not IEF_MOVE_TEST_MODE and not main_isGeneralKey(unitKey) then
+        local piano = main_terrainPlan(unitKey, residuo, distanzaInch)
+        local p = state.activePlayer
+        if piano.maxT < distanzaInch - 0.01 then
+            if piano.maxT <= 0.01 then
+                if p then
+                    warningToColor(piano.motivo == "terreno"
+                        and string.format("Terreno %s davanti: non transitabile per questa unita'", tostring(piano.chi))
+                        or "Movimento esaurito", p, "Yellow", 5, true)
+                end
+                move_redraw(unitKey)
+                return false
+            end
+            if p then
+                warningToColor(piano.motivo == "terreno"
+                    and string.format("Terreno %s davanti: avanza solo %.2f\"", tostring(piano.chi), piano.maxT)
+                    or string.format("Terreno %s: con il movimento rimasto avanza %.2f\"", tostring(piano.cat), piano.maxT),
+                    p, "Yellow", 5, true)
+            end
+            distanzaInch = piano.maxT
+        end
+        costo = math.min(residuo, piano.costo(distanzaInch))
+        if p and costo > distanzaInch + 0.01 and piano.maxT >= distanzaInch - 0.01 then
+            warningToColor(string.format("Terreno %s: %.2f\" costano %.2f\" di movimento", tostring(piano.cat), distanzaInch, costo),
+                p, "Yellow", 5, true)
+        end
+    end
+
     state.history = state.history or {}
     table.insert(state.history, move_snapshot(unitKey))
 
@@ -381,44 +428,18 @@ function move_avanti_apply(unitKey, distanzaInch)
         main_setPositionOnGround(obj, p.x + fwdXZ.x*deltaUnits, p.z + fwdXZ.z*deltaUnits)
     end
 
-    IEF_MOVE_BUDGET[unitKey] = residuo - distanzaInch
-
-    -- Terreni (non in rotta: la rotta ignora le penalità): il
-    -- passo si annulla se finisce in terreno vietato o supera il
-    -- movimento consentito dal terreno toccato; se c'è ancora
-    -- margine si rifà più corto.
-    if not state.rotta and not state.carica and not IEF_MOVE_TEST_MODE and not main_isGeneralKey(unitKey) then
-        local meta = main_getUnitMeta(basiObjs[1])
-        local tipo = meta and meta.unitType
-        local pieno = main_unitFullMove(unitKey)
-        local cap, chi = main_terrainMoveCap(unitKey, tipo, pieno)
-        local usatoPrima = pieno - residuo
-        if cap and (cap < 0 or usatoPrima + distanzaInch > cap + 0.01) then
-            move_restoreSnapshot(unitKey, table.remove(state.history))
-            local p = state.activePlayer
-            if cap < 0 then
-                if p then warningToColor(string.format("Terreno %s: non transitabile per questa unita'", chi), p, "Yellow", 5, true) end
-                move_redraw(unitKey)
-                return false
-            end
-            local margine = cap - usatoPrima
-            if margine > 0.05 then
-                if p then warningToColor(string.format("Terreno %s: movimento ridotto a %.1f\"", chi, cap), p, "Yellow", 5, true) end
-                return move_avanti_apply(unitKey, margine)
-            end
-            if p then warningToColor(string.format("Terreno %s: movimento esaurito (massimo %.1f\")", chi, cap), p, "Yellow", 5, true) end
-            move_redraw(unitKey)
-            return false
-        end
-    end
+    IEF_MOVE_BUDGET[unitKey] = residuo - costo
+    if IEF_MOVE_BUDGET[unitKey] < 0.005 then IEF_MOVE_BUDGET[unitKey] = 0 end
 
     move_redraw(unitKey)
     return true
 end
 -- ============================================================
--- FUNZIONE: move_perno_apply(unitKey, direction)
+-- FUNZIONE: move_perno_apply(unitKey, direction, pollici)
+-- pollici: arco dell'angolo esterno (default 1"; decimali dal
+-- perno manuale, F33)
 -- ============================================================
-function move_perno_apply(unitKey, direction)
+function move_perno_apply(unitKey, direction, pollici)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state or not state.basiObjs or #state.basiObjs < 2 then return false end
     local basiObjs = state.basiObjs
@@ -429,13 +450,17 @@ function move_perno_apply(unitKey, direction)
     -- Regolamento: ogni perno costa 1" di movimento (massimo 3"),
     -- misurato sull'angolo anteriore esterno che ruota attorno
     -- all'angolo anteriore del lato del perno (main_pivotFrontCorner).
-    local distanzaInch = 1
+    local distanzaInch = pollici or 1
 
     if not IEF_MOVE_TEST_MODE then
         if distanzaInch > moveResiduo + 0.001 or distanzaInch > pivotResiduo + 0.001 then
             return false
         end
     end
+
+    if move_manualOff then move_manualOff(unitKey) end
+    local conTerreno = not state.rotta and not IEF_MOVE_TEST_MODE and not main_isGeneralKey(unitKey)
+    local fPrima = conTerreno and main_unitTerrainFactorNow(unitKey) or 1
 
     state.history = state.history or {}
     table.insert(state.history, move_snapshot(unitKey))
@@ -445,9 +470,31 @@ function move_perno_apply(unitKey, direction)
         return false
     end
 
+    -- F32: il perno dentro un terreno lento costa il suo fattore
+    -- (il peggiore fra prima e dopo); non può finire nel vietato.
+    local costo = distanzaInch
+    if conTerreno then
+        local fDopo, cat = main_unitTerrainFactorNow(unitKey)
+        local f = math.max(fPrima, fDopo)
+        local msg = nil
+        if fDopo >= IEF_TERRAIN_BLOCK then
+            msg = string.format("Perno impossibile: l'unita' finirebbe nel terreno %s", tostring(cat))
+        elseif distanzaInch * f > moveResiduo + 0.001 then
+            msg = string.format("Perno nel terreno: costa %.1f\", ne restano %.1f\"", distanzaInch * f, moveResiduo)
+        end
+        if msg then
+            move_restoreSnapshot(unitKey, table.remove(state.history))
+            if state.activePlayer then warningToColor(msg, state.activePlayer, "Yellow", 5, true) end
+            move_redraw(unitKey)
+            return false
+        end
+        costo = distanzaInch * f
+    end
+
     if not IEF_MOVE_TEST_MODE then
-        IEF_MOVE_BUDGET[unitKey]  = moveResiduo  - distanzaInch
+        IEF_MOVE_BUDGET[unitKey]  = math.max(0, moveResiduo - costo)
         IEF_PIVOT_BUDGET[unitKey] = pivotResiduo - distanzaInch
+        state.costoPerni = (state.costoPerni or 0) + costo
     end
 
     -- Il perno non può finire sopra un'altra unità (non attraversabile)
@@ -475,6 +522,7 @@ end
 function move_close(unitKey)
     local state = IEF_MOVE_UNITS[unitKey]
     if not state then return end
+    if move_manualOff then move_manualOff(unitKey, true) end
 
     -- Disordine/riordino da terreno a fine mossa (non per la rotta)
     if not state.rotta and ENGINE.phase == PHASE.MOVE then
@@ -521,14 +569,14 @@ end
 -- ============================================================
 function move_btnPivotSx(player, value, id)
     local unitKey = id:match("^btn_(.+)_PivotSx$")
-    if unitKey then move_perno_apply(unitKey, "left") end
+    if unitKey then move_pivotManToggle(unitKey, "left") end
 end
 -- ============================================================
 -- FUNZIONE: move_btnPivotDx(player, value, id)
 -- ============================================================
 function move_btnPivotDx(player, value, id)
     local unitKey = id:match("^btn_(.+)_PivotDx$")
-    if unitKey then move_perno_apply(unitKey, "right") end
+    if unitKey then move_pivotManToggle(unitKey, "right") end
 end
 -- ============================================================
 -- FUNZIONE: move_btnClose(player, value, id)
@@ -563,3 +611,720 @@ function move_btnUndoAll(player, value, id)
     if unitKey then move_undoAll(unitKey) end
 end
 
+
+-- ============================================================
+-- F32: MOVIMENTO MANUALE ("MANUALE" nel pannello)
+-- Clic: si calcola fin dove l'unità può arrivare (movimento
+-- residuo, terreno lungo il percorso, amiche non attraversabili,
+-- 1/2" dal nemico) e si disegna il corridoio. Il giocatore prende
+-- UNA base qualsiasi dell'unità e la trascina: conta solo quanto
+-- va avanti lungo il fronte (elastico); le altre basi la seguono,
+-- un testo sulla base mostra la distanza. Al rilascio tutte le
+-- basi vanno esatte sull'asse a quella distanza (niente rotazioni
+-- né scivolamenti) e si scala il costo dal movimento.
+-- IEF_MOVE_MANUAL[unitKey] = { piano, dir, start, snap, t, driver,
+--                              bloccate, waitId, linee }
+-- ============================================================
+IEF_MOVE_MANUAL      = IEF_MOVE_MANUAL or {}
+IEF_MOVE_PIVOT       = IEF_MOVE_PIVOT or {}
+IEF_MOVE_MANUAL_TICK = 0.05
+IEF_MOVE_MANUAL_LIFT = 0.15     -- le basi che seguono restano sollevate durante il trascinamento
+MOVEPANEL.manualOn   = "#2E7DB8"
+
+function move_btnManual(player, value, id)
+    local unitKey = id:match("^btn_(.+)_MoveManual$")
+    if not unitKey then return end
+    if IEF_MOVE_MANUAL[unitKey] then
+        move_manualOff(unitKey)
+        move_redraw(unitKey)
+        return
+    end
+    move_manualOn(unitKey)
+end
+
+function move_manualOn(unitKey)
+    if IEF_MOVE_PIVOT[unitKey] then move_pivotManOff(unitKey) end
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state or not state.basiObjs or #state.basiObjs == 0 then return end
+    local p = state.activePlayer
+    local residuo = IEF_MOVE_BUDGET[unitKey] or 0
+    if residuo <= 0.001 then return end
+
+    local limite = residuo
+    if not IEF_MOVE_TEST_MODE then
+        local passo = main_pathCheck(unitKey, residuo, { margineNemico = IEF_MOVE_ENEMY_GAP_INCHES })
+        if passo.avanza < limite then limite = passo.avanza end
+    end
+    local piano
+    if IEF_MOVE_TEST_MODE then
+        piano = { maxT = limite, tratti = { { t0 = 0, t1 = limite, f = 1 } } }
+        function piano.costo(t) return t end
+    else
+        piano = main_terrainPlan(unitKey, residuo, limite)
+    end
+    if piano.maxT <= 0.01 then
+        if p then warningToColor("Nessuno spazio per avanzare", p, "Yellow", 5, true) end
+        return
+    end
+
+    local f = state.basiObjs[1].getTransformForward()
+    local m = {
+        unitKey = unitKey,
+        piano = piano,
+        dir = Vector(f.x, 0, f.z):normalized(),
+        start = {},
+        snap = move_snapshot(unitKey),
+        t = 0,
+    }
+    for _, b in ipairs(state.basiObjs) do m.start[b.getGUID()] = b.getPosition() end
+    IEF_MOVE_MANUAL[unitKey] = m
+    -- A: tutte le basi selezionate per il giocatore, così prendendone
+    -- una TTS trascina l'unità intera
+    m.colore = p and p.color
+    move_manualSeleziona(state, m.colore, true)
+    m.linee = move_manualStaticLines(unitKey, m)
+
+    move_redraw(unitKey)
+    main_aggiornaLinee()
+    if p then
+        warningToColor(string.format("Trascina una base dell'unita' in avanti: massimo %.2f\"", piano.maxT), p, "White", 5, true)
+    end
+end
+
+-- Spegne il manuale; le basi tornano alla partenza se si era a
+-- metà trascinamento (salvo `nonRiposizionare`).
+function move_manualOff(unitKey, nonRiposizionare)
+    if IEF_MOVE_PIVOT[unitKey] then move_pivotManOff(unitKey) end
+    local m = IEF_MOVE_MANUAL[unitKey]
+    if not m then return end
+    if m.waitId then Wait.stop(m.waitId); m.waitId = nil end
+    for _, b in ipairs(m.bloccate or {}) do
+        if b and not b.isDestroyed() then b.setLock(false) end
+    end
+    move_manualLabel(m, nil)
+    if m.driver then move_manualPanel(IEF_MOVE_UNITS[unitKey], unitKey, true) end
+    move_manualSeleziona(IEF_MOVE_UNITS[unitKey], m.colore, false)
+    if m.driver and not nonRiposizionare then
+        local state = IEF_MOVE_UNITS[unitKey]
+        for _, b in ipairs(state and state.basiObjs or {}) do
+            local s0 = m.start[b.getGUID()]
+            if s0 then b.setPosition(s0) end
+        end
+    end
+    IEF_MOVE_MANUAL[unitKey] = nil
+    main_aggiornaLinee()
+end
+
+-- Testo con la distanza (F34: nel pannellino al posto del pannello)
+function move_manualLabel(m, testo)
+    -- F34: la distanza compare al posto del pannello di movimento
+    -- (stessa posizione e rotazione), nascosto durante il trascinamento
+    if not testo or not m.unitKey then return end
+    local state = IEF_MOVE_UNITS[m.unitKey]
+    local pan = state and state.panel3DObj
+    if not pan or pan.isDestroyed() then return end
+    local id = "txtDist_" .. m.unitKey
+    local colore = m.oltre and "#FF4040" or "#FFFFFF"
+    pan.UI.setAttribute(id, "text", testo)
+    pan.UI.setAttribute(id, "color", colore)
+end
+
+-- Pannellino della distanza: stessa posizione/rotazione del
+-- pannello di movimento (main_buildMovementPanel3DXml)
+function move_manualDistXml(unitKey, state)
+    local P = MOVEPANEL
+    local fronte = main_detectFormation(state.basiObjs)
+    local x, y, z = main_calcolaPosizionePannello(fronte, #state.basiObjs)
+    local colore = state.activePlayer and state.activePlayer.color or "Black"
+    return string.format([[
+        <Panel id="panelDist_%s" active="true" color="%s" width="420" height="90" offsetXY="0 405" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+            <Text id="txtDist_%s" text="0.00&quot;" font="%s" fontStyle="Bold" fontSize="44" color="#FFFFFF" alignment="MiddleCenter"/>
+        </Panel>
+        ]], unitKey, P.bg, x, y, z, colore, unitKey, P.font)
+end
+
+-- Aggiunge/toglie le basi dalla selezione del giocatore
+function move_manualSeleziona(state, colore, si)
+    if not state or not colore then return end
+    for _, b in ipairs(state.basiObjs or {}) do
+        if b and not b.isDestroyed() then
+            pcall(function()
+                if si then b.addToPlayerSelection(colore) else b.removeFromPlayerSelection(colore) end
+            end)
+        end
+    end
+end
+
+-- Pannello di movimento nascosto durante il trascinamento
+function move_manualPanel(state, unitKey, visibile)
+    local pan = state and state.panel3DObj
+    if not pan or pan.isDestroyed() then return end
+    if visibile then
+        -- il pannello di movimento torna al frame dopo (ricostruito)
+        Wait.frames(function()
+            if IEF_MOVE_UNITS[unitKey] then move_redraw(unitKey) end
+        end, 1)
+    else
+        pan.UI.setXml(move_manualDistXml(unitKey, state))
+    end
+end
+
+function move_manualTesto(m)
+    if m.oltre then return string.format('max %.2f"', m.piano.maxT) end
+    local costo = m.piano.costo(m.t)
+    if costo > m.t + 0.01 then
+        return string.format('%.2f" (costo %.2f")', m.t, costo)
+    end
+    return string.format('%.2f"', m.t)
+end
+
+function move_manualOnPickUp(player_color, obj)
+    local h = IEF_MOVE_PIVOT_HANDLES and IEF_MOVE_PIVOT_HANDLES[obj.getGUID()]
+    if h then return move_pivotManOnPickUp(player_color, obj, h.unitKey) end
+    local unitKey = main_getUnitKey(obj)
+    if unitKey and IEF_MOVE_PIVOT[unitKey] then return end
+    local m = unitKey and IEF_MOVE_MANUAL[unitKey]
+    if not m or m.driver then return end
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state then return end
+    if state.activePlayer and state.activePlayer.color ~= player_color then return end
+    if not m.start[obj.getGUID()] then return end
+
+    m.driver = obj
+    move_manualPanel(state, unitKey, false)
+    move_manualLabel(m, move_manualTesto(m))
+    m.waitId = Wait.time(function() move_manualTick(unitKey) end, IEF_MOVE_MANUAL_TICK, -1)
+end
+
+-- Distanza lungo il fronte della base presa, limitata a [0, max]
+function move_manualProietta(m)
+    local s0 = m.start[m.driver.getGUID()]
+    local p = m.driver.getPosition()
+    local t = ((p.x - s0.x) * m.dir.x + (p.z - s0.z) * m.dir.z) / INCH_TO_TTS
+    m.oltre = t > m.piano.maxT + 0.01
+    return math.max(0, math.min(m.piano.maxT, t))
+end
+
+function move_manualTick(unitKey)
+    local m = IEF_MOVE_MANUAL[unitKey]
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not m or not state or not m.driver or m.driver.isDestroyed() then
+        if m then move_manualOff(unitKey) end
+        return
+    end
+    m.t = move_manualProietta(m)
+    move_manualLabel(m, move_manualTesto(m))
+    main_aggiornaLinee()
+end
+
+function move_manualOnDrop(player_color, obj)
+    local h = IEF_MOVE_PIVOT_HANDLES and IEF_MOVE_PIVOT_HANDLES[obj.getGUID()]
+    if h then return move_pivotManOnDrop(player_color, obj, h.unitKey) end
+    local unitKey = main_getUnitKey(obj)
+    if unitKey and IEF_MOVE_PIVOT[unitKey] then return end
+    local m = unitKey and IEF_MOVE_MANUAL[unitKey]
+    if not m or m.driver ~= obj then return end
+    if m.waitId then Wait.stop(m.waitId); m.waitId = nil end
+    m.t = move_manualProietta(m)
+    m.oltre = nil
+    Wait.frames(function() move_manualFinalizza(unitKey) end, 2)
+end
+
+function move_manualFinalizza(unitKey)
+    local m = IEF_MOVE_MANUAL[unitKey]
+    if not m then return end
+    local state = IEF_MOVE_UNITS[unitKey]
+    move_manualSeleziona(state, m.colore, false)
+    for _, b in ipairs(m.bloccate or {}) do
+        if b and not b.isDestroyed() then b.setLock(false) end
+    end
+    m.bloccate = nil
+    move_manualLabel(m, nil)
+    if not state then IEF_MOVE_MANUAL[unitKey] = nil; main_aggiornaLinee(); return end
+    move_manualPanel(state, unitKey, true)
+
+    -- Tutte le basi sull'asse, con la rotazione di partenza
+    local t = m.t
+    if t < 0.01 then t = 0 end
+    local d = t * INCH_TO_TTS
+    for _, b in ipairs(state.basiObjs) do
+        local g = b.getGUID()
+        local s0 = m.start[g]
+        if s0 then
+            if m.snap and m.snap.rot[g] then b.setRotation(m.snap.rot[g]) end
+            if t == 0 then
+                b.setPosition(s0)
+            else
+                main_setPositionOnGround(b, s0.x + m.dir.x * d, s0.z + m.dir.z * d)
+            end
+        end
+    end
+    m.driver = nil
+
+    if t == 0 then
+        -- nessun avanzamento: il manuale resta attivo (basi di nuovo
+        -- selezionate per il prossimo trascinamento)
+        move_manualSeleziona(state, m.colore, true)
+        main_aggiornaLinee()
+        return
+    end
+
+    local residuo = IEF_MOVE_BUDGET[unitKey] or 0
+    local costo = math.min(residuo, m.piano.costo(t))
+    state.history = state.history or {}
+    table.insert(state.history, m.snap)
+    if not IEF_MOVE_TEST_MODE then
+        IEF_MOVE_BUDGET[unitKey] = residuo - costo
+        if IEF_MOVE_BUDGET[unitKey] < 0.005 then IEF_MOVE_BUDGET[unitKey] = 0 end
+    end
+    IEF_MOVE_MANUAL[unitKey] = nil
+    if state.activePlayer then
+        warningToColor(costo > t + 0.01
+            and string.format("Avanza %.2f\" (costo %.2f\" per il terreno %s)", t, costo, tostring(m.piano.cat))
+            or string.format("Avanza %.2f\"", t), state.activePlayer, "White", 4, false)
+    end
+    main_aggiornaLinee()
+    move_redraw(unitKey)
+end
+
+-- ============================================================
+-- Linee del manuale (globali, raccolte da main_aggiornaLinee):
+-- corridoio diviso nei tratti del piano (azzurro = aperto,
+-- arancio = terreno lento), tacche ogni pollice, filo verde fino
+-- alla distanza attuale. Le quote seguono il terreno.
+-- ============================================================
+function move_manualStaticLines(unitKey, m)
+    local state = IEF_MOVE_UNITS[unitKey]
+    local out = {}
+    if not state then return out end
+    local basi = state.basiObjs
+    local fwdXZ, right, pos1, pos2 = move_getFrontLine(basi, unitKey)
+    local info = main_parseNickname(basi[1].getName())
+    local ut = info and main_getUnitType(info.unitType)
+    local hw = (ut and ut.base_width_cm or 4) * CM_TO_TTS / 2
+    local hd = (ut and ut.base_depth_cm or 3) * CM_TO_TTS / 2
+    local dir = m.dir
+    local refY = pos1.y
+    local L = { x = pos1.x - right.x * hw + dir.x * hd, z = pos1.z - right.z * hw + dir.z * hd }
+    local R = { x = pos2.x + right.x * hw + dir.x * hd, z = pos2.z + right.z * hw + dir.z * hd }
+    m.frontL, m.frontR = L, R
+
+    local function punto(base, t)
+        local x, z = base.x + dir.x * t * INCH_TO_TTS, base.z + dir.z * t * INCH_TO_TTS
+        local g = main_groundY(x, z, refY) or (refY - 0.1)
+        return { x, g + 0.06, z }
+    end
+    -- lati del corridoio, a pezzi di 1/2" per seguire le colline
+    for _, tr in ipairs(m.piano.tratti) do
+        local col = (tr.f > 1.001) and { 1, 0.35, 0.1 } or { 1, 0.8, 0.1 }
+        for _, base in ipairs({ L, R }) do
+            local pts, t = {}, tr.t0
+            while t < tr.t1 - 1e-6 do
+                table.insert(pts, punto(base, t))
+                t = t + 0.5
+            end
+            table.insert(pts, punto(base, tr.t1))
+            table.insert(out, { points = pts, color = col, thickness = 0.04 })
+        end
+    end
+    -- tacche ogni pollice e chiusura in fondo
+    local maxT = m.piano.maxT
+    local t = 1
+    while t < maxT - 0.05 do
+        table.insert(out, { points = { punto(L, t), punto(R, t) }, color = { 1, 1, 1 }, thickness = 0.015 })
+        t = t + 1
+    end
+    table.insert(out, { points = { punto(L, maxT), punto(R, maxT) }, color = { 1, 0.8, 0.1 }, thickness = 0.05 })
+    return out
+end
+
+function move_manualLines()
+    local out = move_pivotManLines()
+    for _, m in pairs(IEF_MOVE_MANUAL) do
+        for _, l in ipairs(m.linee or {}) do table.insert(out, l) end
+        if m.driver and m.frontL and m.t > 0 then
+            local d = m.t * INCH_TO_TTS
+            local cx = (m.frontL.x + m.frontR.x) / 2
+            local cz = (m.frontL.z + m.frontR.z) / 2
+            local y = (m.linee[1] and m.linee[1].points[1][2]) or 1.22
+            table.insert(out, { points = { { cx, y, cz }, { cx + m.dir.x * d, y, cz + m.dir.z * d } },
+                color = { 0.2, 0.9, 0.2 }, thickness = 0.08 })
+        end
+    end
+    return out
+end
+
+-- ============================================================
+-- F33: PERNO MANUALE ("Perno Manuale" nel pannello)
+-- Clic: due archi (percorso dell'angolo anteriore esterno ruotando
+-- a sinistra o a destra) lunghi quanto il perno consentito. Il
+-- giocatore prende UNA base dell'unità e la sposta verso il lato
+-- in cui vuole girare: l'angolo si misura attorno all'angolo
+-- anteriore di quel lato (perno), le altre basi ruotano con lo
+-- script, il testo dietro l'unità dice i pollici. Al rilascio si
+-- applica il perno esatto con move_perno_apply (stessi controlli
+-- dei pulsanti: budget, terreno, sovrapposizioni).
+-- IEF_MOVE_PIVOT[unitKey] = { sx, dx, start, rot, maxIn, larghezza,
+--      driver, dir, ang, pollici, bloccate, waitId, linee, snapPos }
+-- ============================================================
+-- F36: Perno Sn / Ds aprono il perno a maniglia di quel lato;
+-- ricliccare lo stesso lo spegne, l'altro lato lo cambia
+function move_pivotManToggle(unitKey, dir)
+    local m = IEF_MOVE_PIVOT[unitKey]
+    if m then
+        move_pivotManOff(unitKey)
+        if m.soloDir == dir then move_redraw(unitKey); return end
+    end
+    move_pivotManOn(unitKey, dir)
+end
+
+function move_pivotManOn(unitKey, soloDir)
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state or not state.basiObjs or #state.basiObjs < 2 then return end
+    if IEF_MOVE_MANUAL[unitKey] then move_manualOff(unitKey) end
+    local p = state.activePlayer
+    move_manualSeleziona(state, p and p.color, false)
+    local moveResiduo  = IEF_MOVE_BUDGET[unitKey]  or 0
+    local pivotResiduo = IEF_PIVOT_BUDGET[unitKey] or 0
+    local maxIn = math.min(pivotResiduo, moveResiduo)
+    -- nel terreno lento il perno costa di più: massimo stimato col
+    -- fattore attuale (il controllo esatto è al rilascio)
+    if not state.rotta and not IEF_MOVE_TEST_MODE then
+        local f = main_unitTerrainFactorNow(unitKey)
+        if f < IEF_TERRAIN_BLOCK and f > 1 then maxIn = math.min(pivotResiduo, moveResiduo / f) end
+    end
+    if IEF_MOVE_TEST_MODE then maxIn = 3 end
+    if maxIn <= 0.01 then return end
+
+    local sx, dx, fwd = main_pivotCorners(state.basiObjs)
+    if not sx then return end
+    local larghezza = math.sqrt((dx.x - sx.x) ^ 2 + (dx.z - sx.z) ^ 2)
+    if larghezza < 0.01 then return end
+
+    local m = { unitKey = unitKey, sx = sx, dx = dx, fwd = fwd, larghezza = larghezza, maxIn = maxIn,
+                start = {}, rot = {}, colore = p and p.color, pollici = 0, ang = 0,
+                maniglie = {}, hStart = {}, bloccate = {}, soloDir = soloDir or "left" }
+    for _, b in ipairs(state.basiObjs) do
+        m.start[b.getGUID()] = b.getPosition()
+        m.rot[b.getGUID()] = b.getRotation()
+        -- le basi non si trascinano: si usano le maniglie
+        if not b.getLock() then b.setLock(true); table.insert(m.bloccate, b) end
+    end
+    IEF_MOVE_PIVOT[unitKey] = m
+    m.linee = move_pivotManStaticLines(m)
+    -- maniglia davanti all'angolo che avanza: perno Sn = fermo
+    -- l'angolo sinistro, avanza il destro; perno Ds il contrario
+    if m.soloDir == "left" then move_pivotManManiglia(m, "left", dx)
+    else move_pivotManManiglia(m, "right", sx) end
+    move_redraw(unitKey)
+    main_aggiornaLinee()
+    if p then
+        warningToColor(string.format("Perno %s: trascina la maniglia gialla lungo l'arco (massimo %.2f\")",
+            m.soloDir == "left" and "Sn" or "Ds", maxIn), p, "White", 5, true)
+    end
+end
+
+IEF_MOVE_PIVOT_HANDLES = IEF_MOVE_PIVOT_HANDLES or {}
+IEF_MOVE_PIVOT_HANDLE_AHEAD = 0.4     -- pollici davanti all'angolo
+
+function move_pivotManManiglia(m, dir, angolo)
+    local off = IEF_MOVE_PIVOT_HANDLE_AHEAD * INCH_TO_TTS
+    local x, z = angolo.x + m.fwd.x * off, angolo.z + m.fwd.z * off
+    local g = main_groundY(x, z, 2) or 1.0
+    m.hStart[dir] = { x = x, y = g + 0.3, z = z }
+    spawnObject({
+        type = "Checker_white", position = { x, g + 0.3, z }, rotation = { 0, 0, 0 },
+        scale = { 0.45, 0.45, 0.45 }, sound = false,
+        callback_function = function(o)
+            if IEF_MOVE_PIVOT[m.unitKey] ~= m then o.destruct(); return end
+            o.setColorTint({ 1, 0.8, 0.1 })
+            o.setName(dir == "left" and "Perno Sn" or "Perno Ds")
+            IEF_MOVE_PIVOT_HANDLES[o.getGUID()] = { unitKey = m.unitKey, dir = dir }
+            m.maniglie[dir] = o
+        end,
+    })
+end
+
+function move_pivotManTogliManiglie(m)
+    for _, o in pairs(m.maniglie or {}) do
+        if o and not o.isDestroyed() then
+            IEF_MOVE_PIVOT_HANDLES[o.getGUID()] = nil
+            o.destruct()
+        end
+    end
+    m.maniglie = {}
+end
+
+function move_pivotManOff(unitKey)
+    local m = IEF_MOVE_PIVOT[unitKey]
+    if not m then return end
+    IEF_MOVE_PIVOT[unitKey] = nil
+    if m.waitId then Wait.stop(m.waitId); m.waitId = nil end
+    local state = IEF_MOVE_UNITS[unitKey]
+    move_pivotManTogliManiglie(m)
+    if m.driver then
+        move_manualPanel(state, unitKey, true)
+        move_pivotManRipristina(state, m)
+    end
+    for _, b in ipairs(m.bloccate or {}) do
+        if b and not b.isDestroyed() then b.setLock(false) end
+    end
+    main_aggiornaLinee()
+end
+
+-- Tutte le basi tornano alla posa di partenza
+function move_pivotManRipristina(state, m)
+    for _, b in ipairs(state and state.basiObjs or {}) do
+        local g = b.getGUID()
+        if m.start[g] then b.setPosition(m.start[g]) end
+        if m.rot[g] then b.setRotation(m.rot[g]) end
+    end
+end
+
+-- Ruota il punto (x, z) attorno a c di ang (convenzione dei perni)
+local function ruota(c, x, z, ang)
+    local cs, sn = math.cos(ang), math.sin(ang)
+    local rx, rz = x - c.x, z - c.z
+    return c.x + rx * cs - rz * sn, c.z + rx * sn + rz * cs
+end
+
+-- Angolo con segno da a a b attorno a c (stessa convenzione)
+local function angoloAttorno(c, ax, az, bx, bz)
+    local ux, uz = ax - c.x, az - c.z
+    local vx, vz = bx - c.x, bz - c.z
+    return charge_angolo(ux * vz - uz * vx, ux * vx + uz * vz)
+end
+
+-- Angolo dalla posizione della maniglia in mano. Perno a sinistra
+-- (fermo l'angolo sinistro) = angolo positivo, a destra = negativo
+-- (main_pivotFrontCorner, F34). Ritorna ang (limitato), pollici, oltre.
+function move_pivotManMisura(m)
+    local dir = m.manDir
+    local hs = m.hStart[dir]
+    local p = m.driver.getPosition()
+    local c = (dir == "left") and m.sx or m.dx
+    local ang = angoloAttorno(c, hs.x, hs.z, p.x, p.z)
+    if (dir == "left" and ang < 0) or (dir == "right" and ang > 0) then ang = 0 end
+    local maxAng = (m.maxIn * INCH_TO_TTS) / m.larghezza
+    local oltre = math.abs(ang) > maxAng + 1e-4
+    if oltre then ang = (ang < 0) and -maxAng or maxAng end
+    return ang, math.abs(ang) * m.larghezza / INCH_TO_TTS, oltre
+end
+
+function move_pivotManOnPickUp(player_color, obj, unitKey)
+    local m = IEF_MOVE_PIVOT[unitKey]
+    local state = IEF_MOVE_UNITS[unitKey]
+    local h = IEF_MOVE_PIVOT_HANDLES[obj.getGUID()]
+    if not m or m.driver or not state or not h then return end
+    if state.activePlayer and state.activePlayer.color ~= player_color then return end
+    m.driver, m.manDir = obj, h.dir
+    move_manualPanel(state, unitKey, false)
+    move_manualLabel(m, 'Perno 0.00"')
+    m.waitId = Wait.time(function() move_pivotManTick(unitKey) end, IEF_MOVE_MANUAL_TICK, -1)
+end
+
+function move_pivotManTick(unitKey)
+    local m = IEF_MOVE_PIVOT[unitKey]
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not m or not state or not m.driver or m.driver.isDestroyed() then
+        if m then move_pivotManOff(unitKey) end
+        return
+    end
+    local ang, pollici, oltre = move_pivotManMisura(m)
+    m.ang, m.pollici, m.oltre = ang, pollici, oltre
+    local c = (m.manDir == "left") and m.sx or m.dx
+    local gradi = math.deg(ang)
+    for _, b in ipairs(state.basiObjs) do
+        local g = b.getGUID()
+        local s0, r0 = m.start[g], m.rot[g]
+        if s0 and r0 then
+            local x, z = ruota(c, s0.x, s0.z, ang)
+            b.setPosition(Vector(x, s0.y, z))
+            b.setRotation(Vector(r0.x, r0.y - gradi, r0.z))
+        end
+    end
+    move_manualLabel(m, oltre and string.format('max %.2f"', m.maxIn)
+        or string.format('Perno %s %.2f"', m.manDir == "left" and "Sn" or "Ds", pollici))
+end
+
+function move_pivotManOnDrop(player_color, obj, unitKey)
+    local m = IEF_MOVE_PIVOT[unitKey]
+    if not m or m.driver ~= obj then return end
+    if m.waitId then Wait.stop(m.waitId); m.waitId = nil end
+    local _, pollici = move_pivotManMisura(m)
+    local dir = m.manDir
+    Wait.frames(function() move_pivotManFinalizza(unitKey, dir, pollici) end, 2)
+end
+
+function move_pivotManFinalizza(unitKey, dir, pollici)
+    local m = IEF_MOVE_PIVOT[unitKey]
+    if not m then return end
+    local state = IEF_MOVE_UNITS[unitKey]
+    if not state then move_pivotManOff(unitKey); return end
+    move_manualPanel(state, unitKey, true)
+    move_pivotManRipristina(state, m)
+    local maniglia = m.driver
+    m.driver, m.manDir, m.oltre = nil, nil, nil
+
+    if pollici < 0.01 then
+        -- nessuna rotazione: la maniglia torna al suo posto, il perno
+        -- manuale resta attivo
+        local hs = m.hStart[dir]
+        if maniglia and not maniglia.isDestroyed() and hs then
+            maniglia.setPosition(Vector(hs.x, hs.y, hs.z))
+            maniglia.setRotation(Vector(0, 0, 0))
+        end
+        main_aggiornaLinee()
+        return
+    end
+    move_pivotManOff(unitKey)
+    if move_perno_apply(unitKey, dir, pollici) and state.activePlayer then
+        warningToColor(string.format("Perno %s di %.2f\"", dir == "left" and "Sn" or "Ds", pollici),
+            state.activePlayer, "White", 4, false)
+    end
+    move_redraw(unitKey)
+end
+
+-- F36: ventaglio del perno (disegno di Max): dal perno, il raggio
+-- di partenza lungo il fronte, un raggio per ogni pollice
+-- percorso dall'angolo esterno, il raggio finale al massimo e
+-- l'arco. Giallo del cono di tiro.
+function move_pivotManStaticLines(m)
+    local out = {}
+    local GIALLO = { 1, 0.8, 0.1 }
+    local maxAng = (m.maxIn * INCH_TO_TTS) / m.larghezza
+    local segno = (m.soloDir == "left") and 1 or -1
+    local c = (m.soloDir == "left") and m.sx or m.dx
+    local lontano = (m.soloDir == "left") and m.dx or m.sx
+    local function quota(x, z) return (main_groundY(x, z, 2) or 1.16) + 0.06 end
+    local cy = quota(c.x, c.z)
+    local function raggio(a, spessore)
+        local x, z = ruota(c, lontano.x, lontano.z, a)
+        table.insert(out, { points = { { c.x, cy, c.z }, { x, quota(x, z), z } }, color = GIALLO, thickness = spessore })
+    end
+    raggio(0, 0.04)
+    local k = 1
+    while k < m.maxIn - 0.05 do
+        raggio(segno * (k * INCH_TO_TTS) / m.larghezza, 0.025)
+        k = k + 1
+    end
+    raggio(segno * maxAng, 0.04)
+    local pts = {}
+    for i = 0, 24 do
+        local x, z = ruota(c, lontano.x, lontano.z, segno * maxAng * i / 24)
+        table.insert(pts, { x, quota(x, z), z })
+    end
+    table.insert(out, { points = pts, color = GIALLO, thickness = 0.04 })
+    return out
+end
+
+function move_pivotManLines()
+    local out = {}
+    for _, m in pairs(IEF_MOVE_PIVOT) do
+        for _, l in ipairs(m.linee or {}) do table.insert(out, l) end
+    end
+    return out
+end
+
+-- ============================================================
+-- METODI PRECEDENTI (non più collegati ai pulsanti, conservati)
+-- ============================================================
+
+-- Perno di 1" con i pulsanti (prima di F36)
+function move_btnPivot1Sx(player, value, id)
+    local unitKey = id:match("^btn_(.+)_PivotSx$") or id:match("^btn_(.+)_Pivot1Sx$")
+    if unitKey then move_perno_apply(unitKey, "left") end
+end
+function move_btnPivot1Dx(player, value, id)
+    local unitKey = id:match("^btn_(.+)_PivotDx$") or id:match("^btn_(.+)_Pivot1Dx$")
+    if unitKey then move_perno_apply(unitKey, "right") end
+end
+
+-- Pulsante "Perno Manuale" (F33-F35): perno a maniglia, lato sinistro
+function move_btnPivotManual(player, value, id)
+    local unitKey = id:match("^btn_(.+)_PivotManual$")
+    if not unitKey then return end
+    if IEF_MOVE_PIVOT[unitKey] then
+        move_pivotManOff(unitKey)
+        move_redraw(unitKey)
+        return
+    end
+    move_pivotManOn(unitKey)
+end
+
+-- Testo della distanza come pulsante sulla base (F32b-F33)
+function move_manualNoop() end
+
+-- Il testo della distanza dietro l'unità: sulla base dell'ultimo
+-- rango più vicina al centro, 0.7" dietro al suo bordo posteriore
+-- (F32b-F33, sostituito dal pannellino della distanza in F34)
+function move_manualScegliTesto(m, state)
+    local basi = state.basiObjs
+    local cx, cz = 0, 0
+    for _, b in ipairs(basi) do local p = b.getPosition(); cx = cx + p.x; cz = cz + p.z end
+    cx, cz = cx / #basi, cz / #basi
+    local dietro, host, best = math.huge, nil, nil
+    for _, b in ipairs(basi) do
+        local p = b.getPosition()
+        local avanti = (p.x - cx) * m.dir.x + (p.z - cz) * m.dir.z
+        local lato = math.abs((p.x - cx) * m.dir.z - (p.z - cz) * m.dir.x)
+        if avanti < dietro - 0.05 or (math.abs(avanti - dietro) <= 0.05 and lato < best) then
+            dietro, host, best = math.min(avanti, dietro), b, lato
+        end
+    end
+    if host == m.driver and #basi > 1 then
+        local alt, altBest = nil, nil
+        for _, b in ipairs(basi) do
+            if b ~= m.driver then
+                local p = b.getPosition()
+                local avanti = (p.x - cx) * m.dir.x + (p.z - cz) * m.dir.z
+                if math.abs(avanti - dietro) <= 0.05 then
+                    local lato = math.abs((p.x - cx) * m.dir.z - (p.z - cz) * m.dir.x)
+                    if not altBest or lato < altBest then alt, altBest = b, lato end
+                end
+            end
+        end
+        if alt then host = alt end
+    end
+    m.labelHost = host
+    local info = main_parseNickname(host.getName())
+    local ut = info and main_getUnitType(info.unitType)
+    local hd = (ut and ut.base_depth_cm or 3) * CM_TO_TTS / 2
+    local hp = host.getPosition()
+    local off = hd + 0.7 * INCH_TO_TTS
+    local lp = host.positionToLocal(Vector(hp.x - m.dir.x * off, hp.y, hp.z - m.dir.z * off))
+    m.labelPos = { 0, 0.6, lp.z }
+end
+
+-- Archi dei due perni possibili (F33-F35), tacche ogni pollice
+function move_pivotManStaticLinesDoppie(m)
+    local out = {}
+    local maxAng = (m.maxIn * INCH_TO_TTS) / m.larghezza
+    local function ruotaP(c, x, z, ang)
+        local cs, sn = math.cos(ang), math.sin(ang)
+        local rx, rz = x - c.x, z - c.z
+        return c.x + rx * cs - rz * sn, c.z + rx * sn + rz * cs
+    end
+    local function arco(c, lontano, segno)
+        local pts = {}
+        for i = 0, 24 do
+            local a = segno * maxAng * i / 24
+            local x, z = ruotaP(c, lontano.x, lontano.z, a)
+            local g = main_groundY(x, z, 2) or 1.16
+            table.insert(pts, { x, g + 0.06, z })
+        end
+        table.insert(out, { points = pts, color = { 1, 0.8, 0.1 }, thickness = 0.04 })
+        local k = 1
+        while k <= m.maxIn + 1e-6 do
+            local a = segno * (k * INCH_TO_TTS) / m.larghezza
+            local x, z = ruotaP(c, lontano.x, lontano.z, a)
+            local ix, iz = c.x + (x - c.x) * 0.92, c.z + (z - c.z) * 0.92
+            local g = main_groundY(x, z, 2) or 1.16
+            table.insert(out, { points = { { x, g + 0.06, z }, { ix, g + 0.06, iz } }, color = { 1, 1, 1 }, thickness = 0.02 })
+            k = k + 1
+        end
+    end
+    arco(m.sx, m.dx, 1)
+    arco(m.dx, m.sx, -1)
+    return out
+end

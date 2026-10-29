@@ -209,6 +209,13 @@ function main_aggiornaLinee()
         end
     end
 
+    -- F32: corridoio e filo del movimento manuale
+    if move_manualLines then
+        for _, l in ipairs(move_manualLines()) do
+            table.insert(linee, l)
+        end
+    end
+
     -- Debug: rettangoli di tutte le basi (debug_allRects)
     for _, l in ipairs(IEF_DEBUG_RECT_LINES or {}) do
         table.insert(linee, l)
@@ -839,13 +846,53 @@ end
 -- Stessa convenzione di segno dei perni precedenti (left < 0).
 -- Ritorna l'angolo applicato (radianti) o nil.
 -- ============================================================
+-- ============================================================
+-- F34: DESTRA E SINISTRA DELL'UNITÀ (unica convenzione)
+-- Destra = quella di TTS (getTransformRight): con il fronte
+-- (fx, 0, fz) la destra è (fz, 0, -fx). Prima i perni usavano il
+-- vettore opposto: "Perno Sx" teneva fermo l'angolo destro.
+-- Etichette: Sn = sinistra, Ds = destra.
+-- ============================================================
+function main_rightOf(fwd)
+    return Vector(fwd.z, 0, -fwd.x)
+end
+
+-- Angoli anteriori estremi dell'unità (sx = sinistro, dx = destro)
+-- e versori fronte/destra. F33: riusata dal perno manuale.
+function main_pivotCorners(basiObjs)
+    if not basiObjs or #basiObjs < 1 then return nil end
+    local meta = main_getUnitMeta(basiObjs[1])
+    local tipo = meta and meta.unitType
+    local f0 = basiObjs[1].getTransformForward()
+    local fwd = Vector(f0.x, 0, f0.z):normalized()
+    local right = main_rightOf(fwd)
+    local fronte = -math.huge
+    local angoli = {}
+    for _, b in ipairs(basiObjs) do
+        for _, c in ipairs(main_baseRectOfType(b, tipo).corners) do
+            local v = c.x * fwd.x + c.z * fwd.z
+            table.insert(angoli, { x = c.x, z = c.z, v = v, u = c.x * right.x + c.z * right.z })
+            if v > fronte then fronte = v end
+        end
+    end
+    local sx, dx = nil, nil
+    for _, c in ipairs(angoli) do
+        if c.v >= fronte - 0.05 then
+            if not sx or c.u < sx.u then sx = c end
+            if not dx or c.u > dx.u then dx = c end
+        end
+    end
+    if not sx or not dx then return nil end
+    return sx, dx, fwd, right
+end
+
 function main_pivotFrontCorner(basiObjs, direzione, pollici)
     if not basiObjs or #basiObjs < 2 or not pollici or pollici <= 0 then return nil end
     local meta = main_getUnitMeta(basiObjs[1])
     local tipo = meta and meta.unitType
     local f0 = basiObjs[1].getTransformForward()
     local fwd = Vector(f0.x, 0, f0.z):normalized()
-    local right = Vector(-fwd.z, 0, fwd.x)
+    local right = main_rightOf(fwd)
 
     -- angoli anteriori (rettangoli reali) di tutte le basi
     local fronte = -math.huge
@@ -871,7 +918,9 @@ function main_pivotFrontCorner(basiObjs, direzione, pollici)
     if larghezza < 0.01 then return nil end
 
     local ang = (pollici * INCH_TO_TTS) / larghezza
-    if direzione == "left" then ang = -ang end
+    -- F34: perno a sinistra = angolo sinistro fermo, la destra
+    -- avanza: con la destra vera (main_rightOf) l'angolo è positivo
+    if direzione ~= "left" then ang = -ang end
     local gradi = math.deg(ang)
     local cs, sn = math.cos(ang), math.sin(ang)
     for _, obj in ipairs(basiObjs) do
@@ -1422,8 +1471,11 @@ function main_ricostruisciFormazione(basiObjs, fronte)
 
     local baseInfoAnchor = main_parseNickname(refObj.getName())
     local unitTypeDataAnchor = baseInfoAnchor and main_getUnitType(baseInfoAnchor.unitType)
-    local HGAP = 0.03
-    local VGAP = 0.03
+    -- F27: stessi giochi dello spawn (prima RIORDINA, chiamato
+    -- anche a fine spawn, rimetteva i ranghi a 0.03 e annullava il
+    -- gioco dello schieramento).
+    local HGAP = IEF_FILE_GAP
+    local VGAP = IEF_RANK_GAP
     local width = (unitTypeDataAnchor and unitTypeDataAnchor.base_width_cm or 4) * CM_TO_TTS + HGAP
     local depth = (unitTypeDataAnchor and unitTypeDataAnchor.base_depth_cm or 3) * CM_TO_TTS + VGAP
 
@@ -1552,8 +1604,24 @@ end
 -- di Annulla (fotografia presa PRIMA della manovra).
 local function formOp(unitKey, fn)
     local state = IEF_MOVE_UNITS and IEF_MOVE_UNITS[unitKey]
+    if state and move_manualOff then move_manualOff(unitKey) end
     local snap = state and move_snapshot(unitKey)
     if fn() and snap then
+        -- F32: la manovra non può far finire l'unità in terreno
+        -- vietato (non in schieramento né in rotta)
+        if not state.schieramento and not state.rotta and not IEF_MOVE_TEST_MODE then
+            local f, cat = main_unitTerrainFactorNow(unitKey)
+            if f >= IEF_TERRAIN_BLOCK then
+                move_restoreSnapshot(unitKey, snap)
+                if state.activePlayer then
+                    warningToColor(string.format("Manovra impossibile: l'unita' finirebbe nel terreno %s", tostring(cat)),
+                        state.activePlayer, "Yellow", 5, true)
+                end
+                move_redraw(unitKey)
+                main_formationCamera(unitKey)
+                return
+            end
+        end
         state.history = state.history or {}
         table.insert(state.history, snap)
         move_redraw(unitKey)
@@ -1956,13 +2024,12 @@ function main_buildMovementPanel3DXml(unitKey, x, y, z, colore, titolo, info)
         titolo, P.font, P.gold,
         info, P.font, P.grey,
         sezione("MOVIMENTO"),
-        riga(btn("Move1", "Avanti 1&quot;", "move_btnMove1", 128) .. btn("Move2", "Avanti 2&quot;", "move_btnMove2", 128)
-          .. btn("MoveMax", "Avanti Max", "move_btnMoveMax", 128) .. btn("PivotSx", "Perno Sx", "move_btnPivotSx", 128)
-          .. btn("PivotDx", "Perno Dx", "move_btnPivotDx", 128)),
+        riga(btn("MoveManual", "Avanti", "move_btnManual", 172) .. btn("MoveMax", "Avanti Max", "move_btnMoveMax", 172)
+          .. btn("PivotSx", "Perno Sn", "move_btnPivotSx", 172) .. btn("PivotDx", "Perno Ds", "move_btnPivotDx", 172)),
         sezione("FORMAZIONE"),
         riga(btn("FrontMinus2", "Fronte -2", "main_frontMinus2", 120) .. btn("FrontMinus1", "Fronte -1", "main_frontMinus1", 120)
           .. btn("FrontPlus1", "Fronte +1", "main_frontPlus1", 120) .. btn("FrontPlus2", "Fronte +2", "main_frontPlus2", 120)),
-        riga(btn("Cambio90Sx", "90° Sx", "main_cambioFronte90Sx", 160) .. btn("Cambio90Dx", "90° Dx", "main_cambioFronte90Dx", 160)
+        riga(btn("Cambio90Sx", "90° Sn", "main_cambioFronte90Sx", 160) .. btn("Cambio90Dx", "90° Ds", "main_cambioFronte90Dx", 160)
           .. btn("Cambio180", "180°", "main_cambioFronte180", 160)),
         riga(btn("UndoLast", "Annulla Ultimo", "move_btnUndoLast", 330, P.undo1) .. btn("UndoAll", "Annulla Tutto", "move_btnUndoAll", 330, P.undo2)),
         unitKey, P.font, P.close)
@@ -2411,7 +2478,7 @@ function moveGeneral(obj, unit, pos, rot, w, h, color, textColor)
     obj.createButton({
         click_function = "main_generalMoveButton",
         function_owner = Global,
-        label = "MOVIMENTO",
+        label = "MUOVI",
         position = pos,
         rotation = rot,
         width = w + 50, 
@@ -2430,7 +2497,7 @@ function move(obj, unit, pos, rot, w, h, color, textColor)
     obj.createButton({
         click_function = "main_movementOpenFromButton",
         function_owner = Global,
-        label = inRotta and "ROTTA" or "MOVIMENTO",
+        label = inRotta and "ROTTA" or "MUOVI",
         position = pos,
         rotation = rot,
         width = w + 50, 
@@ -2554,7 +2621,7 @@ function main_decodeArmyCodeLabel(unitKey)
     if not unitKey then return "Sconosciuto" end
     local codice = unitKey:match("^([^_]+)")
     if not codice then return "Sconosciuto" end
-    return ARMIES_LABELS[codice] or codice
+    return ARMIES_UNIT_LABELS[codice] or codice
 end
 
 -- ============================================================
@@ -3001,6 +3068,11 @@ end
 IEF_GROUND_GRID    = { -1, -0.5, 0, 0.5, 1 }   -- campioni per lato (frazione della semidimensione)
 IEF_GROUND_INSET   = 0.02                     -- unità TTS: campioni appena dentro il bordo
 IEF_GROUND_EPSILON = 0.01                     -- unità TTS: margine sopra il terreno
+-- F27: gioco fra le basi di un'unità (unità TTS), usato sia allo
+-- spawn sia da RIORDINA. 0.10 = 1.3 mm: con le mesh alla misura
+-- esatta, ranghi a contatto => la fisica solleva qualche base.
+IEF_FILE_GAP = 0.03                           -- fra le colonne
+IEF_RANK_GAP = 0.03                           -- fra i ranghi (F28: 0.10 lasciava spazio visibile)
 
 -- ============================================================
 -- FUNZIONE: main_groundY(x, z, refY)
@@ -3071,43 +3143,191 @@ end
 -- una base piatta (la rotazione è solo attorno a Y).
 -- ============================================================
 function main_baseBottomOffset(obj)
-    -- Bounds NON ruotati (getBoundsNormalized): esatti anche se la
-    -- base è inclinata. Con getBounds (allineato al mondo) una base
-    -- inclinata su una collina dava un fondo più basso del vero, e
-    -- ogni spostamento la rialzava un po' di più.
-    -- offset = posizione - centro, quindi fondo = offset.y + size.y/2.
-    local bn = obj.getBoundsNormalized()
-    if bn and bn.size and bn.offset then
-        return bn.offset.y + bn.size.y / 2
-    end
+    -- F29: si torna a getBounds (allineato al mondo). Il debug ha
+    -- mostrato che getBoundsNormalized dà un'altezza/offset sbagliati
+    -- su molte basi (fondo stimato 0.108 sotto il centro invece di
+    -- 0.025): RIORDINA le appoggiava 1 mm sopra il tavolo.
+    -- Le basi sono sempre piane (main_setPositionOnGround le
+    -- raddrizza prima di misurare), quindi sull'asse Y è esatto.
     local b = obj.getBounds()
-    if not b or not b.size then return nil end
+    if not b or not b.size or not b.center then return nil end
     return obj.getPosition().y - (b.center.y - b.size.y / 2)
 end
 
 -- ============================================================
--- FUNZIONE: main_setPositionOnGround(obj, x, z, deltaRad)
+-- F31: MODO DI APPOGGIO SUI PENDII (prova, scelta di Max)
+--   "A" = la base si inclina e segue il pendio (calcolato dallo
+--         script, niente fisica)
+--   "B" = la base resta piana, poi la fisica la fa assestare
+--   "C" = la base resta piana, appoggiata sul punto più alto
+--         (come prima: a valle resta sospesa)
+-- Si cambia al volo con  /execute debug_terreno("A")
+-- ============================================================
+IEF_GROUND_MODE  = IEF_GROUND_MODE or "A"
+IEF_BASE_FONDO   = IEF_BASE_FONDO or {}      -- guid -> fondo misurato a base piana
+IEF_GROUND_TILT_PENDING = IEF_GROUND_TILT_PENDING or {}
+
+local function groundStorto(a) a = ((a + 180) % 360) - 180; return math.abs(a) > 0.05 end
+
+-- Distanza pivot -> fondo misurata con la base PIANA (con la base
+-- inclinata getBounds darebbe il punto più basso, non il fondo).
+-- Si salva nel GMNotes (fondoMesh) per sopravvivere al reload.
+function main_baseFondoPiatto(obj, soloSalvato)
+    local guid = obj.getGUID()
+    if IEF_BASE_FONDO[guid] then return IEF_BASE_FONDO[guid] end
+    local meta = main_getUnitMeta(obj)
+    local f = meta and tonumber(meta.fondoMesh)
+    if f then IEF_BASE_FONDO[guid] = f; return f end
+    -- soloSalvato: la base è appena stata raddrizzata in questo
+    -- frame, getBounds potrebbe essere ancora quello vecchio.
+    if soloSalvato then return nil end
+    local rot = obj.getRotation()
+    if groundStorto(rot.x) or groundStorto(rot.z) then return nil end
+    f = main_baseBottomOffset(obj)
+    if f then
+        IEF_BASE_FONDO[guid] = f
+        if type(meta) == "table" then
+            meta.fondoMesh = f
+            obj.setGMNotes(JSON.encode(meta))
+        end
+    end
+    return f
+end
+
+-- ============================================================
+-- FUNZIONE: main_groundTilt(obj)   (modo A)
+-- Inclina la base sul piano che approssima il terreno sotto la sua
+-- impronta (minimi quadrati sui campioni della griglia), alzato
+-- quanto basta perché nessun punto del terreno la buchi. Mantiene
+-- la direzione del fronte (yaw) e il centro della base.
+-- ============================================================
+function main_groundTilt(obj)
+    if not obj or obj.isDestroyed() then return end
+    local rot = obj.getRotation()
+    local yaw = rot.y
+    local fondo = main_baseFondoPiatto(obj)
+
+    -- assi orizzontali della base (rotazione piana)
+    obj.setRotation(Vector(0, yaw, 0))
+    if not fondo then fondo = main_baseBottomOffset(obj) end
+    local f, r = obj.getTransformForward(), obj.getTransformRight()
+    local F = Vector(f.x, 0, f.z):normalized()
+    local R = Vector(r.x, 0, r.z):normalized()
+
+    local c = main_baseCentro(obj)
+    local meta = main_getUnitMeta(obj)
+    local ut = meta and meta.unitType and main_getUnitType(meta.unitType)
+    local hw = ((c.w and c.w > 0) and c.w / 2 or ((ut and ut.base_width_cm or 4) * CM_TO_TTS / 2)) - IEF_GROUND_INSET
+    local hd = ((c.d and c.d > 0) and c.d / 2 or ((ut and ut.base_depth_cm or 3) * CM_TO_TTS / 2)) - IEF_GROUND_INSET
+
+    local p = obj.getPosition()
+    local Cx = p.x + R.x * c.x + F.x * c.z
+    local Cz = p.z + R.z * c.x + F.z * c.z
+
+    -- campioni (u = verso destra, v = verso il fronte)
+    local campioni, sg, n = {}, 0, 0
+    for _, a in ipairs(IEF_GROUND_GRID) do
+        for _, b in ipairs(IEF_GROUND_GRID) do
+            local u, v = a * hw, b * hd
+            local g = main_groundY(Cx + R.x * u + F.x * v, Cz + R.z * u + F.z * v, p.y)
+            if not g then
+                -- un campione fuori dal tavolo: si resta piani
+                main_setPositionOnGround(obj, p.x, p.z, nil, true)
+                return
+            end
+            table.insert(campioni, { u = u, v = v, g = g })
+            sg, n = sg + g, n + 1
+        end
+    end
+    -- griglia simmetrica: i minimi quadrati si separano
+    local h0 = sg / n
+    local suu, svv, sug, svg = 0, 0, 0, 0
+    for _, k in ipairs(campioni) do
+        suu, svv = suu + k.u * k.u, svv + k.v * k.v
+        sug, svg = sug + k.u * (k.g - h0), svg + k.v * (k.g - h0)
+    end
+    local su = suu > 0 and sug / suu or 0
+    local sv = svv > 0 and svg / svv or 0
+    local alza = 0
+    for _, k in ipairs(campioni) do
+        local d = k.g - (h0 + su * k.u + sv * k.v)
+        if d > alza then alza = d end
+    end
+    h0 = h0 + alza
+
+    -- normale del piano nel mondo
+    local L = math.sqrt(su * su + sv * sv + 1)
+    local nx = (-su * R.x - sv * F.x) / L
+    local ny = 1 / L
+    local nz = (-su * R.z - sv * F.z) / L
+
+    -- angoli: pitch attorno alla destra, roll attorno al fronte.
+    -- Il verso dei segni dipende dagli assi di TTS: si provano le 4
+    -- combinazioni e si tiene quella con la normale giusta.
+    local pitch = math.deg(math.atan(sv))
+    local roll  = math.deg(math.asin(math.max(-1, math.min(1, su / L))))
+    local migliore, best = nil, -2
+    for _, sp in ipairs({ 1, -1 }) do
+        for _, sr in ipairs({ 1, -1 }) do
+            obj.setRotation(Vector(sp * pitch, yaw, sr * roll))
+            local up = obj.getTransformUp()
+            local d = up.x * nx + up.y * ny + up.z * nz
+            if d > best then best, migliore = d, { sp * pitch, sr * roll } end
+        end
+    end
+    obj.setRotation(Vector(migliore[1], yaw, migliore[2]))
+
+    -- pivot = centro del fondo + up*fondo - (assi inclinati * centro mesh)
+    local up = obj.getTransformUp()
+    local f2, r2 = obj.getTransformForward(), obj.getTransformRight()
+    local by = h0 + IEF_GROUND_EPSILON
+    local fz = fondo or 0
+    obj.setPosition(Vector(
+        Cx + up.x * fz - r2.x * c.x - f2.x * c.z,
+        by + up.y * fz - r2.y * c.x - f2.y * c.z,
+        Cz + up.z * fz - r2.z * c.x - f2.z * c.z))
+end
+
+-- ============================================================
+-- FUNZIONE: main_setPositionOnGround(obj, x, z, deltaRad, soloPiano)
 -- Sposta la base in (x, z) con il fondo appoggiato sul punto più
 -- alto del terreno sotto la sua impronta di arrivo. deltaRad:
 -- rotazione che la base sta per ricevere (perni), facoltativa.
 -- Se le misure non riescono, mantiene la Y attuale.
+-- F31: poi, secondo IEF_GROUND_MODE, al frame dopo (quando il
+-- chiamante ha già impostato la rotazione finale) la base si
+-- inclina sul pendio (A) o la fisica la fa assestare (B).
 -- ============================================================
-function main_setPositionOnGround(obj, x, z, deltaRad)
-    -- Le basi restano sempre piane (rotazione solo attorno a Y):
-    -- se la fisica le ha inclinate su una collina, si raddrizzano.
+function main_setPositionOnGround(obj, x, z, deltaRad, soloPiano)
     local rot = obj.getRotation()
-    local function storto(a) a = ((a + 180) % 360) - 180; return math.abs(a) > 0.05 end
-    if storto(rot.x) or storto(rot.z) then
+    if groundStorto(rot.x) or groundStorto(rot.z) then
         obj.setRotation(Vector(0, rot.y, 0))
+    else
+        main_baseFondoPiatto(obj)      -- base piana: misura affidabile
     end
     local p = obj.getPosition()
     local terreno = main_baseFootprintGroundY(obj, x, z, deltaRad)
-    local fondo = main_baseBottomOffset(obj)
+    local fondo = main_baseFondoPiatto(obj, true) or main_baseBottomOffset(obj)
     local y = p.y
     if terreno and fondo then
         y = terreno + fondo + IEF_GROUND_EPSILON
     end
     obj.setPosition(Vector(x, y, z))
+
+    if soloPiano or IEF_GROUND_MODE == "C" then return end
+    local guid = obj.getGUID()
+    if IEF_GROUND_TILT_PENDING[guid] then return end
+    IEF_GROUND_TILT_PENDING[guid] = true
+    Wait.frames(function()
+        IEF_GROUND_TILT_PENDING[guid] = nil
+        if not obj or obj.isDestroyed() then return end
+        if IEF_GROUND_MODE == "A" then
+            main_groundTilt(obj)
+        elseif IEF_GROUND_MODE == "B" and not obj.getLock() then
+            -- sveglia la fisica: la base cade e si assesta da sola
+            obj.setVelocity(Vector(0, -0.5, 0))
+        end
+    end, 1)
 end
 -- ============================================================
 -- FUNZIONE: main_cambioFronte90Core(unitKey, direction)

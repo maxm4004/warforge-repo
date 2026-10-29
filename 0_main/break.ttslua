@@ -786,6 +786,151 @@ function main_terrainMoveCap(unitKey, tipo, pieno, cats)
     return cap, chi
 end
 
+-- ============================================================
+-- F32: COSTO DEL TERRENO LUNGO IL PERCORSO
+-- Decisione Max 28/10: ogni pollice percorso con almeno una base
+-- dentro un terreno lento costa di più. Fattore = movimento pieno
+-- / movimento ridotto: "dimezza" = 2, "riduce a 1 pollice" =
+-- pieno/1, "riduce a 2 pollici" = pieno/2 (FP 4": 3" in aperto +
+-- 1" residuo = 1/2" nel rotto). "NO" = vietato: ci si ferma prima.
+-- Il percorso si campiona ogni IEF_TERRAIN_STEP_INCHES; i bordi
+-- del terreno si trovano per bisezione.
+-- ============================================================
+IEF_TERRAIN_STEP_INCHES = 0.25
+IEF_TERRAIN_BISECT      = 5        -- 0.25" / 2^5 = 0.008"
+IEF_TERRAIN_BLOCK       = 1e9      -- fattore "vietato"
+IEF_TERRAIN_STOP_INCHES = 0.02     -- ci si ferma così prima del vietato
+
+function main_terrainFactor(cat, tipo, pieno)
+    local eff = main_terrainEffectFor(cat, tipo)
+    local m = eff and eff.movement
+    if m == "NO" then return IEF_TERRAIN_BLOCK end
+    if m == "dimezza" then return 2 end
+    if m == "riduce_1_pollice" then return math.max(1, pieno or 1) end
+    if m == "riduce_2_pollici" then return math.max(1, (pieno or 2) / 2) end
+    return 1
+end
+
+-- Rettangoli reali delle basi (centro della mesh) e dati del tipo
+function main_terrainUnitData(unitKey)
+    local basi = main_getUnitBases(unitKey)
+    if #basi == 0 then return nil end
+    local meta = main_getUnitMeta(basi[1])
+    local tipo = meta and meta.unitType
+    local rects = {}
+    for _, b in ipairs(basi) do table.insert(rects, main_baseRectOfType(b, tipo)) end
+    local f = basi[1].getTransformForward()
+    return {
+        tipo = tipo, rects = rects, pieno = main_unitFullMove(unitKey),
+        dir = Vector(f.x, 0, f.z):normalized(), refY = basi[1].getPosition().y,
+    }
+end
+
+-- Fattore peggiore (e categoria) con le basi traslate di t pollici
+function main_terrainFactorAt(dati, t)
+    local d = (t or 0) * INCH_TO_TTS
+    local tol = 0.05
+    local peggiore, chi, cache = 1, nil, {}
+    for _, r in ipairs(dati.rects) do
+        local cx, cz = r.x + dati.dir.x * d, r.z + dati.dir.z * d
+        local punti = { { 0, 0 }, { r.hw - tol, r.hd - tol }, { r.hw - tol, -r.hd + tol },
+                        { -r.hw + tol, r.hd - tol }, { -r.hw + tol, -r.hd + tol } }
+        for _, p in ipairs(punti) do
+            local cat = main_terrainAtPoint(cx + r.rx * p[1] + r.fx * p[2], dati.refY, cz + r.rz * p[1] + r.fz * p[2])
+            if cat and cat ~= "APERTO" and cat ~= "COVER" then
+                local f = cache[cat]
+                if not f then f = main_terrainFactor(cat, dati.tipo, dati.pieno); cache[cat] = f end
+                if f > peggiore then peggiore, chi = f, cat end
+            end
+        end
+    end
+    return peggiore, chi
+end
+
+-- Fattore del terreno dove si trova ora l'unità
+function main_unitTerrainFactorNow(unitKey)
+    local dati = main_terrainUnitData(unitKey)
+    if not dati then return 1, nil end
+    return main_terrainFactorAt(dati, 0)
+end
+
+-- ============================================================
+-- FUNZIONE: main_terrainPlan(unitKey, budget, limite)
+-- Avanzamento lungo il fronte dalla posizione attuale, al massimo
+-- `limite` pollici, con `budget` pollici di movimento.
+-- Ritorna { maxT, tratti = {{t0,t1,f,cat}}, motivo, chi, cat,
+--           costo = function(t) }
+--   maxT  : pollici percorribili
+--   motivo: "terreno" (vietato davanti) | "movimento" | "limite"
+--   cat   : terreno lento più severo attraversato (per i messaggi)
+-- ============================================================
+function main_terrainPlan(unitKey, budget, limite)
+    local piano = { maxT = 0, tratti = {}, motivo = "limite" }
+    function piano.costo(t)
+        local c = 0
+        for _, tr in ipairs(piano.tratti) do
+            if t <= tr.t0 then break end
+            c = c + (math.min(t, tr.t1) - tr.t0) * tr.f
+        end
+        return c
+    end
+    local dati = main_terrainUnitData(unitKey)
+    if not dati or budget <= 0 or limite <= 0 then return piano end
+    local function F(t) return main_terrainFactorAt(dati, t) end
+
+    local t, costo = 0, 0
+    local fCur, catCur = F(0)
+    if fCur >= IEF_TERRAIN_BLOCK then piano.motivo, piano.chi = "terreno", catCur; return piano end
+    local fMax = 1
+
+    local function aggiungi(t0, t1, f, cat)
+        if t1 > t0 + 1e-6 then
+            table.insert(piano.tratti, { t0 = t0, t1 = t1, f = f, cat = cat })
+            if f > fMax and f < IEF_TERRAIN_BLOCK then fMax, piano.cat = f, cat end
+        end
+    end
+
+    while t < limite - 1e-6 do
+        local t2 = math.min(t + IEF_TERRAIN_STEP_INCHES, limite)
+        local f2, cat2 = F(t2)
+        local tc = t2
+        if f2 ~= fCur then
+            local a, b = t, t2
+            for _ = 1, IEF_TERRAIN_BISECT do
+                local m = (a + b) / 2
+                if F(m) == fCur then a = m else b = m end
+            end
+            tc = b
+        end
+        -- tratto [t, tc] al fattore corrente
+        local spesa = (tc - t) * fCur
+        if costo + spesa >= budget - 1e-6 then
+            local tFine = t + (budget - costo) / fCur
+            aggiungi(t, tFine, fCur, catCur)
+            t, costo = tFine, budget
+            piano.motivo = "movimento"
+            break
+        end
+        aggiungi(t, tc, fCur, catCur)
+        costo, t = costo + spesa, tc
+        if tc < t2 - 1e-6 or f2 ~= fCur then
+            local fN, catN = F(tc)
+            if fN >= IEF_TERRAIN_BLOCK then
+                -- vietato davanti: ci si ferma un attimo prima
+                local stop = math.max(0, tc - IEF_TERRAIN_STOP_INCHES)
+                while #piano.tratti > 0 and piano.tratti[#piano.tratti].t0 >= stop do table.remove(piano.tratti) end
+                if #piano.tratti > 0 then piano.tratti[#piano.tratti].t1 = math.min(piano.tratti[#piano.tratti].t1, stop) end
+                t = stop
+                piano.motivo, piano.chi = "terreno", catN
+                break
+            end
+            fCur, catCur = fN, catN
+        end
+    end
+    piano.maxT = t
+    return piano
+end
+
 -- Disordine da terreno a fine movimento: entra in terreno che
 -- disordina -> DISORDINATA (solo da SALDA); uscita completa da
 -- quel terreno -> riordinata automaticamente, senza test.
