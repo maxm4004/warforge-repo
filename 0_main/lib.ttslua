@@ -3571,6 +3571,25 @@ function main_unitsInMelee()
 end
 
 -- ============================================================
+-- F39: main_unitsEngaged()
+-- Unità in mischia OPPURE a contatto per una carica riuscita di
+-- questo turno: le cariche entrano in IEF_MELEE_LIST solo
+-- all'inizio della fase Mischia (melee_importFromCharges), quindi
+-- nella fase di Tiro main_unitsInMelee non le vede.
+-- ============================================================
+function main_unitsEngaged()
+    local out = main_unitsInMelee()
+    for _, c in ipairs(IEF_CHARGE_QUEUE or {}) do
+        if c.step == CHARGE_STEP.CLO and c.outcome == CHARGE_OUTCOME.OK
+           and c.unitArmy1Key and c.unitArmy2Key then
+            out[c.unitArmy1Key] = true
+            out[c.unitArmy2Key] = true
+        end
+    end
+    return out
+end
+
+-- ============================================================
 -- FUNZIONE: main_isMistaMeta(meta)
 -- Unità mista (ranghi con armi diverse, es. Bondi o Leidang:
 -- lancieri + arcieri): attributo armamento = "MISTO" in GMNotes,

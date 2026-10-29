@@ -735,7 +735,7 @@ function shoot_trovaBersaglio(basiObjs, nemici, rangeUnits, angoloGradi)
         table.insert(mieRect, main_baseRectOfType(b, tipo0))
     end
     local cono = shoot_coneOf(mieRect, angoloGradi)
-    local inMischia = main_unitsInMelee()
+    local inMischia = main_unitsEngaged()   -- F39: anche le cariche di questo turno
     local ostacoli = shoot_ostacoli()
 
     local unita = {}
@@ -1622,8 +1622,10 @@ function shoot_mirinoStart(player, basiObjs, host)
     shoot_mirinoStop()
     local info = shoot_range_and_target(player, basiObjs, { soloCono = true })
     if type(info) ~= "table" then return end
-    if not info.target then
-        -- nessun bersaglio: comportamento di sempre (avviso + cono)
+    -- F40: nessun pre-controllo sul bersaglio, il mirino compare
+    -- sempre (restano i controlli dell'unità in shoot_range_and_target).
+    -- Con IEF_SHOOT_MIRINO_PRECONTROLLO = true torna la gestione F38.
+    if not info.target and IEF_SHOOT_MIRINO_PRECONTROLLO then
         shoot_range_and_target(player, basiObjs)
         return
     end
@@ -1643,7 +1645,7 @@ function shoot_mirinoStart(player, basiObjs, host)
     local x, z = ux / un, uz / un
     if alto == -math.huge then alto = (main_groundY(x, z, 2) or 1.0) + 1.5 end
     local m = { player = player, basi = basiObjs, host = host or basiObjs[1], info = info,
-                giusto = main_getUnitKey(info.target), start = { x = x, y = alto + IEF_SHOOT_MIRINO_ALTEZZA, z = z } }
+                giusto = info.target and main_getUnitKey(info.target), start = { x = x, y = alto + IEF_SHOOT_MIRINO_ALTEZZA, z = z } }
     m.sospeso = IEF_SHOOT_MIRINO_SOPRA
     local yawUnita = basiObjs[1].getRotation().y
     m.rot = { x = IEF_SHOOT_MIRINO_ROT.x, y = yawUnita + IEF_SHOOT_MIRINO_ROT.y, z = IEF_SHOOT_MIRINO_ROT.z }
@@ -1721,7 +1723,7 @@ function shoot_mirinoPannello(m, testo, colore)
         h.UI.setXml(string.format([[
             <Panel id="panelMirino" active="true" color="%s" width="760" height="90" offsetXY="0 405" position="%f %f %f" rotation="-90 0 0" visibility="%s">
                 <HorizontalLayout spacing="10" padding="16 16 10 10" childAlignment="MiddleCenter" childForceExpandWidth="false">
-                    <Text id="txtMirino" text="%s" font="%s" fontStyle="Bold" fontSize="28" color="%s" alignment="MiddleCenter" preferredWidth="560"/>
+                    <Text id="txtMirino" text="%s" font="%s" fontStyle="Normal" fontSize="20" color="%s" alignment="MiddleCenter" preferredWidth="560"/>
                     <Button id="btnMirinoChiudi" text="Chiudi" font="%s" fontSize="18" color="%s" textColor="White" preferredWidth="140" preferredHeight="50" onClick="Global/shoot_mirinoChiudi"/>
                 </HorizontalLayout>
             </Panel>
@@ -1739,7 +1741,7 @@ function shoot_mirinoUnitaSotto(m, px, pz)
     for _, o in ipairs(getAllObjects()) do
         if o.hasTag(tagNemico) then
             local info = main_parseNickname(o.getName())
-            if info and info.unitType ~= "GEN" then
+            if info and info.unitType ~= "GEN" and not main_isGeneralKey(main_getUnitKey(o)) then
                 local d = main_pointRectDistance(px, pz, main_baseRectOfType(o, info.unitType))
                 if d <= dMin then meglio, dMin = main_getUnitKey(o), d end
             end
@@ -1754,30 +1756,81 @@ function shoot_mirinoEvidenzia(m, key, valido)
     end
     m.sopra = key
     if key then
-        local col = valido and { 0.2, 0.9, 0.2 } or { 1, 0.2, 0.2 }
+        local col = (valido == true or valido == "ok") and { 0.2, 0.9, 0.2 }
+                 or (valido == "arancio" and { 1, 0.63, 0.13 }) or { 1, 0.2, 0.2 }
         for _, b in ipairs(main_getUnitBases(key)) do b.highlightOn(col) end
     end
 end
 
 -- Esito del bersaglio key: valido, testo
+IEF_SHOOT_MIRINO_PRECONTROLLO = false   -- true = senza bersaglio niente mirino (F38)
+IEF_SHOOT_MIRINO_COLORI = { ok = "#40FF40", arancio = "#FFA020", rosso = "#FF4040" }
+
+-- ============================================================
+-- F40: esito del bersaglio key -> esito ("ok"|"arancio"|"rosso"), testo
+--   verde   : bersaglio valido, tiro eseguibile
+--   rosso   : fuori gittata, nessun tiro
+--   arancio : a distanza di tiro ma in mischia, non in LOS o con un
+--             bersaglio selezionabile più vicino, nessun tiro
+-- Testo: distanza - Bersaglio valido / non valido - Causa (la prima
+-- in quest'ordine: gittata, mischia, LOS, più vicino).
+-- ============================================================
 function shoot_mirinoValuta(m, key)
-    local nome = main_decodeExtendedUnitLabel(key)
-    if key == m.giusto then
-        if not m.distGiusto then
-            m.distGiusto = shoot_mirinoDistanza(m, key)
+    m.cache = m.cache or {}
+    if m.cache[key] then return m.cache[key].esito, m.cache[key].testo end
+    local d = shoot_mirinoDistBordo(m, key)
+    local function esci(esito, causa)
+        local testo = causa
+            and string.format('%.2f" - Bersaglio non valido \n %s', d / INCH_TO_TTS, causa)
+            or string.format('%.2f" - Bersaglio valido', d / INCH_TO_TTS)
+        m.cache[key] = { esito = esito, testo = testo }
+        return esito, testo
+    end
+    if key == m.giusto then return esci("ok", nil) end
+    local range = m.info.rangeUnits
+    local dCono = shoot_mirinoDistanza(m, key)
+    if dCono > range then
+        if d > range then return esci("rosso", "Fuori gittata") end
+        return esci("arancio", "Il bersaglio non è in LOS")      -- fuori dall'angolo di tiro
+    end
+    if main_unitsEngaged()[key] then return esci("arancio", "In mischia") end
+    if not shoot_mirinoLOS(m, key) then return esci("arancio", "Il bersaglio non è in LOS") end
+    return esci("arancio", "Esiste un bersaglio selezionabile più vicino")
+end
+
+-- Distanza bordo-bordo minima fra basi tiratrici e unità key
+function shoot_mirinoDistBordo(m, key)
+    local d = math.huge
+    for _, b in ipairs(main_getUnitBases(key)) do
+        local info = main_parseNickname(b.getName())
+        local r = main_baseRectOfType(b, info and info.unitType)
+        for _, mr in ipairs(m.info.mieRect) do
+            local dd = main_rectsDistance(mr, r)
+            if dd < d then d = dd end
         end
-        return true, string.format("%s  %.2f\"", nome, m.distGiusto / INCH_TO_TTS)
     end
-    if main_isGeneralKey(key) then return false, "Generale: non e' un bersaglio" end
-    if main_unitsInMelee()[key] then return false, nome .. ": in mischia" end
-    local d = shoot_mirinoDistanza(m, key)
-    if d == math.huge then return false, nome .. ": fuori dal cono di tiro" end
-    if d > m.info.rangeUnits then
-        return false, string.format("%s: fuori gittata (%.1f\" > %.0f\")", nome, d / INCH_TO_TTS, m.info.rangeUnits / INCH_TO_TTS)
+    return d
+end
+
+-- Almeno una base tiratrice con il corridoio libero di 4 cm verso
+-- una base dell'unità key (stessa regola di shoot_trovaBersaglio)
+function shoot_mirinoLOS(m, key)
+    local polys = {}
+    for _, b in ipairs(main_getUnitBases(key)) do
+        local info = main_parseNickname(b.getName())
+        local _, poly = shoot_distInCone(m.info.cono, m.info.mieRect, main_baseRectOfType(b, info and info.unitType))
+        if poly and #poly >= 3 then table.insert(polys, poly) end
     end
-    m.distGiusto = m.distGiusto or shoot_mirinoDistanza(m, m.giusto)
-    if d < m.distGiusto then return false, nome .. ": nessuna linea di vista libera" end
-    return false, "Il bersaglio non è valido"
+    if #polys == 0 then return false end
+    m.ostacoli = m.ostacoli or shoot_ostacoli()
+    local escludi = { [m.info.unitKey] = true, [key] = true }
+    local prep = shoot_preparaOstacoli(m.ostacoli, escludi, shoot_area(m.info.mieRect, polys))
+    for _, poly in ipairs(polys) do
+        for _, mr in ipairs(m.info.mieRect) do
+            if shoot_corridoioLibero(mr, poly, m.ostacoli, escludi, prep) then return true end
+        end
+    end
+    return false
 end
 
 function shoot_mirinoDistanza(m, key)
@@ -1805,24 +1858,26 @@ function shoot_mirinoTick()
     local key = shoot_mirinoUnitaSotto(m, p.x, p.z)
     -- linea elastica dal fronte al mirino (verde sul bersaglio
     -- valido, rossa su uno non valido, gialla altrove)
-    local ok, testo = false, nil
-    if key then ok, testo = shoot_mirinoValuta(m, key) end
-    local col = key and (ok and { 0.2, 0.9, 0.2 } or { 1, 0.2, 0.2 }) or { 1, 0.8, 0.1 }
+    local esito, testo = nil, nil
+    if key then esito, testo = shoot_mirinoValuta(m, key) end
+    local ok = esito == "ok"
+    local col = (esito == "ok" and { 0.2, 0.9, 0.2 }) or (esito == "arancio" and { 1, 0.63, 0.13 })
+             or (esito == "rosso" and { 1, 0.2, 0.2 }) or { 1, 0.8, 0.1 }
     local o = m.origine
     local y0 = (main_groundY(o.x, o.z, 2) or 1.2) + 0.06
     local y1 = (main_groundY(p.x, p.z, 2) or 1.2) + 0.06
     IEF_SHOOTING.activeLines = { { points = { { o.x, y0, o.z }, { p.x, y1, p.z } }, color = col, thickness = 0.08 } }
     callHandler("aggiornaLinee")
     if not key then
+        -- terreno vuoto, Generali e unità amiche: ignorati
         shoot_mirinoEvidenzia(m, nil)
         m.valido = false
-        local d = math.sqrt((p.x - o.x) ^ 2 + (p.z - o.z) ^ 2) / INCH_TO_TTS
-        shoot_mirinoPannello(m, string.format('%.2f"', d), "#FFFFFF")
+        shoot_mirinoPannello(m, "", "#FFFFFF")
         return
     end
     m.valido = ok
-    shoot_mirinoEvidenzia(m, key, ok)
-    shoot_mirinoPannello(m, testo, ok and "#40FF40" or "#FF4040")
+    shoot_mirinoEvidenzia(m, key, esito)
+    shoot_mirinoPannello(m, testo, IEF_SHOOT_MIRINO_COLORI[esito] or "#FFFFFF")
 end
 
 function shoot_mirinoOnDrop(player_color, obj)
