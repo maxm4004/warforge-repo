@@ -1030,3 +1030,38 @@ function debug_terreno(modo)
     end
     print(string.format("[TERRENO] modo %s applicato a %d basi", modo, n))
 end
+
+-- ============================================================
+-- FUNZIONE DI TEST: debug_terrenoSotto(color)   (F43c)
+-- Per ogni base dell'unità selezionata: cosa colpisce il raggio
+-- verso il basso al centro (nome, tag), la categoria di terreno
+-- riconosciuta in quel punto e se l'oggetto blocca la vista; poi
+-- le categorie dell'intera unità (stessi punti di movimento e
+-- scheda). Uso:  /execute debug_terrenoSotto("Red")
+-- ============================================================
+function debug_terrenoSotto(color)
+    local player = Player[color]
+    local unitKey
+    for _, o in ipairs(player and player.getSelectedObjects() or {}) do
+        if main_parseNickname(o.getName()) then unitKey = main_getUnitKey(o); break end
+    end
+    if not unitKey then print("[TERRENO] Seleziona una base dell'unità"); return end
+    print("[TERRENO] " .. main_decodeExtendedUnitLabel(unitKey))
+    for _, b in ipairs(main_getUnitBases(unitKey)) do
+        local p = b.getPosition()
+        local info = main_parseNickname(b.getName())
+        print(string.format("  base %s  categoria al centro: %s", tostring(info and info.baseSeq),
+            tostring(main_terrainAtPoint(p.x, p.y, p.z))))
+        local hits = Physics.cast({ origin = Vector(p.x, p.y + 5, p.z), direction = Vector(0, -1, 0), type = 1, max_distance = 15 })
+        for _, h in ipairs(hits or {}) do
+            local o = h.hit_object
+            if o and o ~= b and not o.hasTag("Army1") and not o.hasTag("Army2") then
+                print(string.format("      sotto: %s [%s] tag {%s}%s", tostring(o.getName()), tostring(o.type),
+                    table.concat(o.getTags() or {}, ","), (shoot_bloccaVista and shoot_bloccaVista(o)) and "  BLOCCA LA VISTA" or ""))
+            end
+        end
+    end
+    local cats = {}
+    for c in pairs(main_unitTerrainCats(unitKey)) do table.insert(cats, c) end
+    print("  categorie dell'unità: " .. ((#cats > 0) and table.concat(cats, ", ") or "nessuna (aperto)"))
+end

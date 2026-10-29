@@ -525,7 +525,14 @@ function main_unitInfoTerrainRows(unitKey, tipo)
     for cat in pairs(cats) do table.insert(lista, cat) end
     table.sort(lista)
     if #lista == 0 then
-        table.insert(righe, { "Terreno", "Aperto (nessun effetto)" })
+        -- F43b: la collina dolce è terreno APERTO (nessun effetto sul
+        -- movimento) ma si riconosce dal tag Aperto dell'elemento
+        if main_unitOnGentleHill(unitKey) then
+            table.insert(righe, { "Terreno", "Collina dolce (come aperto)" })
+            table.insert(righe, { "  Collina dolce", '+1 in mischia (1° turno) se piu\' in alto', UNITINFO.okColor })
+        else
+            table.insert(righe, { "Terreno", "Aperto (nessun effetto)" })
+        end
     else
         local nomi = {}
         for _, c in ipairs(lista) do table.insert(nomi, NOMI_TERRENO[c] or c) end
@@ -551,4 +558,21 @@ function main_unitInfoTerrainRows(unitKey, tipo)
         table.insert(righe, { "  Disordinata dal terreno", "si riordina uscendone del tutto", UNITINFO.warnColor })
     end
     return righe
+end
+
+-- F43b: almeno una base sopra un elemento con il tag Aperto (collina dolce)
+function main_unitOnGentleHill(unitKey)
+    for _, b in ipairs(main_getUnitBases(unitKey)) do
+        local p = b.getPosition()
+        local hits = Physics.cast({ origin = Vector(p.x, p.y + 5, p.z), direction = Vector(0, -1, 0), type = 1, max_distance = 15 })
+        for _, h in ipairs(hits or {}) do
+            local o = h.hit_object
+            if o and o ~= b and not o.hasTag("Army1") and not o.hasTag("Army2") then
+                for _, t in ipairs(o.getTags() or {}) do
+                    if string.upper(t) == "APERTO" then return true end
+                end
+            end
+        end
+    end
+    return false
 end
