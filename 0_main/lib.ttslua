@@ -209,6 +209,13 @@ function main_aggiornaLinee()
         end
     end
 
+    -- F41: corridoio, perno e filo del mirino di carica
+    if charge_mirinoLines then
+        for _, l in ipairs(charge_mirinoLines()) do
+            table.insert(linee, l)
+        end
+    end
+
     -- F32: corridoio e filo del movimento manuale
     if move_manualLines then
         for _, l in ipairs(move_manualLines()) do

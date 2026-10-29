@@ -164,7 +164,8 @@ function main_unitInfoFixedRows(unitKey)
         local inRaggio = slot and main_isInCommandRange(bases[1], slot)
         table.insert(righe, { "Generale aggregato", gen and main_decodeExtendedUnitLabel(gen) or "no", uiBool(gen ~= nil, true) })
         table.insert(righe, { "In raggio di comando", uiSiNo(inRaggio), inRaggio and UNITINFO.okColor or UNITINFO.koColor })
-        table.insert(righe, { "Terreno", main_getUnitTerrain(unitKey) or "APERTO" })
+        -- F43: terreno toccato dalle basi e suoi effetti per il tipo
+        for _, r in ipairs(main_unitInfoTerrainRows(unitKey, tipo)) do table.insert(righe, r) end
         if main_unitInCover(unitKey) then
             table.insert(righe, { "  In copertura", "si (-1 al tiro nemico)", UNITINFO.okColor })
         end
@@ -313,6 +314,12 @@ function main_unitInfoPhaseRows(unitKey)
     local extra = {}
     if fase == PHASE.CHARGE_DECLARE or fase == PHASE.CHARGE_REACT or fase == PHASE.CHARGE_AUTO then
         if not generale then extra = main_unitInfoChargeRows(unitKey) end
+    elseif fase == PHASE.MOVE then
+        -- F43: movimento e perno rimasti nel turno
+        local mov = IEF_MOVE_BUDGET and IEF_MOVE_BUDGET[unitKey]
+        local per = IEF_PIVOT_BUDGET and IEF_PIVOT_BUDGET[unitKey]
+        if mov then table.insert(extra, { "Movimento rimasto", string.format('%.2f"', mov) }) end
+        if per and not generale then table.insert(extra, { "Perno rimasto", string.format('%.2f"', per) }) end
     elseif fase == PHASE.SHOOT then
         if not generale then
             local fatto = IEF_FIRED and IEF_FIRED[unitKey]
@@ -501,4 +508,47 @@ function main_unitInfoPanelsXml()
             rowsXml)
     end
     return xml
+end
+
+-- ============================================================
+-- F43: righe del terreno nella scheda unità
+-- Terreno = categorie toccate da almeno una base (stessi punti del
+-- movimento); per ognuna l'effetto sul tipo dell'unità:
+-- movimento (fattore di costo, F32) e coesione (disordina).
+-- ============================================================
+local NOMI_TERRENO = { ROTTO = "Rotto", DIFFICILE = "Difficile", INTRANSITABILE = "Intransitabile", FIUME = "Fiume" }
+
+function main_unitInfoTerrainRows(unitKey, tipo)
+    local righe = {}
+    local cats = main_unitTerrainCats(unitKey)
+    local lista = {}
+    for cat in pairs(cats) do table.insert(lista, cat) end
+    table.sort(lista)
+    if #lista == 0 then
+        table.insert(righe, { "Terreno", "Aperto (nessun effetto)" })
+    else
+        local nomi = {}
+        for _, c in ipairs(lista) do table.insert(nomi, NOMI_TERRENO[c] or c) end
+        table.insert(righe, { "Terreno", table.concat(nomi, ", "), UNITINFO.warnColor })
+        local pieno = main_unitFullMove(unitKey)
+        for _, c in ipairs(lista) do
+            local eff = main_terrainEffectFor(c, tipo) or {}
+            local f = main_terrainFactor(c, tipo, pieno)
+            local mov
+            if f >= IEF_TERRAIN_BLOCK then mov = "vietato"
+            elseif f > 1.001 then
+                local testi = { dimezza = "dimezzato", riduce_1_pollice = 'ridotto a 1"', riduce_2_pollici = 'ridotto a 2"' }
+                mov = string.format('%s (1" costa %.1f")', testi[eff.movement] or "ridotto", f)
+            else mov = "nessun effetto" end
+            table.insert(righe, { "  " .. (NOMI_TERRENO[c] or c) .. ": movimento", mov,
+                (f > 1.001) and UNITINFO.warnColor or UNITINFO.textColor })
+            if eff.cohesion == "disordina" then
+                table.insert(righe, { "  " .. (NOMI_TERRENO[c] or c) .. ": coesione", "disordina", UNITINFO.koColor })
+            end
+        end
+    end
+    if IEF_TERRAIN_DISORDER and IEF_TERRAIN_DISORDER[unitKey] then
+        table.insert(righe, { "  Disordinata dal terreno", "si riordina uscendone del tutto", UNITINFO.warnColor })
+    end
+    return righe
 end

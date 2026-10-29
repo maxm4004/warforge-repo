@@ -1394,6 +1394,7 @@ function melee_btGo(ctx, player)
     if not targetKey then
         local pieno = main_unitFullMove(key)
         melee_btTranslate(basi, pieno)
+        main_terrainCohesionAfterMove(key)   -- F42
         printToAll(string.format("[MISCHIA] Sfondamento della %s: avanza di %d\", nessun nemico raggiunto",
             main_decodeExtendedUnitLabel(key), pieno), {r=1,g=0.8,b=0.3})
         return
@@ -1402,6 +1403,7 @@ function melee_btGo(ctx, player)
     local fianco = charge_isFlankCharge(key, targetKey)
     melee_btTranslate(basi, dist or 0)
     charge_alignToEnemy(key, targetKey, fianco)
+    main_terrainCohesionAfterMove(key)   -- F42: disordine da terreno
 
     if main_getCohesion(targetKey) == COHESION.ROT then
         printToAll(string.format("[MISCHIA] Sfondamento: la %s raggiunge la %s in rotta e la DISTRUGGE",

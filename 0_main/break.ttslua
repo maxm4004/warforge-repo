@@ -812,7 +812,7 @@ function main_terrainFactor(cat, tipo, pieno)
 end
 
 -- Rettangoli reali delle basi (centro della mesh) e dati del tipo
-function main_terrainUnitData(unitKey)
+function main_terrainUnitData(unitKey, dirOverride)
     local basi = main_getUnitBases(unitKey)
     if #basi == 0 then return nil end
     local meta = main_getUnitMeta(basi[1])
@@ -820,9 +820,12 @@ function main_terrainUnitData(unitKey)
     local rects = {}
     for _, b in ipairs(basi) do table.insert(rects, main_baseRectOfType(b, tipo)) end
     local f = basi[1].getTransformForward()
+    -- F42: dirOverride = direzione del percorso diversa dal fronte
+    -- (evasione: all'indietro, calcolata prima del dietrofront)
+    local dir = dirOverride and Vector(dirOverride.x, 0, dirOverride.z):normalized() or Vector(f.x, 0, f.z):normalized()
     return {
         tipo = tipo, rects = rects, pieno = main_unitFullMove(unitKey),
-        dir = Vector(f.x, 0, f.z):normalized(), refY = basi[1].getPosition().y,
+        dir = dir, refY = basi[1].getPosition().y,
     }
 end
 
@@ -864,7 +867,7 @@ end
 --   motivo: "terreno" (vietato davanti) | "movimento" | "limite"
 --   cat   : terreno lento più severo attraversato (per i messaggi)
 -- ============================================================
-function main_terrainPlan(unitKey, budget, limite)
+function main_terrainPlan(unitKey, budget, limite, dirOverride)
     local piano = { maxT = 0, tratti = {}, motivo = "limite" }
     function piano.costo(t)
         local c = 0
@@ -874,7 +877,7 @@ function main_terrainPlan(unitKey, budget, limite)
         end
         return c
     end
-    local dati = main_terrainUnitData(unitKey)
+    local dati = main_terrainUnitData(unitKey, dirOverride)
     if not dati or budget <= 0 or limite <= 0 then return piano end
     local function F(t) return main_terrainFactorAt(dati, t) end
 

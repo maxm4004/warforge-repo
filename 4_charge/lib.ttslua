@@ -307,7 +307,7 @@ end
 -- ============================================================
 -- FUNZIONE: charge_findLineTarget(myKey, slot)
 -- ============================================================
-function charge_findLineTarget(myKey, slot)
+function charge_findLineTarget(myKey, slot, pollici)
 
     local myBases = charge_getUnitBases(myKey)
     if #myBases == 0 then
@@ -322,6 +322,9 @@ function charge_findLineTarget(myKey, slot)
 
     local unitTypeData = main_getUnitType(myTipo)
     local moveInches = unitTypeData and unitTypeData.move_inches or 0
+    -- F41g: lunghezza del corridoio passata dal chiamante (movimento
+    -- meno il perno già usato); senza, il movimento pieno come prima
+    if pollici then moveInches = math.max(0, pollici) end
 
     local baseHalfWidth = (unitTypeData and unitTypeData.base_width_cm or 4) * CM_TO_TTS / 2 - 0.06
     local baseHalfDepth = (unitTypeData and unitTypeData.base_depth_cm or 3) * CM_TO_TTS / 2 - 0.06
@@ -450,11 +453,12 @@ function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText, info
         return '<HorizontalLayout spacing="8" childAlignment="MiddleCenter" childForceExpandWidth="false" preferredHeight="34">' .. contenuto .. '</HorizontalLayout>'
     end
     return string.format([[
-        <Panel id="panelCharge_%s" active="true" color="%s" width="%d" height="300" offsetXY="0 300" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+        <Panel id="panelCharge_%s" active="true" color="%s" width="%d" height="340" offsetXY="0 320" position="%f %f %f" rotation="-90 0 0" visibility="%s">
             <VerticalLayout spacing="8" padding="20 20 16 16" childAlignment="UpperCenter" childForceExpandHeight="false">
                 <Text text="%s" font="%s" fontStyle="Bold" fontSize="22" color="%s" alignment="MiddleCenter" preferredHeight="30"/>
                 <Text text="%s" font="%s" fontSize="15" color="%s" alignment="MiddleCenter" preferredHeight="22"/>
                 <Text text="DICHIARAZIONE DI CARICA" font="%s" fontStyle="Bold" fontSize="15" color="%s" alignment="MiddleLeft" preferredHeight="22"/>
+                <Text id="txtMirino_%s" text="" font="%s" fontStyle="Normal" fontSize="18" color="#FFFFFF" alignment="MiddleCenter" preferredHeight="30"/>
                 %s %s
             </VerticalLayout>
         </Panel>
@@ -462,7 +466,11 @@ function charge_buildDeclarePanel3DXml(unitKey, x, y, z, colore, labelText, info
         labelText, P.font, P.gold,
         infoText or "", P.font, P.grey,
         P.font, P.gold,
-        riga(btn("ChargePivotSx", "Perno Sn", "charge_btnPivotSx", 210) .. btn("ChargePivotDx", "Perno Ds", "charge_btnPivotDx", 210)
+        unitKey, P.font,
+        (IEF_CHARGE_USA_MIRINO ~= false)
+          -- F41c: il controllo lo fa il mirino
+          and riga(btn("ChargePivotSx", "Perno Sn", "charge_btnPivotSx", 330) .. btn("ChargePivotDx", "Perno Ds", "charge_btnPivotDx", 330))
+          or riga(btn("ChargePivotSx", "Perno Sn", "charge_btnPivotSx", 210) .. btn("ChargePivotDx", "Perno Ds", "charge_btnPivotDx", 210)
           .. btn("ChargeCheck", "Controlla", "charge_btnCheck", 210, "#C8642A")),
         riga(btn("ChargeAbort", "Annulla", "charge_btnAbort", 330, P.undo2) .. btn("ChargeClose", "Chiudi", "charge_btnClose", 330, P.close)))
 end
@@ -492,6 +500,14 @@ function charge_redraw(unitKey)
 
     local labelText = main_decodeExtendedUnitLabel(session.attackerKey)
     local infoText = string.format("Perno usato %.1f&quot; su 2.0&quot;   -   Controlla il bersaglio, poi Dichiara", session.pivotUsed)
+    if IEF_CHARGE_USA_MIRINO ~= false then
+        -- F41c: perno e movimento totale (il perno si sottrae al movimento)
+        local meta = charge_getUnitMeta(session.myBases[1])
+        local ut = meta and main_getUnitType(meta.unitType)
+        local mov = (ut and ut.move_inches) or 0
+        infoText = string.format("Perno %.2f&quot; su %.1f&quot;   -   Movimento %.2f&quot; su %.1f&quot;",
+            session.pivotUsed or 0, IEF_CHARGE_PIVOT_MAX or 2, math.max(0, mov - (session.pivotUsed or 0)), mov)
+    end
     session.panel3DObj.UI.setXml(charge_buildDeclarePanel3DXml(session.attackerKey, x, y, z, session.activePlayer.color, labelText, infoText))
 end
 
@@ -500,9 +516,15 @@ end
 -- Chiude il pannello 3D e pulisce la sessione di dichiarazione.
 -- Stesso principio di move_close (6_move/lib.ttslua).
 -- ============================================================
-function charge_close(unitKey)
+function charge_close(unitKey, dichiarata)
     local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if not session then return end
+    if charge_pernoOff then charge_pernoOff(session, true) end
+    if charge_mirinoStop then charge_mirinoStop(session) end
+    -- F41h: i perni servono solo a preparare la carica. Se la carica
+    -- non viene dichiarata (Chiudi, test fallito, riapertura...)
+    -- l'unità torna alla posizione e all'orientamento di partenza.
+    if not dichiarata then charge_declareRestorePosition(session) end
 
     if session.lineHost then
         session.lineHost.setVectorLines({})
@@ -595,6 +617,8 @@ function charge_declareOpenFromButton(obj, player_color, alt_click)
     UI.setAttribute("confirm_panel_charge", "active", "false")
     Wait.time(function ()
         charge_redraw(myKey)
+        -- F41: mirino da trascinare sul bersaglio
+        if IEF_CHARGE_USA_MIRINO ~= false then charge_mirinoSpawn(myKey) end
     end, 1)
 end
 -- ============================================================
@@ -647,6 +671,7 @@ function charge_btnPivotSx(player, value, id)
     if not player then return end
     local unitKey = id:match("^btn_(.+)_ChargePivotSx$")
     if not unitKey then return end
+    if IEF_CHARGE_USA_MIRINO ~= false then return charge_pernoToggle(unitKey, "left") end
     charge_pivotApply(player, unitKey, "left")
 end
 
@@ -658,6 +683,7 @@ function charge_btnPivotDx(player, value, id)
     if not player then return end
     local unitKey = id:match("^btn_(.+)_ChargePivotDx$")
     if not unitKey then return end
+    if IEF_CHARGE_USA_MIRINO ~= false then return charge_pernoToggle(unitKey, "right") end
     charge_pivotApply(player, unitKey, "right")
 end
 
@@ -682,7 +708,8 @@ function charge_checkTarget(player, unitKey)
 
     if ENGINE.phase == PHASE.CHARGE_DECLARE then
 
-        local targetKey, a, distInches, newHost, startLeft, startRight, endLeft, endRight = charge_findLineTarget(session.attackerKey, slot)
+        local targetKey, a, distInches, newHost, startLeft, startRight, endLeft, endRight =
+            charge_findLineTarget(session.attackerKey, slot, (IEF_CHARGE_USA_MIRINO ~= false) and charge_portata(session) or nil)
 
         if newHost then
             if session.lineHost and session.lineHost ~= newHost then
@@ -781,7 +808,15 @@ end
 function charge_declareAbort(player, unitKey)
     local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
     if session then
+        if charge_pernoOff then charge_pernoOff(session, true) end
         charge_declareRestorePosition(session)
+        -- F41: Annulla azzera anche i perni e rimette il mirino
+        if IEF_CHARGE_USA_MIRINO ~= false then
+            session.pivotUsed = 0
+            charge_mirinoStop(session)
+            charge_redraw(unitKey)
+            charge_dopoSpostamento(unitKey)
+        end
     end
 end
 
@@ -818,11 +853,16 @@ function charge_declareCancel(player, value, id, buttonConfig)
     local unitKey = slot and IEF_CHARGE_ACTIVE_CONFIRM[slot]
     local session = unitKey and IEF_CHARGE_DECLARE_SESSION[unitKey]
     if session then
+        if charge_pernoOff then charge_pernoOff(session, true) end
         charge_declareRestorePosition(session)
         session.pivotUsed  = 0
         session.targetKey  = nil
         session.distInches = nil
         charge_redraw(unitKey)
+        if IEF_CHARGE_USA_MIRINO ~= false then
+            charge_mirinoStop(session)
+            charge_dopoSpostamento(unitKey)
+        end
     end
     UI.setAttribute("confirm_panel_charge", "active", "false")
     return true
@@ -881,7 +921,7 @@ function charge_declareConfirm(player, value, id, buttonConfig)
     end
 
     warningToColor(string.format("La %s carica %s", main_decodeExtendedUnitLabel(attackerKey), main_decodeExtendedUnitLabel(targetKey)), player, "Yellow", 5, true)
-    charge_close(unitKey)
+    charge_close(unitKey, true)   -- dichiarata: il perno resta
     callHandler("buildUI")
     callHandler("updateCenterPanel")
 end
@@ -1694,6 +1734,17 @@ function charge_executeEvade(evadingSlot, elemento)
         local oldFwd = defenderBases[1].getTransformForward()
         local fleeXZ = Vector(-oldFwd.x, 0, -oldFwd.z):normalized()
 
+        -- F42: l'evasione subisce il terreno (decisione Max): percorso
+        -- all'indietro col costo del terreno, calcolato prima del
+        -- dietrofront (stessa impronta, direzione di fuga)
+        local pianoEva = main_terrainPlan(evadingKey, moveInches, moveInches, fleeXZ)
+        local costoTerreno = pianoEva.maxT and pianoEva.maxT < moveInches - 0.01
+        if costoTerreno then
+            printToAll(string.format("[CARICA] L'evasione della %s nel terreno %s: %.1f\" invece di %.1f\"",
+                main_decodeExtendedUnitLabel(evadingKey), tostring(pianoEva.cat or pianoEva.chi), pianoEva.maxT, moveInches), {r=1,g=0.6,b=0.2})
+            moveInches = pianoEva.maxT
+        end
+
         charge_turnAround180(defenderBases)
 
         -- Regolamento: "Se incontrano ostacoli insuperabili (terreni
@@ -1720,6 +1771,7 @@ function charge_executeEvade(evadingSlot, elemento)
         end
 
         main_generalFlipAndMove(evadingKey, fleeXZ.x, fleeXZ.z, deltaUnits)
+        main_terrainCohesionAfterMove(evadingKey)   -- F42
 
         -- Dopo il dietrofront il rango posteriore è cambiato: il
         -- pulsante va sulla nuova base d'angolo (come in formazione).
@@ -2209,6 +2261,7 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         IEF_MOVE_BUDGET[unitKey] = distanzaDichiarata
         move_avanti_apply(unitKey, distanzaDichiarata)
         main_syncAttachedGeneral(unitKey)
+        main_terrainCohesionAfterMove(unitKey)   -- F42: disordine da terreno
         IEF_MOVE_UNITS[unitKey] = nil
         IEF_MOVE_BUDGET[unitKey] = nil
 
@@ -2297,6 +2350,7 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         elemento.step = CHARGE_STEP.CLO
         if slot == 1 then elemento.movedArmy1 = true else elemento.movedArmy2 = true end
         IEF_UNIT_NO_MOVE_NEXT_TURN[unitKey] = true
+        main_terrainCohesionAfterMove(unitKey)   -- F42: disordine da terreno
         warningToColor(string.format("[CARICA] %s percorre %.2f\" (massimo) e non raggiunge la %s: carica fallita",
             main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, main_decodeExtendedUnitLabel(otherKey)), player, "Yellow", 6, true)
         printToAll(string.format("[CARICA] %s non raggiunge la %s: carica fallita",
@@ -2330,6 +2384,9 @@ function charge_executeChargeMove(player, unitKey, elementoDato)
         charge_elephantContact(elemento)
     end
 
+    -- F42: chi finisce la carica (o la contro-carica) in un terreno
+    -- che disordina si disordina
+    main_terrainCohesionAfterMove(unitKey)
     warningToColor(string.format("[CARICA] %s percorre %.2f\" (di %.2f\" totali)", main_decodeExtendedUnitLabel(unitKey), distanzaDaPercorrere, distanzaTotaleInch), player, "Yellow", 5, true)
 end
 -- ============================================================
@@ -2573,4 +2630,619 @@ function charge_elephantContact(elemento)
             end)
         end
     end
+end
+
+-- ============================================================
+-- F41: MIRINO DI CARICA E PERNO A MANIGLIA
+-- Clic su CARICA (controlli dell'unità di sempre): pannello con
+-- Perno Sn / Perno Ds a maniglia (massimo 2" in tutto) e il
+-- mirino (icona "mirino_carica") davanti al fronte, con il
+-- corridoio della carica in giallo. Il giocatore trascina il
+-- mirino su un'unità nemica; nel pannello:
+--   verde   : bersaglio valido (eventuale "Serve un test di
+--             morale" / "Carica sul fianco")
+--   rosso   : fuori portata
+--   arancio : in portata ma non in linea retta, bersaglio più
+--             vicino in linea retta, o non caricabile
+-- Rilasciato sul verde: charge_checkTarget (conferma Dichiara /
+-- Chiudi o il test di morale, come prima). Altrimenti torna.
+-- IEF_CHARGE_USA_MIRINO = false: gestione precedente.
+-- ============================================================
+IEF_CHARGE_USA_MIRINO     = (IEF_CHARGE_USA_MIRINO ~= false)
+IEF_CHARGE_MIRINO_SCALA   = IEF_CHARGE_MIRINO_SCALA or 0.20
+IEF_CHARGE_MIRINO_DAVANTI = IEF_CHARGE_MIRINO_DAVANTI or 0.8
+IEF_CHARGE_MIRINO_ROT     = IEF_CHARGE_MIRINO_ROT or { x = 0, y = 45, z = 0 }
+IEF_CHARGE_MIRINO_COLORI  = { ok = "#40FF40", arancio = "#FFA020", rosso = "#FF4040" }
+IEF_CHARGE_PIVOT_MAX      = 2
+IEF_CHARGE_LINES          = IEF_CHARGE_LINES or {}     -- unitKey -> linee globali
+IEF_CHARGE_HANDLES        = IEF_CHARGE_HANDLES or {}   -- guid -> { unitKey, tipo }
+
+local GIALLO = { 1, 0.8, 0.1 }
+
+local function ruotaC(c, x, z, ang)
+    local cs, sn = math.cos(ang), math.sin(ang)
+    local rx, rz = x - c.x, z - c.z
+    return c.x + rx * cs - rz * sn, c.z + rx * sn + rz * cs
+end
+
+local function angoloAttornoC(c, ax, az, bx, bz)
+    local ux, uz = ax - c.x, az - c.z
+    local vx, vz = bx - c.x, bz - c.z
+    return charge_angolo(ux * vz - uz * vx, ux * vx + uz * vz)
+end
+
+local function quotaC(x, z) return (main_groundY(x, z, 2) or 1.16) + 0.06 end
+
+-- Linee globali della carica (corridoio, perno, filo del mirino)
+function charge_mirinoLines()
+    local out = {}
+    for _, l in pairs(IEF_CHARGE_LINES) do
+        for _, x in ipairs(l) do table.insert(out, x) end
+    end
+    return out
+end
+
+function charge_setLines(unitKey)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
+    local out = {}
+    if session then
+        for _, l in ipairs(session.lineeCorridoio or {}) do table.insert(out, l) end
+        for _, l in ipairs(session.lineePerno or {}) do table.insert(out, l) end
+        if session.lineaFilo then table.insert(out, session.lineaFilo) end
+    end
+    IEF_CHARGE_LINES[unitKey] = (#out > 0) and out or nil
+    callHandler("aggiornaLinee")
+end
+
+-- Corridoio della carica in giallo (stessa geometria di charge_findLineTarget)
+IEF_CHARGE_DEBUG_CORRIDOIO = false  -- F41f: diagnostica del corridoio
+
+-- F42: portata della carica in linea retta: movimento disponibile
+-- percorso dritto davanti al fronte, con il costo del terreno
+-- (decisione Max: le cariche risentono del terreno). Si ferma prima
+-- del terreno vietato.
+function charge_portata(session)
+    local disp = charge_movimentoDisponibile(session)
+    if disp <= 0 then return 0 end
+    local piano = main_terrainPlan(session.attackerKey, disp, disp)
+    return piano.maxT or disp, piano
+end
+
+-- F41g: movimento che resta per la carica (pieno meno il perno usato)
+function charge_movimentoDisponibile(session)
+    local meta = charge_getUnitMeta(session.myBases[1])
+    local ut = meta and main_getUnitType(meta.unitType)
+    return math.max(0, ((ut and ut.move_inches) or 0) - (session.pivotUsed or 0))
+end
+function charge_corridoioGiallo(session, slot)
+    local _, _, _, _, sL, sR, eL, eR = charge_findLineTarget(session.attackerKey, slot, charge_portata(session))
+    if IEF_CHARGE_DEBUG_CORRIDOIO then
+        local b = session.myBases[1]
+        local f = b.getTransformForward()
+        print(string.format("[CARICA-MIRINO] corridoio: rotY base %.1f  fronte (%.3f, %.3f)  perno usato %.2f",
+            b.getRotation().y, f.x, f.z, session.pivotUsed or 0))
+    end
+    if not sL then session.lineeCorridoio = nil; return end
+    local function seg(a, b, n)
+        local pts = {}
+        for i = 0, n do
+            local t = i / n
+            local x, z = a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t
+            table.insert(pts, { x, quotaC(x, z), z })
+        end
+        return { points = pts, color = GIALLO, thickness = 0.04 }
+    end
+    session.lineeCorridoio = { seg(sL, eL, 12), seg(sR, eR, 12), seg(eL, eR, 4) }
+    session.corr = { sL = sL, sR = sR }
+end
+
+-- ============================================================
+-- Mirino
+-- ============================================================
+function charge_mirinoSpawn(unitKey)
+    local ok, err = pcall(charge_mirinoSpawnCore, unitKey)
+    if not ok then
+        print("[CARICA-MIRINO] errore all'apertura del mirino: " .. tostring(err))
+    end
+end
+
+function charge_mirinoSpawnCore(unitKey)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
+    if not session then return end
+    charge_mirinoStop(session)
+    local player = session.activePlayer
+    local slot = main_getArmyByColor(player)
+    if not slot then return end
+    if charge_alreadyDeclared(slot, session.attackerKey) then return end
+
+    charge_corridoioGiallo(session, slot)
+    local fwd, right, fL, fR = charge_getFrontLine(session.myBases)
+    local meta = charge_getUnitMeta(session.myBases[1])
+    local ut = meta and main_getUnitType(meta.unitType)
+    local hd = ((ut and ut.base_depth_cm) or 3) * CM_TO_TTS / 2
+    local p1, p2 = fL.getPosition(), fR.getPosition()
+    local ox, oz = (p1.x + p2.x) / 2 + fwd.x * hd, (p1.z + p2.z) / 2 + fwd.z * hd
+    local d = IEF_CHARGE_MIRINO_DAVANTI * INCH_TO_TTS
+    local gx, gz = ox + fwd.x * d, oz + fwd.z * d
+    local m = {
+        unitKey = unitKey, slot = slot, origine = { x = ox, z = oz },
+        start = { x = gx, y = (main_groundY(gx, gz, 2) or 1.0) + 0.15, z = gz },
+        rot = { x = IEF_CHARGE_MIRINO_ROT.x, y = session.myBases[1].getRotation().y + IEF_CHARGE_MIRINO_ROT.y, z = IEF_CHARGE_MIRINO_ROT.z },
+        cache = {},
+    }
+    local gK, _, gD = charge_findLineTarget(session.attackerKey, slot, charge_portata(session))
+    m.giusto, m.giustoDist = gK, gD
+    session.mirino = m
+    charge_setLines(unitKey)
+    charge_mirinoTesto(session, "Trascina il mirino sul bersaglio", "#FFFFFF")
+
+    local function pronto(o)
+        if session.mirino ~= m or IEF_CHARGE_DECLARE_SESSION[unitKey] ~= session then o.destruct(); return end
+        o.setName("Mirino carica")
+        o.setVelocity(Vector(0, 0, 0))
+        m.obj = o
+        IEF_CHARGE_HANDLES[o.getGUID()] = { unitKey = unitKey, tipo = "mirino" }
+    end
+    local url = main_uiIconUrl and main_uiIconUrl("mirino_carica")
+    if url then
+        spawnObjectData({
+            data = {
+                Name = "Custom_Token",
+                Transform = { posX = m.start.x, posY = m.start.y, posZ = m.start.z,
+                              rotX = m.rot.x, rotY = m.rot.y, rotZ = m.rot.z,
+                              scaleX = IEF_CHARGE_MIRINO_SCALA, scaleY = 1, scaleZ = IEF_CHARGE_MIRINO_SCALA },
+                CustomImage = {
+                    ImageURL = url, ImageSecondaryURL = "", ImageScalar = 1, WidthScale = 0,
+                    CustomToken = { Thickness = 0.1, MergeDistancePixels = 15, StandUp = false, Stackable = false },
+                },
+            },
+            callback_function = pronto,
+        })
+    else
+        spawnObject({
+            type = "Checker_white", position = { m.start.x, m.start.y, m.start.z },
+            rotation = { m.rot.x, m.rot.y, m.rot.z }, scale = { 0.45, 0.45, 0.45 }, sound = false,
+            callback_function = function(o) o.setColorTint({ 1, 0.4, 0.1 }); pronto(o) end,
+        })
+    end
+end
+
+function charge_mirinoStop(session)
+    local m = session and session.mirino
+    if not m then return end
+    session.mirino = nil
+    if m.waitId then Wait.stop(m.waitId) end
+    if m.obj and not m.obj.isDestroyed() then
+        IEF_CHARGE_HANDLES[m.obj.getGUID()] = nil
+        m.obj.destruct()
+    end
+    charge_mirinoEvidenzia(m, nil)
+    session.lineaFilo = nil
+    session.lineeCorridoio = nil
+    charge_setLines(session.attackerKey)
+end
+
+function charge_mirinoTesto(session, testo, colore)
+    session.ultimoTesto, session.ultimoColore = testo, colore
+    local pan = session.panel3DObj
+    if not pan or pan.isDestroyed() then return end
+    local id = "txtMirino_" .. session.attackerKey
+    -- F41b: il pannello ricostruito da charge_redraw (setXml) è pronto
+    -- solo qualche frame dopo: scrivere subito dà "Object reference
+    -- not set". Si riprova finché non è caricato.
+    local function scrivi()
+        if not pan or pan.isDestroyed() then return true end
+        if pan.UI.loading then return false end
+        local ok = pcall(function()
+            pan.UI.setAttribute(id, "text", testo)
+            pan.UI.setAttribute(id, "color", colore)
+        end)
+        return ok
+    end
+    if not scrivi() then
+        Wait.frames(function()
+            if not scrivi() then Wait.frames(scrivi, 20) end
+        end, 10)
+    end
+end
+
+function charge_mirinoEvidenzia(m, key, esito)
+    if m.sopra and m.sopra ~= key then
+        for _, b in ipairs(main_getUnitBases(m.sopra)) do b.highlightOff() end
+    end
+    m.sopra = key
+    if key then
+        local col = (esito == "ok" and { 0.2, 0.9, 0.2 }) or (esito == "arancio" and { 1, 0.63, 0.13 }) or { 1, 0.2, 0.2 }
+        for _, b in ipairs(main_getUnitBases(key)) do b.highlightOn(col) end
+    end
+end
+
+-- Unità nemica sotto il mirino (Generali ignorati)
+function charge_mirinoUnitaSotto(m, px, pz)
+    local tagNemico = "Army" .. (m.slot == 1 and 2 or 1)
+    local meglio, dMin = nil, 0.3 * INCH_TO_TTS
+    for _, o in ipairs(getAllObjects()) do
+        if o.hasTag(tagNemico) then
+            local info = main_parseNickname(o.getName())
+            local k = info and main_getUnitKey(o)
+            if info and info.unitType ~= "GEN" and k and not main_isGeneralKey(k) then
+                local d = main_pointRectDistance(px, pz, main_baseRectOfType(o, info.unitType))
+                if d <= dMin then meglio, dMin = k, d end
+            end
+        end
+    end
+    return meglio
+end
+
+-- Esito: "ok" | "arancio" | "rosso", testo (distanza - valido/non valido - causa)
+function charge_mirinoValuta(session, key)
+    local m = session.mirino
+    if m.cache[key] then return m.cache[key].esito, m.cache[key].testo end
+    local myBases = charge_getUnitBases(session.attackerKey)
+    local myMeta = charge_getUnitMeta(myBases[1])
+    local myTipo = myMeta and myMeta.unitType
+    local rects = {}
+    for _, b in ipairs(myBases) do table.insert(rects, main_baseRectOfType(b, myTipo)) end
+    local d = math.huge
+    local suoi = charge_getUnitBases(key)
+    for _, b in ipairs(suoi) do
+        local info = main_parseNickname(b.getName())
+        local r = main_baseRectOfType(b, info and info.unitType)
+        for _, mr in ipairs(rects) do d = math.min(d, main_rectsDistance(mr, r)) end
+    end
+    local function esci(esito, causa, nota)
+        local testo
+        if causa then testo = string.format('%.2f" - Bersaglio non valido - Causa: %s', d / INCH_TO_TTS, causa)
+        elseif nota then testo = string.format('%.2f" - Bersaglio valido - %s', d / INCH_TO_TTS, nota)
+        else testo = string.format('%.2f" - Bersaglio valido', d / INCH_TO_TTS) end
+        m.cache[key] = { esito = esito, testo = testo }
+        return esito, testo
+    end
+    -- F41h: la carica percorre la distanza IN LINEA RETTA lungo il
+    -- corridoio (dal fronte all'angolo più vicino del bersaglio dentro
+    -- la larghezza dell'unità), con il movimento meno il perno usato
+    local disp = charge_movimentoDisponibile(session) * INCH_TO_TTS
+    local portataT = charge_portata(session) * INCH_TO_TTS     -- F42: col terreno
+    local inLinea, zMin = false, math.huge
+    if session.corr then
+        local fwd = charge_getFrontLine(myBases)
+        local sL, sR = session.corr.sL, session.corr.sR
+        local larg = math.sqrt((sR.x - sL.x) ^ 2 + (sR.z - sL.z) ^ 2)
+        local ux, uz = (sR.x - sL.x) / larg, (sR.z - sL.z) / larg
+        for _, b in ipairs(suoi) do
+            local info = main_parseNickname(b.getName())
+            for _, c in ipairs(main_baseRectOfType(b, info and info.unitType).corners) do
+                local rx, rz = c.x - sL.x, c.z - sL.z
+                local lz = rx * fwd.x + rz * fwd.z
+                local lx = rx * ux + rz * uz
+                if lz >= 0 and lx >= 0 and lx <= larg then
+                    inLinea = true
+                    if lz < zMin then zMin = lz end
+                end
+            end
+        end
+    end
+    if not inLinea then
+        if d > disp + 0.01 then return esci("rosso", "Fuori portata") end
+        return esci("arancio", "Il bersaglio non è in linea retta")
+    end
+    d = zMin   -- distanza mostrata = quella che la carica percorre
+    if zMin > portataT + 0.01 then return esci("rosso", "Fuori portata") end
+    if key ~= m.giusto then
+        if m.giusto and m.giustoDist and (m.giustoDist * INCH_TO_TTS) < zMin - 0.01 then
+            return esci("arancio", "Esiste un bersaglio più vicino in linea retta")
+        end
+        return esci("arancio", "Il bersaglio non può essere caricato")
+    end
+    local note = {}
+    if charge_chargeTestFor(session.attackerKey, key) and IEF_CHARGE_TEST_PASSED[session.attackerKey] ~= key then
+        table.insert(note, "Serve un test di morale")
+    end
+    if charge_isFlankCharge(session.attackerKey, key) then table.insert(note, "Carica sul fianco") end
+    return esci("ok", nil, (#note > 0) and table.concat(note, " - ") or nil)
+end
+
+function charge_mirinoTick(unitKey)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
+    local m = session and session.mirino
+    if not m or not m.obj or m.obj.isDestroyed() then return end
+    local p = m.obj.getPosition()
+    local key = charge_mirinoUnitaSotto(m, p.x, p.z)
+    local esito, testo = nil, nil
+    if key then esito, testo = charge_mirinoValuta(session, key) end
+    local col = (esito == "ok" and { 0.2, 0.9, 0.2 }) or (esito == "arancio" and { 1, 0.63, 0.13 })
+             or (esito == "rosso" and { 1, 0.2, 0.2 }) or GIALLO
+    local o = m.origine
+    session.lineaFilo = { points = { { o.x, quotaC(o.x, o.z), o.z }, { p.x, quotaC(p.x, p.z), p.z } }, color = col, thickness = 0.08 }
+    charge_setLines(unitKey)
+    m.valido = (esito == "ok")
+    m.bersaglio = key
+    if not key then
+        charge_mirinoEvidenzia(m, nil)
+        -- F41f: distanza dal fronte al mirino e movimento disponibile
+        -- (movimento pieno meno il perno già usato)
+        local meta = charge_getUnitMeta(session.myBases[1])
+        local ut = meta and main_getUnitType(meta.unitType)
+        local disp = math.max(0, ((ut and ut.move_inches) or 0) - (session.pivotUsed or 0))
+        local d = math.sqrt((p.x - o.x) ^ 2 + (p.z - o.z) ^ 2) / INCH_TO_TTS
+        charge_mirinoTesto(session, string.format('%.2f" - Movimento disponibile %.2f"', d, disp),
+            d > disp + 0.01 and IEF_CHARGE_MIRINO_COLORI.rosso or "#FFFFFF")
+        return
+    end
+    charge_mirinoEvidenzia(m, key, esito)
+    charge_mirinoTesto(session, testo, IEF_CHARGE_MIRINO_COLORI[esito] or "#FFFFFF")
+end
+
+function charge_mirinoRitorna(session)
+    local m = session and session.mirino
+    if not m or not m.obj or m.obj.isDestroyed() then return end
+    m.obj.setPosition(Vector(m.start.x, m.start.y, m.start.z))
+    m.obj.setRotation(Vector(m.rot.x, m.rot.y, m.rot.z))
+    m.obj.setVelocity(Vector(0, 0, 0))
+    session.lineaFilo = nil
+    charge_setLines(session.attackerKey)
+    charge_mirinoEvidenzia(m, nil)
+    charge_mirinoTesto(session, "Trascina il mirino sul bersaglio", "#FFFFFF")
+end
+
+-- ============================================================
+-- Perno a maniglia della carica (massimo 2" in tutto)
+-- ============================================================
+function charge_pernoToggle(unitKey, lato)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
+    if not session then return end
+    local era = session.perno and session.perno.lato
+    charge_pernoOff(session, false)
+    if era == lato then return end
+    local residuo = IEF_CHARGE_PIVOT_MAX - (session.pivotUsed or 0)
+    local p = session.activePlayer
+    if residuo <= 0.01 then
+        if p then warningToColor("Perno massimo (2\") già usato", p, "Yellow", 4, true) end
+        return
+    end
+    if #session.myBases < 2 then
+        if p then warningToColor("Unità a base singola: perno non applicabile", p, "Yellow", 4, true) end
+        return
+    end
+    local sx, dx, fwd = main_pivotCorners(session.myBases)
+    if not sx then return end
+    local larghezza = math.sqrt((dx.x - sx.x) ^ 2 + (dx.z - sx.z) ^ 2)
+    if larghezza < 0.01 then return end
+    -- il mirino si toglie mentre si gira: torna dopo il perno
+    charge_mirinoStop(session)
+    local pr = { lato = lato, sx = sx, dx = dx, fwd = fwd, larghezza = larghezza, maxIn = residuo,
+                 start = {}, rot = {}, bloccate = {} }
+    for _, b in ipairs(session.myBases) do
+        pr.start[b.getGUID()] = b.getPosition()
+        pr.rot[b.getGUID()] = b.getRotation()
+        if not b.getLock() then b.setLock(true); table.insert(pr.bloccate, b) end
+    end
+    session.perno = pr
+    -- ventaglio (come nel movimento)
+    local segno = (lato == "left") and 1 or -1
+    local c = (lato == "left") and sx or dx
+    local lontano = (lato == "left") and dx or sx
+    local maxAng = (residuo * INCH_TO_TTS) / larghezza
+    local cy = quotaC(c.x, c.z)
+    local linee = {}
+    local function raggio(a, sp)
+        local x, z = ruotaC(c, lontano.x, lontano.z, a)
+        table.insert(linee, { points = { { c.x, cy, c.z }, { x, quotaC(x, z), z } }, color = GIALLO, thickness = sp })
+    end
+    raggio(0, 0.04)
+    local k = 1
+    while k < residuo - 0.05 do raggio(segno * (k * INCH_TO_TTS) / larghezza, 0.025); k = k + 1 end
+    raggio(segno * maxAng, 0.04)
+    local pts = {}
+    for i = 0, 24 do
+        local x, z = ruotaC(c, lontano.x, lontano.z, segno * maxAng * i / 24)
+        table.insert(pts, { x, quotaC(x, z), z })
+    end
+    table.insert(linee, { points = pts, color = GIALLO, thickness = 0.04 })
+    session.lineePerno = linee
+    charge_setLines(unitKey)
+    -- maniglia davanti all'angolo che avanza
+    local off = 0.4 * INCH_TO_TTS
+    local hx, hz = lontano.x + fwd.x * off, lontano.z + fwd.z * off
+    pr.hStart = { x = hx, y = (main_groundY(hx, hz, 2) or 1.0) + 0.3, z = hz }
+    spawnObject({
+        type = "Checker_white", position = { pr.hStart.x, pr.hStart.y, pr.hStart.z }, rotation = { 0, 0, 0 },
+        scale = { 0.45, 0.45, 0.45 }, sound = false,
+        callback_function = function(o)
+            if session.perno ~= pr then o.destruct(); return end
+            o.setColorTint(GIALLO)
+            o.setName(lato == "left" and "Perno Sn" or "Perno Ds")
+            pr.obj = o
+            IEF_CHARGE_HANDLES[o.getGUID()] = { unitKey = unitKey, tipo = "perno" }
+        end,
+    })
+    charge_mirinoTesto(session, string.format('Perno %s: trascina la maniglia (massimo %.2f")', lato == "left" and "Sn" or "Ds", residuo), "#FFFFFF")
+end
+
+-- Spegne il perno; ripristina se a metà; rimette il mirino se richiesto
+function charge_pernoOff(session, senzaMirino)
+    local pr = session and session.perno
+    if not pr then return end
+    session.perno = nil
+    if pr.waitId then Wait.stop(pr.waitId) end
+    if pr.obj and not pr.obj.isDestroyed() then
+        IEF_CHARGE_HANDLES[pr.obj.getGUID()] = nil
+        pr.obj.destruct()
+    end
+    if pr.inMano then
+        for _, b in ipairs(session.myBases) do
+            local g = b.getGUID()
+            if pr.start[g] then b.setPosition(pr.start[g]) end
+            if pr.rot[g] then b.setRotation(pr.rot[g]) end
+        end
+    end
+    for _, b in ipairs(pr.bloccate or {}) do
+        if b and not b.isDestroyed() then b.setLock(false) end
+    end
+    session.lineePerno = nil
+    charge_setLines(session.attackerKey)
+    if not senzaMirino and IEF_CHARGE_DECLARE_SESSION[session.attackerKey] == session then
+        charge_mirinoSpawn(session.attackerKey)
+    end
+end
+
+function charge_pernoMisura(pr, p)
+    local c = (pr.lato == "left") and pr.sx or pr.dx
+    local ang = angoloAttornoC(c, pr.hStart.x, pr.hStart.z, p.x, p.z)
+    if (pr.lato == "left" and ang < 0) or (pr.lato == "right" and ang > 0) then ang = 0 end
+    local maxAng = (pr.maxIn * INCH_TO_TTS) / pr.larghezza
+    local oltre = math.abs(ang) > maxAng + 1e-4
+    if oltre then ang = (ang < 0) and -maxAng or maxAng end
+    return ang, math.abs(ang) * pr.larghezza / INCH_TO_TTS, oltre
+end
+
+function charge_pernoTick(unitKey)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
+    local pr = session and session.perno
+    if not pr or not pr.obj or pr.obj.isDestroyed() then return end
+    local ang, pollici, oltre = charge_pernoMisura(pr, pr.obj.getPosition())
+    local c = (pr.lato == "left") and pr.sx or pr.dx
+    local gradi = math.deg(ang)
+    for _, b in ipairs(session.myBases) do
+        local g = b.getGUID()
+        local s0, r0 = pr.start[g], pr.rot[g]
+        if s0 and r0 then
+            local x, z = ruotaC(c, s0.x, s0.z, ang)
+            b.setPosition(Vector(x, s0.y, z))
+            b.setRotation(Vector(r0.x, r0.y - gradi, r0.z))
+        end
+    end
+    charge_mirinoTesto(session, oltre and string.format('max %.2f"', pr.maxIn)
+        or string.format('Perno %s %.2f"', pr.lato == "left" and "Sn" or "Ds", pollici), oltre and "#FF4040" or "#FFFFFF")
+end
+
+function charge_pernoFinalizza(unitKey, pollici)
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
+    local pr = session and session.perno
+    if not pr then return end
+    -- posa di partenza, poi il perno esatto
+    for _, b in ipairs(session.myBases) do
+        local g = b.getGUID()
+        if pr.start[g] then b.setPosition(pr.start[g]) end
+        if pr.rot[g] then b.setRotation(pr.rot[g]) end
+    end
+    pr.inMano = false
+    local lato = pr.lato
+    if pollici < 0.01 then
+        if pr.obj and not pr.obj.isDestroyed() then
+            pr.obj.setPosition(Vector(pr.hStart.x, pr.hStart.y, pr.hStart.z))
+            pr.obj.setRotation(Vector(0, 0, 0))
+        end
+        return
+    end
+    charge_pernoOff(session, true)
+    if main_pivotFrontCorner(session.myBases, lato, pollici) then
+        session.pivotUsed = (session.pivotUsed or 0) + pollici
+    end
+    -- F41e: posizione e rotazione nuove delle basi si leggono solo
+    -- qualche frame dopo (fisica): corridoio e mirino si ricalcolano
+    -- quando l'unità ha davvero girato
+    charge_redraw(unitKey)
+    charge_dopoSpostamento(unitKey)
+end
+
+function charge_dopoSpostamento(unitKey)
+    Wait.frames(function()
+        if not IEF_CHARGE_DECLARE_SESSION[unitKey] then return end
+        charge_redraw(unitKey)
+        charge_mirinoSpawn(unitKey)
+    end, 5)
+end
+
+-- ============================================================
+-- F41c: durante il trascinamento (mirino o maniglia del perno) il
+-- pannello di dichiarazione lascia il posto a un pannellino con il
+-- solo messaggio (stesso id txtMirino_<unità>); al rilascio torna.
+-- ============================================================
+function charge_pannellino(session)
+    local pan = session.panel3DObj
+    if not pan or pan.isDestroyed() then return end
+    local P = MOVEPANEL
+    local fronte = main_detectFormation(session.myBases)
+    local x, y, z = main_calcolaPosizionePannello(fronte, #session.myBases)
+    pan.UI.setXml(string.format([[
+        <Panel id="panelChargeDrag_%s" active="true" color="%s" width="760" height="90" offsetXY="0 320" position="%f %f %f" rotation="-90 0 0" visibility="%s">
+            <HorizontalLayout spacing="10" padding="16 16 10 10" childAlignment="MiddleCenter" childForceExpandWidth="false">
+                <Text id="txtMirino_%s" text="" font="%s" fontStyle="Normal" fontSize="20" color="#FFFFFF" alignment="MiddleCenter" preferredWidth="560"/>
+                <Button id="btnMirinoChiudi_%s" text="Chiudi" font="%s" fontSize="18" color="%s" textColor="White" preferredWidth="140" preferredHeight="50" onClick="Global/charge_mirinoChiudi"/>
+            </HorizontalLayout>
+        </Panel>
+        ]], session.attackerKey, P.bg, x, y, z, session.activePlayer.color, session.attackerKey, P.font,
+            session.attackerKey, P.font, P.close))
+end
+
+function charge_pannelloTorna(session)
+    charge_redraw(session.attackerKey)
+    if session.ultimoTesto then
+        charge_mirinoTesto(session, session.ultimoTesto, session.ultimoColore or "#FFFFFF")
+    end
+end
+
+-- ============================================================
+-- Eventi (da onObjectPickUp / onObjectDrop in 0_main/general)
+-- ============================================================
+function charge_mirinoOnPickUp(player_color, obj)
+    local h = IEF_CHARGE_HANDLES[obj.getGUID()]
+    if not h then return end
+    local session = IEF_CHARGE_DECLARE_SESSION[h.unitKey]
+    if not session or session.activePlayer.color ~= player_color then return end
+    if h.tipo == "mirino" and session.mirino then
+        local m = session.mirino
+        charge_pannellino(session)
+        if m.waitId then Wait.stop(m.waitId) end
+        m.waitId = Wait.time(function() charge_mirinoTick(h.unitKey) end, 0.1, -1)
+    elseif h.tipo == "perno" and session.perno then
+        local pr = session.perno
+        charge_pannellino(session)
+        pr.inMano = true
+        if pr.waitId then Wait.stop(pr.waitId) end
+        pr.waitId = Wait.time(function() charge_pernoTick(h.unitKey) end, 0.05, -1)
+    end
+end
+
+function charge_mirinoOnDrop(player_color, obj)
+    local h = IEF_CHARGE_HANDLES[obj.getGUID()]
+    if not h then return end
+    local session = IEF_CHARGE_DECLARE_SESSION[h.unitKey]
+    if not session then return end
+    if h.tipo == "mirino" and session.mirino then
+        local m = session.mirino
+        if m.waitId then Wait.stop(m.waitId); m.waitId = nil end
+        charge_mirinoTick(h.unitKey)
+        charge_pannelloTorna(session)
+        if m.valido then
+            -- conferma Dichiara / Chiudi (o test di morale): flusso di sempre
+            charge_checkTarget(session.activePlayer, h.unitKey)
+        else
+            Wait.frames(function() charge_mirinoRitorna(session) end, 2)
+        end
+    elseif h.tipo == "perno" and session.perno then
+        local pr = session.perno
+        if pr.waitId then Wait.stop(pr.waitId); pr.waitId = nil end
+        local _, pollici = charge_pernoMisura(pr, obj.getPosition())
+        Wait.frames(function()
+            charge_pernoFinalizza(h.unitKey, pollici)
+            -- senza rotazione il pannello torna qui (con il perno torna
+            -- già da charge_pernoFinalizza -> charge_redraw)
+            if IEF_CHARGE_DECLARE_SESSION[h.unitKey] == session and session.perno then charge_pannelloTorna(session) end
+        end, 2)
+    end
+end
+
+-- Chiudi del pannellino (come nel tiro): chiude la dichiarazione
+function charge_mirinoChiudi(player, value, id)
+    local unitKey = id and id:match("^btnMirinoChiudi_(.+)$")
+    if not unitKey then return end
+    local session = IEF_CHARGE_DECLARE_SESSION[unitKey]
+    if session then
+        if charge_pernoOff then charge_pernoOff(session, true) end
+        charge_declareRestorePosition(session)
+    end
+    charge_close(unitKey)
+    UI.setAttribute("confirm_panel_charge", "active", "false")
 end

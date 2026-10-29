@@ -548,12 +548,14 @@ function onObjectPickUp(player_color, obj)
     main_generalOnPickUp(player_color, obj)
     if move_manualOnPickUp then move_manualOnPickUp(player_color, obj) end
     if shoot_mirinoOnPickUp then shoot_mirinoOnPickUp(player_color, obj) end
+    if charge_mirinoOnPickUp then charge_mirinoOnPickUp(player_color, obj) end
 end
 
 function onObjectDrop(player_color, obj)
     main_generalOnDrop(player_color, obj)
     if move_manualOnDrop then move_manualOnDrop(player_color, obj) end
     if shoot_mirinoOnDrop then shoot_mirinoOnDrop(player_color, obj) end
+    if charge_mirinoOnDrop then charge_mirinoOnDrop(player_color, obj) end
 end
 
 -- ============================================================

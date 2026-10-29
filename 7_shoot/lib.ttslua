@@ -626,6 +626,8 @@ end
 -- dai controlli: il click sul tiro resta veloce.
 function shoot_preparaOstacoli(ostacoli, escludi, area)
     local out = {}
+    -- F42: elementi di terreno che bloccano la vista nell'area
+    out.terreni = shoot_terreniVista(area)
     for _, r in ipairs(ostacoli) do
         if not escludi[r.key] then
             local rr = rettangoloRistretto(r)
@@ -701,6 +703,10 @@ function shoot_corridoi(mioRect, poly, ostacoli, escludi, prep, soloUno)
                    and shoot_polyOverlap(corr, o.poly) then
                     blocca = o.r; break
                 end
+            end
+            -- F42: anche il terreno che blocca la vista chiude il corridoio
+            if blocca == nil and ristretti.terreni and #ristretti.terreni > 0 then
+                blocca = shoot_terrenoNelCorridoio(corr, mioRect, q, ristretti.terreni)
             end
             table.insert(out, { punto = q, poligono = corr, libero = (blocca == nil), blocca = blocca })
             if soloUno and blocca == nil then return out end
@@ -1671,7 +1677,7 @@ function shoot_mirinoStart(player, basiObjs, host)
     end
     -- F38f: il mirino è un gettone con l'icona "Tiro" della UI
     -- (asset personalizzati del Global); senza icona, la pedina gialla
-    local url = main_uiIconUrl("Tiro")
+    local url = main_uiIconUrl("mirino_tiro")
     if url then
         spawnObjectData({
             data = {
@@ -1908,4 +1914,96 @@ end
 -- Pulsante Chiudi del pannellino: annulla mirino e cono
 function shoot_mirinoChiudi(player, value, id)
     shoot_ResetLines(player)
+end
+
+-- ============================================================
+-- F42: TERRENI CHE BLOCCANO LA VISTA
+-- Decisione Max: colline, boschi, edifici (elementi con altezza)
+-- bloccano il tiro; cespugli, rocce lievi, campi, fossati,
+-- paludi, laghetti, fiume no. L'attributo sta sull'elemento sul
+-- tavolo: tag "BLOCCA_VISTA" (gli elementi arrivano dalla bag dei
+-- terreni, non dalle carte). L'elemento sotto la base che tira o
+-- sotto il bersaglio non blocca: dalla collina si tira, nel bosco
+-- si viene tirati (con il -1 di copertura).
+-- ============================================================
+IEF_TAG_BLOCCA_VISTA = "BLOCCA_VISTA"
+IEF_LOS_TERRENO_PASSO = 0.25     -- pollici fra un campione e l'altro lungo il corridoio
+
+function shoot_bloccaVista(o)
+    if not o or not o.getTags then return false end
+    for _, t in ipairs(o.getTags() or {}) do
+        local u = string.upper(t)
+        if u == IEF_TAG_BLOCCA_VISTA or u == "BLOCCAVISTA" then return true end
+    end
+    return false
+end
+
+-- Elementi che bloccano la vista (con il loro riquadro) nell'area
+function shoot_terreniVista(area)
+    local out = {}
+    for _, o in ipairs(getAllObjects()) do
+        if shoot_bloccaVista(o) then
+            local b = o.getBounds()
+            if b and b.center and b.size then
+                local e = { obj = o, x1 = b.center.x - b.size.x / 2, x2 = b.center.x + b.size.x / 2,
+                            z1 = b.center.z - b.size.z / 2, z2 = b.center.z + b.size.z / 2 }
+                if not area or not (e.x2 < area.x1 or e.x1 > area.x2 or e.z2 < area.z1 or e.z1 > area.z2) then
+                    table.insert(out, e)
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- Oggetti colpiti da un raggio verso il basso nel punto (x, z)
+local function sottoIlPunto(x, z)
+    local set = {}
+    local hits = Physics.cast({ origin = Vector(x, 30, z), direction = Vector(0, -1, 0), type = 1, max_distance = 40 })
+    for _, h in ipairs(hits or {}) do
+        if h.hit_object then set[h.hit_object.getGUID()] = true end
+    end
+    return set
+end
+
+-- Primo elemento che blocca la vista dentro il corridoio corr
+-- (fl, fr, fr+v, fl+v), esclusi quelli sotto la base che tira e
+-- sotto il punto del bersaglio q. Ritorna { obj } o nil.
+function shoot_terrenoNelCorridoio(corr, mioRect, q, terreni)
+    local cx1, cx2, cz1, cz2 = math.huge, -math.huge, math.huge, -math.huge
+    for _, v in ipairs(corr) do
+        cx1, cx2 = math.min(cx1, v.x), math.max(cx2, v.x)
+        cz1, cz2 = math.min(cz1, v.z), math.max(cz2, v.z)
+    end
+    local candidati = {}
+    for _, e in ipairs(terreni) do
+        if not (e.x2 < cx1 or e.x1 > cx2 or e.z2 < cz1 or e.z1 > cz2) then table.insert(candidati, e) end
+    end
+    if #candidati == 0 then return nil end
+
+    local esclusi = sottoIlPunto(mioRect.x, mioRect.z)
+    for g in pairs(sottoIlPunto(q.x, q.z)) do esclusi[g] = true end
+
+    local fl, fr, flv = corr[1], corr[2], corr[4]
+    local vx, vz = flv.x - fl.x, flv.z - fl.z
+    local lung = math.sqrt(vx * vx + vz * vz)
+    local n = math.max(1, math.ceil(lung / (IEF_LOS_TERRENO_PASSO * INCH_TO_TTS)))
+    for _, e in ipairs(candidati) do
+        if not esclusi[e.obj.getGUID()] then
+            for _, u in ipairs({ 0.1, 0.5, 0.9 }) do
+                local ax, az = fl.x + (fr.x - fl.x) * u, fl.z + (fr.z - fl.z) * u
+                for i = 0, n do
+                    local t = i / n
+                    local px, pz = ax + vx * t, az + vz * t
+                    if px >= e.x1 and px <= e.x2 and pz >= e.z1 and pz <= e.z2 then
+                        local hits = Physics.cast({ origin = Vector(px, 30, pz), direction = Vector(0, -1, 0), type = 1, max_distance = 40 })
+                        for _, h in ipairs(hits or {}) do
+                            if h.hit_object == e.obj then return { obj = e.obj, terreno = true } end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
 end
