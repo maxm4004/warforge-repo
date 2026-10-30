@@ -1,0 +1,26 @@
+-- ============================================================
+-- WARFORGE IEF — 3_deploy/constants.ttslua
+-- Costanti di configurazione della cartella (valori fissi:
+-- misure, tolleranze, colori, interruttori, GUID, tabelle di
+-- regole). Lo stato della partita resta in state.ttslua.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- (da 3_deploy/lib.ttslua)
+-- ------------------------------------------------------------
+-- terrains: mappa nome → URL texture per diffuseURL = "erba_verde" ecc.
+DEPLOYMENT_TERRAINS = {
+    terra_fango = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523998487/F1855119665D8199F8E2AD87F6C8DB9ADEC7E6F9/",
+    erba_mista  = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523994816/56D1D3CBC31E99107B1BAD94F46FA7B335540040/",
+    autunno     = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523990770/9EBBA093EC1C1CA2CEBD5286AB2BEAF40E79FB4E/",
+    terra_secca = "https://steamusercontent-a.akamaihd.net/ugc/1014942732523987577/7B0CDDFBEF5CF9960B959A037B0140030E2B05A2/",
+    erba_verde  = "https://steamusercontent-a.akamaihd.net/ugc/1014942544699601731/8CA9A0469A8383413D7ED3B2732CC52D29F840C2/",
+    sabbia      = "https://steamusercontent-a.akamaihd.net/ugc/1014942732524001712/C11D0581583CC167D7A51ACA1763CBA4EF43E44C/",
+}
+
+-- ------------------------------------------------------------
+-- (da 3_deploy/state.ttslua)
+-- ------------------------------------------------------------
+IEF_URL_ARMY1 = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/generated/tts-armies/ang-army.json"
+
+IEF_URL_ARMY2 = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/generated/tts-armies/vik-army.json"

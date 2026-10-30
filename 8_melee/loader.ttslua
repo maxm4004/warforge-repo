@@ -3,6 +3,7 @@
 -- Ordine: state → lib → phase → register → callbacks → hooks
 -- ============================================================
 
+require("rulesets.imperifeudi.8_melee.constants")
 require("rulesets.imperifeudi.8_melee.state")
 require("rulesets.imperifeudi.8_melee.lib")
 require("rulesets.imperifeudi.8_melee.phase")

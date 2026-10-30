@@ -1089,29 +1089,6 @@ function charge_hasArmaDaTiro(armi)
     end
     return false
 end
--- ============================================================
--- STILE LISTE LATERALI (nuova grafica, come pannello tiro/dadi)
--- Usato da: liste Cariche/Movimenti di carica e Reazioni.
--- Le righe sono Button (click), con id invariati: i refresh via
--- UI.setAttribute (testo/textColor) continuano a funzionare.
--- ============================================================
-LISTPANEL = LISTPANEL or {
-    width     = 420,
-    offsetXY  = "-10 -330",
-    padding   = 10,
-    spacing   = 2,
-    titleH    = 22,
-    noteH     = 16,
-    rowH      = 24,
-    bg        = "rgba(0,0,0,0.70)",
-    rowBg     = "rgba(1,1,1,0.06)",
-    gold      = "#FFD833",
-    grey      = "#BBBBBB",
-    todo      = "White",     -- riga da fare
-    done      = "#5BD35B",   -- riga fatta / scelta
-    font      = "warforge_font",
-    rowFont   = 10,          -- testo delle righe (piccolo: la riga si legge per intero)
-}
 
 -- ============================================================
 -- FUNZIONE: ui_listPanelXml(o)
@@ -1345,7 +1322,6 @@ end
 -- delle basi del bersaglio (rettangoli reali delle basi); una
 -- base è "dietro" se tutti i suoi 4 angoli lo sono.
 -- ============================================================
-CHARGE_FLANK_TOL = 0.02
 function charge_isFlankCharge(chargerKey, targetKey)
     local d = charge_flankDetails(chargerKey, targetKey)
     return d ~= nil and d.dietro >= 2
@@ -1689,7 +1665,6 @@ end
 -- Riga Attacco processata: il lato slot ha già mosso (carica o
 -- evasione) o la carica è chiusa.
 -- ============================================================
-CHARGE_ROW_DONE_COLOR = "#5BD35B"
 function charge_attackRowDone(slot, elemento)
     if elemento.step == CHARGE_STEP.CLO then return true end
     return (slot == 1 and elemento.movedArmy1) or (slot == 2 and elemento.movedArmy2) or false
@@ -1999,6 +1974,19 @@ function charge_closestBasePair(basesA, basesB)
 
     return migliorA, migliorB, migliorDist
 end
+
+-- Angolo (radianti, -pi..pi) del vettore (x, y): sostituisce
+-- math.atan2, deprecata, usando solo math.atan a un argomento.
+function charge_angolo(y, x)
+    if x > 0 then return math.atan(y / x) end
+    if x < 0 then
+        if y >= 0 then return math.atan(y / x) + math.pi end
+        return math.atan(y / x) - math.pi
+    end
+    if y > 0 then return math.pi / 2 end
+    if y < 0 then return -math.pi / 2 end
+    return 0
+end
 -- ============================================================
 -- FUNZIONE: charge_alignToEnemy(myKey, enemyKey)
 -- Regolamento, MOVIMENTO DI CARICA: "Quando l'unità che carica
@@ -2014,20 +2002,6 @@ end
 --    con una base nemica di quel lato).
 -- Ritorna il lato: "FRONTE" | "FIANCO" | "RETRO" (nil se non fatto).
 -- ============================================================
-CHARGE_ALIGN_TOL = 0.1
-
--- Angolo (radianti, -pi..pi) del vettore (x, y): sostituisce
--- math.atan2, deprecata, usando solo math.atan a un argomento.
-function charge_angolo(y, x)
-    if x > 0 then return math.atan(y / x) end
-    if x < 0 then
-        if y >= 0 then return math.atan(y / x) + math.pi end
-        return math.atan(y / x) - math.pi
-    end
-    if y > 0 then return math.pi / 2 end
-    if y < 0 then return -math.pi / 2 end
-    return 0
-end
 function charge_alignToEnemy(myKey, enemyKey, sulFianco)
     local mie, sue = charge_getUnitBases(myKey), charge_getUnitBases(enemyKey)
     if #mie == 0 or #sue == 0 then return nil end
@@ -2632,28 +2606,6 @@ function charge_elephantContact(elemento)
     end
 end
 
--- ============================================================
--- F41: MIRINO DI CARICA E PERNO A MANIGLIA
--- Clic su CARICA (controlli dell'unità di sempre): pannello con
--- Perno Sn / Perno Ds a maniglia (massimo 2" in tutto) e il
--- mirino (icona "mirino_carica") davanti al fronte, con il
--- corridoio della carica in giallo. Il giocatore trascina il
--- mirino su un'unità nemica; nel pannello:
---   verde   : bersaglio valido (eventuale "Serve un test di
---             morale" / "Carica sul fianco")
---   rosso   : fuori portata
---   arancio : in portata ma non in linea retta, bersaglio più
---             vicino in linea retta, o non caricabile
--- Rilasciato sul verde: charge_checkTarget (conferma Dichiara /
--- Chiudi o il test di morale, come prima). Altrimenti torna.
--- IEF_CHARGE_USA_MIRINO = false: gestione precedente.
--- ============================================================
-IEF_CHARGE_USA_MIRINO     = (IEF_CHARGE_USA_MIRINO ~= false)
-IEF_CHARGE_MIRINO_SCALA   = IEF_CHARGE_MIRINO_SCALA or 0.20
-IEF_CHARGE_MIRINO_DAVANTI = IEF_CHARGE_MIRINO_DAVANTI or 0.8
-IEF_CHARGE_MIRINO_ROT     = IEF_CHARGE_MIRINO_ROT or { x = 0, y = 45, z = 0 }
-IEF_CHARGE_MIRINO_COLORI  = { ok = "#40FF40", arancio = "#FFA020", rosso = "#FF4040" }
-IEF_CHARGE_PIVOT_MAX      = 2
 IEF_CHARGE_LINES          = IEF_CHARGE_LINES or {}     -- unitKey -> linee globali
 IEF_CHARGE_HANDLES        = IEF_CHARGE_HANDLES or {}   -- guid -> { unitKey, tipo }
 
@@ -2694,8 +2646,6 @@ function charge_setLines(unitKey)
     callHandler("aggiornaLinee")
 end
 
--- Corridoio della carica in giallo (stessa geometria di charge_findLineTarget)
-IEF_CHARGE_DEBUG_CORRIDOIO = false  -- F41f: diagnostica del corridoio
 
 -- F42: portata della carica in linea retta: movimento disponibile
 -- percorso dritto davanti al fronte, con il costo del terreno

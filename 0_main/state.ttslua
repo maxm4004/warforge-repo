@@ -81,15 +81,6 @@ ArmyYaw = {
     ["ButtonBase"]   =  { [1] = 0, [2] = 180 },
 }
 
--- ============================================================
--- ENUM: CAMERA_ZONE — nomi validi per IEF_CAMERA_ZONE
--- ============================================================
-CAMERA_ZONE = {
-    ARMY_ROLL_DICES = "ArmyRollDices",
-    ARMY_CARDS      = "ArmyCards",
-    ARMY_BLOCK      = "ArmyBlock",
-    ARMY_HOME       = "ArmyHome",
-}
 
 -- ============================================================
 -- IEF_CAMERA_ZONE — ora referenzia tabelle già esistenti
@@ -125,39 +116,7 @@ IEF_CAMERA_ZONE = IEF_CAMERA_ZONE or {
     GEN = "Generale",
 }
 
-ARMIES_UNIT_LABELS = {
-["ANG"] = "AngloSassone",					
-["VIK"] = "Vichinga",				
-["NOR"] = "Normanna",				
-["FRA"] = "Franca",			
-["IRL"] = "Irlandese",		
-["COM"] = "Italiana",			
-["LON"] = "Longobarda",				
-["BIZ"] = "Bizantina",			
-["CRO"] = "Crociata", 				
-["SAS"] = "Sassanida", 				
-["TED"] = "Tedesca",
-["SEL"] = "Turca", 			
-["TEU"] = "Teutonica", 				
-["RUS"] = "Russa",	
-}
 
-ARMIES_LABELS = {
-["ANG"] = "AngloSassone",					
-["VIK"] = "Vichingo",				
-["NOR"] = "Normanno",				
-["FRA"] = "Franco Carolingio",			
-["IRL"] = "Irlandese",		
-["COM"] = "Italiano",			
-["LON"] = "Longobardo",				
-["BIZ"] = "Bizantino",			
-["CRO"] = "Crociato", 				
-["SAS"] = "Sassanida", 				
-["TED"] = "Tedesco",
-["SEL"] = "Turco", 			
-["TEU"] = "Teutonico", 				
-["RUS"] = "Russo",	
-}
 
 IEF_RANGE_CIRCLE_SHOWN = IEF_RANGE_CIRCLE_SHOWN or {}
 IEF_RANGE_HIGHLIGHTED = IEF_RANGE_HIGHLIGHTED or {}

@@ -19,8 +19,6 @@ ARMY = {
     }
 }
 
-IEF_URL_ARMY1 = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/generated/tts-armies/ang-army.json"
-IEF_URL_ARMY2 = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/generated/tts-armies/vik-army.json"
 
 DEPLOYMENT = DEPLOYMENT or {
     initialized = false,

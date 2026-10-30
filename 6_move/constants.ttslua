@@ -1,0 +1,17 @@
+-- ============================================================
+-- WARFORGE IEF — 6_move/constants.ttslua
+-- Costanti di configurazione della cartella (valori fissi:
+-- misure, tolleranze, colori, interruttori, GUID, tabelle di
+-- regole). Lo stato della partita resta in state.ttslua.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- (da 6_move/lib.ttslua)
+-- ------------------------------------------------------------
+IEF_MOVE_MANUAL_TICK = 0.05
+
+IEF_MOVE_MANUAL_LIFT = 0.15     -- le basi che seguono restano sollevate durante il trascinamento
+
+MOVEPANEL.manualOn   = "#2E7DB8"
+
+IEF_MOVE_PIVOT_HANDLE_AHEAD = 0.4     -- pollici davanti all'angolo

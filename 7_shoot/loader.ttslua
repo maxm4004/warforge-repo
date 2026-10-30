@@ -3,6 +3,7 @@
 -- Ordine: state → lib → phase → register → callbacks → hooks
 -- ============================================================
 
+require("rulesets.imperifeudi.7_shoot.constants")
 require("rulesets.imperifeudi.7_shoot.state")
 require("rulesets.imperifeudi.7_shoot.lib")
 require("rulesets.imperifeudi.7_shoot.phase")

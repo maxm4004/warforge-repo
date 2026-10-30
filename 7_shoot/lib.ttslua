@@ -996,7 +996,6 @@ end
 -- IEF_SHOOTING.angle (45°).
 -- Ritorna: numero, basi pronte, basi nemiche raggiunte.
 -- ============================================================
-IEF_SHOOT_GITTATA_UNITA = true   -- marcatore di versione (F13), letto da debug_shootBasi
 function shoot_basiPronte(basiObjs, basiNemiche, rangeUnits, angoloGradi)
     if not basiObjs or #basiObjs == 0 then return 0, {}, {} end
     if not basiNemiche or #basiNemiche == 0 then return 0, {}, {} end
@@ -1352,36 +1351,6 @@ function shoot_diceScheda(titolo, shooterKey, targetKey, weapon, basiPronte, raf
     }
     return scheda, numDadi, soglia
 end
--- ============================================================
--- PANNELLO INFO TIRO
--- Visibile al giocatore che tira dal clic sul pulsante base
--- (bersaglio trovato) fino al tiro o a Chiudi. Solo
--- informazioni, nessun pulsante: Tiro/Chiudi restano in
--- confirm_panel_shoot. Stile del pannello dadi.
--- ============================================================
-SHOOTINFO = SHOOTINFO or {
-    width     = 560,
-    colWidth  = 262,
-    padding   = 12,
-    titleH    = 24,
-    noteH     = 16,
-    rowH      = 17,
-    gap       = 6,
-    colRows   = 7,     -- righe per colonna (Tiratore / Bersaglio)
-    rows      = 8,     -- righe per colonna della parte bassa (Dadi / Per colpire)
-    valWidth  = 80,    -- larghezza della colonna valori (Dadi / Per colpire)
-    bg        = "rgba(0,0,0,0.70)",
-    gold      = "#FFD833",
-    grey      = "#BBBBBB",
-    bonus     = "#5BD35B",
-    malus     = "#FF6B6B",
-    statoH    = 22,
-    esitoH    = 26,
-    maxFaces  = 16,
-    faceSize  = 28,
-    faceGap   = 4,
-    faceKo    = "rgba(1,1,1,0.3)",
-}
 
 -- ============================================================
 -- FUNZIONE: shoot_infoPanelXml()
@@ -1768,9 +1737,6 @@ function shoot_mirinoEvidenzia(m, key, valido)
     end
 end
 
--- Esito del bersaglio key: valido, testo
-IEF_SHOOT_MIRINO_PRECONTROLLO = false   -- true = senza bersaglio niente mirino (F38)
-IEF_SHOOT_MIRINO_COLORI = { ok = "#40FF40", arancio = "#FFA020", rosso = "#FF4040" }
 
 -- ============================================================
 -- F40: esito del bersaglio key -> esito ("ok"|"arancio"|"rosso"), testo
@@ -1916,18 +1882,6 @@ function shoot_mirinoChiudi(player, value, id)
     shoot_ResetLines(player)
 end
 
--- ============================================================
--- F42: TERRENI CHE BLOCCANO LA VISTA
--- Decisione Max: colline, boschi, edifici (elementi con altezza)
--- bloccano il tiro; cespugli, rocce lievi, campi, fossati,
--- paludi, laghetti, fiume no. L'attributo sta sull'elemento sul
--- tavolo: tag "BLOCCA_VISTA" (gli elementi arrivano dalla bag dei
--- terreni, non dalle carte). L'elemento sotto la base che tira o
--- sotto il bersaglio non blocca: dalla collina si tira, nel bosco
--- si viene tirati (con il -1 di copertura).
--- ============================================================
-IEF_TAG_BLOCCA_VISTA = "BLOCCA_VISTA"
-IEF_LOS_TERRENO_PASSO = 0.25     -- pollici fra un campione e l'altro lungo il corridoio
 
 -- F46: blocca la vista un elemento con tag BLOCCA_VISTA, Collina o
 -- Bosco (decisione Max: collina = Aperto + Collina, bosco =
@@ -1949,7 +1903,6 @@ function shoot_eCollina(o)
     return false
 end
 
-IEF_LOS_LIMITARE_POLLICI = 1    -- F46: "al limitare" del bosco, per base
 
 -- Elementi che bloccano la vista (con il loro riquadro) nell'area
 function shoot_terreniVista(area)

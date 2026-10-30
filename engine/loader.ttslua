@@ -1,3 +1,4 @@
+require("engine.constants")
 require("engine.dispatcher")
 require("engine.conditions")
 require("engine.boot")

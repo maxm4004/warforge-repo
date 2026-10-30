@@ -4,6 +4,7 @@
 -- Ordine: state → lib → phase → register → callbacks → hooks
 -- ============================================================
 
+require("rulesets.imperifeudi.3_deploy.constants")
 require("rulesets.imperifeudi.3_deploy.state")
 require("rulesets.imperifeudi.3_deploy.lib")
 require("rulesets.imperifeudi.3_deploy.phase")

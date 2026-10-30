@@ -640,9 +640,6 @@ end
 -- ============================================================
 IEF_MOVE_MANUAL      = IEF_MOVE_MANUAL or {}
 IEF_MOVE_PIVOT       = IEF_MOVE_PIVOT or {}
-IEF_MOVE_MANUAL_TICK = 0.05
-IEF_MOVE_MANUAL_LIFT = 0.15     -- le basi che seguono restano sollevate durante il trascinamento
-MOVEPANEL.manualOn   = "#2E7DB8"
 
 function move_btnManual(player, value, id)
     local unitKey = id:match("^btn_(.+)_MoveManual$")
@@ -1044,7 +1041,6 @@ function move_pivotManOn(unitKey, soloDir)
 end
 
 IEF_MOVE_PIVOT_HANDLES = IEF_MOVE_PIVOT_HANDLES or {}
-IEF_MOVE_PIVOT_HANDLE_AHEAD = 0.4     -- pollici davanti all'angolo
 
 function move_pivotManManiglia(m, dir, angolo)
     local off = IEF_MOVE_PIVOT_HANDLE_AHEAD * INCH_TO_TTS

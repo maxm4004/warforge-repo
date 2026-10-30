@@ -553,15 +553,6 @@ function melee_contactBases(myKey, enemyBases)
     return result
 end
 
--- ============================================================
--- FUNZIONE: melee_touchingBases(myKey, enemyBases)
--- Basi di myKey a contatto con una base nemica su QUALSIASI lato,
--- ma lungo un LATO (non solo per uno spigolo): il punto medio di
--- un lato di una delle due basi deve stare a meno di 0,05"
--- dall'altra. Basi affiancate che si sfiorano solo all'angolo
--- (es. base in overlap accanto al nemico) non contano.
--- ============================================================
-MELEE_TOUCH_INCHES = 0.05
 local function puntiMediLati(r)
     local k = r.corners   -- (-w,-d) (-w,+d) (+w,-d) (+w,+d)
     local function m(a, b) return { x = (a.x + b.x) / 2, z = (a.z + b.z) / 2 } end
@@ -576,6 +567,14 @@ local function toccaSulLato(ra, rb, tol)
     end
     return false
 end
+-- ============================================================
+-- FUNZIONE: melee_touchingBases(myKey, enemyBases)
+-- Basi di myKey a contatto con una base nemica su QUALSIASI lato,
+-- ma lungo un LATO (non solo per uno spigolo): il punto medio di
+-- un lato di una delle due basi deve stare a meno di 0,05"
+-- dall'altra. Basi affiancate che si sfiorano solo all'angolo
+-- (es. base in overlap accanto al nemico) non contano.
+-- ============================================================
 function melee_touchingBases(myKey, enemyBases)
     local out = {}
     local tol = MELEE_TOUCH_INCHES * INCH_TO_TTS

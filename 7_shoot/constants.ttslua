@@ -1,0 +1,80 @@
+-- ============================================================
+-- WARFORGE IEF — 7_shoot/constants.ttslua
+-- Costanti di configurazione della cartella (valori fissi:
+-- misure, tolleranze, colori, interruttori, GUID, tabelle di
+-- regole). Lo stato della partita resta in state.ttslua.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- (da 7_shoot/state.ttslua)
+-- ------------------------------------------------------------
+IEF_SHOOT_USA_MIRINO = true     -- false = gestione precedente
+
+IEF_SHOOT_MIRINO_SCALA = 0.20   -- grandezza del gettone con l'icona Tiro
+
+IEF_SHOOT_MIRINO_ALTEZZA = 0.4  -- (modo "sopra le teste") quanto sta sopra la figura più alta
+
+IEF_SHOOT_MIRINO_SOPRA = false  -- false = a terra davanti al fronte; true = sospeso sopra le teste
+
+IEF_SHOOT_MIRINO_DAVANTI = 0.8  -- (modo a terra) pollici fra il fronte e il centro del mirino
+
+-- rotazione del gettone in gradi: x/z inclinazione, y si somma
+-- alla direzione dell'unità (0 = orientato come il suo fronte)
+IEF_SHOOT_MIRINO_ROT = { x = 0, y = 45, z = 0 }
+
+-- ------------------------------------------------------------
+-- (da 7_shoot/lib.ttslua)
+-- ------------------------------------------------------------
+IEF_SHOOT_GITTATA_UNITA = true   -- marcatore di versione (F13), letto da debug_shootBasi
+
+-- ============================================================
+-- PANNELLO INFO TIRO
+-- Visibile al giocatore che tira dal clic sul pulsante base
+-- (bersaglio trovato) fino al tiro o a Chiudi. Solo
+-- informazioni, nessun pulsante: Tiro/Chiudi restano in
+-- confirm_panel_shoot. Stile del pannello dadi.
+-- ============================================================
+SHOOTINFO = SHOOTINFO or {
+    width     = 560,
+    colWidth  = 262,
+    padding   = 12,
+    titleH    = 24,
+    noteH     = 16,
+    rowH      = 17,
+    gap       = 6,
+    colRows   = 7,     -- righe per colonna (Tiratore / Bersaglio)
+    rows      = 8,     -- righe per colonna della parte bassa (Dadi / Per colpire)
+    valWidth  = 80,    -- larghezza della colonna valori (Dadi / Per colpire)
+    bg        = "rgba(0,0,0,0.70)",
+    gold      = "#FFD833",
+    grey      = "#BBBBBB",
+    bonus     = "#5BD35B",
+    malus     = "#FF6B6B",
+    statoH    = 22,
+    esitoH    = 26,
+    maxFaces  = 16,
+    faceSize  = 28,
+    faceGap   = 4,
+    faceKo    = "rgba(1,1,1,0.3)",
+}
+
+-- Esito del bersaglio key: valido, testo
+IEF_SHOOT_MIRINO_PRECONTROLLO = false   -- true = senza bersaglio niente mirino (F38)
+
+IEF_SHOOT_MIRINO_COLORI = { ok = "#40FF40", arancio = "#FFA020", rosso = "#FF4040" }
+
+-- ============================================================
+-- F42: TERRENI CHE BLOCCANO LA VISTA
+-- Decisione Max: colline, boschi, edifici (elementi con altezza)
+-- bloccano il tiro; cespugli, rocce lievi, campi, fossati,
+-- paludi, laghetti, fiume no. L'attributo sta sull'elemento sul
+-- tavolo: tag "BLOCCA_VISTA" (gli elementi arrivano dalla bag dei
+-- terreni, non dalle carte). L'elemento sotto la base che tira o
+-- sotto il bersaglio non blocca: dalla collina si tira, nel bosco
+-- si viene tirati (con il -1 di copertura).
+-- ============================================================
+IEF_TAG_BLOCCA_VISTA = "BLOCCA_VISTA"
+
+IEF_LOS_TERRENO_PASSO = 0.25     -- pollici fra un campione e l'altro lungo il corridoio
+
+IEF_LOS_LIMITARE_POLLICI = 1    -- F46: "al limitare" del bosco, per base

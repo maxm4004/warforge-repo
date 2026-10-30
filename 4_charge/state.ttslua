@@ -4,60 +4,9 @@
 -- CHARGE_STOPFIRE, CHARGE_AUTO.
 -- ============================================================
 
--- ============================================================
--- ENUM: REACTION_TYPE — le 4 risposte possibili a una carica
--- subita (regolamento, "POSSIBILI RISPOSTE ALLE CARICHE").
--- ============================================================
-REACTION_TYPE = {
-    COC = "ControCarica",
-    EVA = "Evasione",
-    FER = "Ferma",
-    TIR = "TiroArresto",
-}
 
--- ============================================================
--- ENUM: CHARGE_STEP — stato di avanzamento di un elemento in
--- IEF_CHARGE_QUEUE.
---   DEC = accodata, non ancora processata
---   REA = in corso di risoluzione/movimento, o risposta del
---         bersaglio in atto
---   CLO = completamente risolta
--- ============================================================
-CHARGE_STEP = {
-    DEC  = "Dichiarazione",
-    REA  = "Reazione",
-    CLO  = "Chiusura",
-}
 
--- ============================================================
--- ENUM: CHARGE_OUTCOME — esito finale di una carica risolta,
--- per le liste Attacco/Difesa.
--- ============================================================
-CHARGE_OUTCOME = {
-    OK  = "Riuscita",
-    EVI = "Evitata",       -- bersaglio ha evaso
-    ANN = "Fermata",     -- test morale fallito in dichiarazione/limitazioni/Tiro d'Arresto
-}
 
--- ============================================================
--- ENUM: UNIT_TYPES — codice (chiave, come nei dati reali:
--- GMNotes/army JSON) -> etichetta italiana per la UI. I confronti
--- nella logica usano SEMPRE il codice breve letterale ("KN",
--- "ART", ecc.), MAI UNIT_TYPES.KN — quello è il valore etichetta,
--- non il codice. Uso corretto: UNIT_TYPES[myTipo] per un testo
--- leggibile, myTipo == "KN" per un confronto.
--- ============================================================
-UNIT_TYPES = {
-    KN  = "Cavalieri",
-    CP  = "Cavalleria Pesante",
-    FM  = "Fanteria Media",
-    CL  = "Cavalleria Leggera",
-    FL  = "Fanteria Leggera",
-    FP  = "Fanteria Pesante",
-    ART = "Artiglieria",
-    EL  = "Elefanti",
-    GEN = "Generali e Comandanti",
-}
 
 -- Coda cariche UNICA (non più indicizzata per esercito): un solo
 -- oggetto per evento di carica, condiviso fra le due unità
@@ -122,10 +71,6 @@ IEF_CHARGE_DECLARE_SESSION = IEF_CHARGE_DECLARE_SESSION or {}
 -- pannello 3D) per ciascun player: [slot] = unitKey
 IEF_CHARGE_ACTIVE_CONFIRM = IEF_CHARGE_ACTIVE_CONFIRM or {}
 
-MORALE_RESULT = {
-    OK = "SUPERATO",
-    KO = "FALLITO",
-}
 
 -- Unità che hanno fallito il test per caricare in questo turno:
 -- [unitKey] = true (azzerata in before_charge_declare)
@@ -138,11 +83,3 @@ IEF_CHARGE_PENDING_TESTS = IEF_CHARGE_PENDING_TESTS or {}
 -- Test per caricare superati in questo turno:
 -- [attackerKey] = targetKey (azzerata in before_charge_declare)
 IEF_CHARGE_TEST_PASSED = IEF_CHARGE_TEST_PASSED or {}
-
--- Etichette dei bottoni di reazione
-CHARGE_REACTION_LABEL = {
-    [REACTION_TYPE.COC] = "Contro Carica",
-    [REACTION_TYPE.EVA] = "Evasione",
-    [REACTION_TYPE.TIR] = "Tiro di Arresto",
-    [REACTION_TYPE.FER] = "Nessuna Reazione",
-}

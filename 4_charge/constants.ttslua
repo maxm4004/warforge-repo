@@ -1,0 +1,141 @@
+-- ============================================================
+-- WARFORGE IEF — 4_charge/constants.ttslua
+-- Costanti di configurazione della cartella (valori fissi:
+-- misure, tolleranze, colori, interruttori, GUID, tabelle di
+-- regole). Lo stato della partita resta in state.ttslua.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- (da 4_charge/state.ttslua)
+-- ------------------------------------------------------------
+-- ============================================================
+-- ENUM: REACTION_TYPE — le 4 risposte possibili a una carica
+-- subita (regolamento, "POSSIBILI RISPOSTE ALLE CARICHE").
+-- ============================================================
+REACTION_TYPE = {
+    COC = "ControCarica",
+    EVA = "Evasione",
+    FER = "Ferma",
+    TIR = "TiroArresto",
+}
+
+-- ============================================================
+-- ENUM: CHARGE_STEP — stato di avanzamento di un elemento in
+-- IEF_CHARGE_QUEUE.
+--   DEC = accodata, non ancora processata
+--   REA = in corso di risoluzione/movimento, o risposta del
+--         bersaglio in atto
+--   CLO = completamente risolta
+-- ============================================================
+CHARGE_STEP = {
+    DEC  = "Dichiarazione",
+    REA  = "Reazione",
+    CLO  = "Chiusura",
+}
+
+-- ============================================================
+-- ENUM: CHARGE_OUTCOME — esito finale di una carica risolta,
+-- per le liste Attacco/Difesa.
+-- ============================================================
+CHARGE_OUTCOME = {
+    OK  = "Riuscita",
+    EVI = "Evitata",       -- bersaglio ha evaso
+    ANN = "Fermata",     -- test morale fallito in dichiarazione/limitazioni/Tiro d'Arresto
+}
+
+-- ============================================================
+-- ENUM: UNIT_TYPES — codice (chiave, come nei dati reali:
+-- GMNotes/army JSON) -> etichetta italiana per la UI. I confronti
+-- nella logica usano SEMPRE il codice breve letterale ("KN",
+-- "ART", ecc.), MAI UNIT_TYPES.KN — quello è il valore etichetta,
+-- non il codice. Uso corretto: UNIT_TYPES[myTipo] per un testo
+-- leggibile, myTipo == "KN" per un confronto.
+-- ============================================================
+UNIT_TYPES = {
+    KN  = "Cavalieri",
+    CP  = "Cavalleria Pesante",
+    FM  = "Fanteria Media",
+    CL  = "Cavalleria Leggera",
+    FL  = "Fanteria Leggera",
+    FP  = "Fanteria Pesante",
+    ART = "Artiglieria",
+    EL  = "Elefanti",
+    GEN = "Generali e Comandanti",
+}
+
+MORALE_RESULT = {
+    OK = "SUPERATO",
+    KO = "FALLITO",
+}
+
+-- Etichette dei bottoni di reazione
+CHARGE_REACTION_LABEL = {
+    [REACTION_TYPE.COC] = "Contro Carica",
+    [REACTION_TYPE.EVA] = "Evasione",
+    [REACTION_TYPE.TIR] = "Tiro di Arresto",
+    [REACTION_TYPE.FER] = "Nessuna Reazione",
+}
+
+-- ------------------------------------------------------------
+-- (da 4_charge/lib.ttslua)
+-- ------------------------------------------------------------
+-- ============================================================
+-- STILE LISTE LATERALI (nuova grafica, come pannello tiro/dadi)
+-- Usato da: liste Cariche/Movimenti di carica e Reazioni.
+-- Le righe sono Button (click), con id invariati: i refresh via
+-- UI.setAttribute (testo/textColor) continuano a funzionare.
+-- ============================================================
+LISTPANEL = LISTPANEL or {
+    width     = 420,
+    offsetXY  = "-10 -330",
+    padding   = 10,
+    spacing   = 2,
+    titleH    = 22,
+    noteH     = 16,
+    rowH      = 24,
+    bg        = "rgba(0,0,0,0.70)",
+    rowBg     = "rgba(1,1,1,0.06)",
+    gold      = "#FFD833",
+    grey      = "#BBBBBB",
+    todo      = "White",     -- riga da fare
+    done      = "#5BD35B",   -- riga fatta / scelta
+    font      = "warforge_font",
+    rowFont   = 10,          -- testo delle righe (piccolo: la riga si legge per intero)
+}
+
+CHARGE_FLANK_TOL = 0.02
+
+CHARGE_ROW_DONE_COLOR = "#5BD35B"
+
+CHARGE_ALIGN_TOL = 0.1
+
+-- ============================================================
+-- F41: MIRINO DI CARICA E PERNO A MANIGLIA
+-- Clic su CARICA (controlli dell'unità di sempre): pannello con
+-- Perno Sn / Perno Ds a maniglia (massimo 2" in tutto) e il
+-- mirino (icona "mirino_carica") davanti al fronte, con il
+-- corridoio della carica in giallo. Il giocatore trascina il
+-- mirino su un'unità nemica; nel pannello:
+--   verde   : bersaglio valido (eventuale "Serve un test di
+--             morale" / "Carica sul fianco")
+--   rosso   : fuori portata
+--   arancio : in portata ma non in linea retta, bersaglio più
+--             vicino in linea retta, o non caricabile
+-- Rilasciato sul verde: charge_checkTarget (conferma Dichiara /
+-- Chiudi o il test di morale, come prima). Altrimenti torna.
+-- IEF_CHARGE_USA_MIRINO = false: gestione precedente.
+-- ============================================================
+IEF_CHARGE_USA_MIRINO     = (IEF_CHARGE_USA_MIRINO ~= false)
+
+IEF_CHARGE_MIRINO_SCALA   = IEF_CHARGE_MIRINO_SCALA or 0.20
+
+IEF_CHARGE_MIRINO_DAVANTI = IEF_CHARGE_MIRINO_DAVANTI or 0.8
+
+IEF_CHARGE_MIRINO_ROT     = IEF_CHARGE_MIRINO_ROT or { x = 0, y = 45, z = 0 }
+
+IEF_CHARGE_MIRINO_COLORI  = { ok = "#40FF40", arancio = "#FFA020", rosso = "#FF4040" }
+
+IEF_CHARGE_PIVOT_MAX      = 2
+
+-- Corridoio della carica in giallo (stessa geometria di charge_findLineTarget)
+IEF_CHARGE_DEBUG_CORRIDOIO = false  -- F41f: diagnostica del corridoio

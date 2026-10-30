@@ -26,35 +26,11 @@ IEF_DICE_LAST_ROLL = IEF_DICE_LAST_ROLL or {
     [2] = {},
 }
 
-IEF_DICE_TRAY_GUID = IEF_DICE_TRAY_GUID or {
-    [1] = "5418fe",
-    [2] = "efb29f",
-}
 
-IEF_DICE_BAG_GUID = IEF_DICE_BAG_GUID or {
-    [1] = "eb4ed3",
-    [2] = "1338a3",
-}
 
-IEF_DICE_ZONE = IEF_DICE_ZONE or {
-    [1] = { x = -77.72, y = 1.44, z = -35.97 },
-    [2] = { x = 77.72, y = 1.44, z = 35.97 },    
-}
 
-IEF_DICE_SPAWN_POS = IEF_DICE_SPAWN_POS or {
-    [1] = { x = 75.70, y = 1.44, z = -67.99 },
-    [2] = { x = -75.70, y = 1.44, z = 67.99 },
-}
 
-IEF_DICE_CAMERA_HOME = {
-    [1] = { x = 0, y = 40, z = 0 },   -- vista overview default per slot 1, aggiusta ai tuoi valori
-    [2] = { x = 0, y = 40, z = 0 },   -- vista overview default per slot 2, aggiusta ai tuoi valori
-}
 
-IEF_DICE_CAMERA_YAW = {
-    [1] = 0,
-    [2] = 180,
-}
 
 -- ============================================================
 -- FUNZIONE: spinDie()

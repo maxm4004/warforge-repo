@@ -79,3 +79,366 @@ COHESION_TINT = {
     LOSS_HIGHLIGHT_COLOR = {1, 0, 0}
     ENGINE_TRANSITION_DELAY = 1.5
     IEF_FLANK_CONTACT_INCHES = 0.05
+
+-- ------------------------------------------------------------
+-- (da 0_main/break.ttslua)
+-- ------------------------------------------------------------
+-- ============================================================
+-- TABELLA: IEF_INTERPENETRATION
+-- Regolamento, "Muovere attraverso unità": tipi che possono
+-- attraversare unità amiche, o esserne attraversati, senza
+-- disordinarle e senza esserne disordinati. "TUTTI" = ogni tipo.
+-- ============================================================
+IEF_INTERPENETRATION = {
+    FL = { attraversa = "TUTTI",               attraversataDa = "TUTTI" },
+    CL = { attraversa = { "KN", "CP", "CL" }, attraversataDa = { "KN", "CP", "CL" } },
+}
+
+-- ============================================================
+-- TABELLA: IEF_ROUT_BLOCKING_TERRAIN
+-- Categorie di terreno che fermano la rotta ("terreno
+-- intransitabile"), solo se per il tipo dell'unità il movimento
+-- in terrain.json è "NO". Le penalità di rotto/difficile si
+-- ignorano in rotta.
+-- ============================================================
+IEF_ROUT_BLOCKING_TERRAIN = { INTRANSITABILE = true }
+
+IEF_ROUT_TOLERANCE_INCHES    = 0.05   -- basi solo a contatto: non è sovrapposizione
+
+IEF_ROUT_TERRAIN_STEP_INCHES = 0.25   -- passo di campionamento del terreno
+
+-- ============================================================
+-- F32: COSTO DEL TERRENO LUNGO IL PERCORSO
+-- Decisione Max 28/10: ogni pollice percorso con almeno una base
+-- dentro un terreno lento costa di più. Fattore = movimento pieno
+-- / movimento ridotto: "dimezza" = 2, "riduce a 1 pollice" =
+-- pieno/1, "riduce a 2 pollici" = pieno/2 (FP 4": 3" in aperto +
+-- 1" residuo = 1/2" nel rotto). "NO" = vietato: ci si ferma prima.
+-- Il percorso si campiona ogni IEF_TERRAIN_STEP_INCHES; i bordi
+-- del terreno si trovano per bisezione.
+-- ============================================================
+IEF_TERRAIN_STEP_INCHES = 0.25
+
+IEF_TERRAIN_BISECT      = 5        -- 0.25" / 2^5 = 0.008"
+
+IEF_TERRAIN_BLOCK       = 1e9      -- fattore "vietato"
+
+IEF_TERRAIN_STOP_INCHES = 0.02     -- ci si ferma così prima del vietato
+
+-- ============================================================
+-- PERCORSO LIBERO (manovra ed evasione)
+-- Regolamento: FL attraversa chiunque, CL attraversa KN/CP/CL
+-- (IEF_INTERPENETRATION); le altre unità amiche non si
+-- attraversano. Il nemico si tocca solo caricando.
+-- Decisioni Max 24/10: in manovra ci si ferma a contatto
+-- dell'amica che non si può attraversare e a ½" dal nemico;
+-- l'evasione si ferma davanti a terreno intransitabile o a truppe
+-- che non può attraversare.
+-- ============================================================
+IEF_MOVE_ENEMY_GAP_INCHES = 0.5
+
+-- ------------------------------------------------------------
+-- (da 0_main/data.ttslua)
+-- ------------------------------------------------------------
+IEF_JSON_BASE_URL = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/json/"
+
+-- URL costanti per ogni JSON base dati
+IEF_URL_UNIT_TYPES    = IEF_JSON_BASE_URL .. "unit_types.json"
+
+IEF_URL_WEAPONS       = IEF_JSON_BASE_URL .. "weapons.json"
+
+IEF_URL_MORALE        = IEF_JSON_BASE_URL .. "morale.json"
+
+IEF_URL_MELEE         = IEF_JSON_BASE_URL .. "melee_modifiers.json"
+
+IEF_URL_MOVEMENT      = IEF_JSON_BASE_URL .. "movement.json"
+
+IEF_URL_CAPABILITIES  = IEF_JSON_BASE_URL .. "capabilities.json"
+
+IEF_URL_TERRAIN       = IEF_JSON_BASE_URL .. "terrain.json"
+
+IEF_URL_ARMY_CODES    = IEF_JSON_BASE_URL .. "army_codes.json"
+
+IEF_URL_ENEMY_ALIASES = IEF_JSON_BASE_URL .. "enemy_aliases.json"
+
+IEF_URL_FIELD_TERRAIN_VARIANTS = IEF_JSON_BASE_URL .. "field_terrain_variants.json"
+
+-- ------------------------------------------------------------
+-- (da 0_main/general.ttslua)
+-- ------------------------------------------------------------
+IEF_GENERAL_DRAG_TICK   = 0.1    -- secondi fra un ridisegno del filo e l'altro
+
+IEF_GENERAL_MOVE_TOL    = 0.05   -- pollici di tolleranza nel controllo finale
+
+IEF_GENERAL_LINE_Y      = 1.22
+
+-- ------------------------------------------------------------
+-- (da 0_main/lib.ttslua)
+-- ------------------------------------------------------------
+MOVEPANEL = {
+    width   = 760,
+    bg      = "rgba(0,0,0,0.70)",
+    font    = "warforge_font",
+    gold    = "#FFD833",
+    grey    = "#BBBBBB",
+    btnOn   = "#B8902E",
+    btnOff  = "rgba(0.25,0.25,0.25,0.6)",
+    undo1   = "#8A5A1E",
+    undo2   = "#8A2E2E",
+    close   = "rgba(0.35,0.35,0.35,1)",
+}
+
+-- ============================================================
+-- APPOGGIO DELLE BASI SUL TERRENO (movimenti da script)
+-- setPosition con la Y vecchia lascia la base dentro una collina.
+-- Si misura il terreno su tutta l'impronta della base (griglia
+-- 5x5 di raggi verso il basso, dimensioni dichiarate, assi nativi
+-- TTS) nella posizione e rotazione di arrivo, si prende il punto
+-- più alto e ci si appoggia il fondo della base.
+-- ============================================================
+IEF_GROUND_GRID    = { -1, -0.5, 0, 0.5, 1 }   -- campioni per lato (frazione della semidimensione)
+
+IEF_GROUND_INSET   = 0.02                     -- unità TTS: campioni appena dentro il bordo
+
+IEF_GROUND_EPSILON = 0.01                     -- unità TTS: margine sopra il terreno
+
+-- F27: gioco fra le basi di un'unità (unità TTS), usato sia allo
+-- spawn sia da RIORDINA. 0.10 = 1.3 mm: con le mesh alla misura
+-- esatta, ranghi a contatto => la fisica solleva qualche base.
+IEF_FILE_GAP = 0.03                           -- fra le colonne
+
+IEF_RANK_GAP = 0.03                           -- fra i ranghi (F28: 0.10 lasciava spazio visibile)
+
+-- ============================================================
+-- F31: MODO DI APPOGGIO SUI PENDII (prova, scelta di Max)
+--   "A" = la base si inclina e segue il pendio (calcolato dallo
+--         script, niente fisica)
+--   "B" = la base resta piana, poi la fisica la fa assestare
+--   "C" = la base resta piana, appoggiata sul punto più alto
+--         (come prima: a valle resta sospesa)
+-- Si cambia al volo con  /execute debug_terreno("A")
+-- ============================================================
+IEF_GROUND_MODE  = IEF_GROUND_MODE or "A"
+
+IEF_CHARGE_PIVOT_INCHES = 2
+
+-- ------------------------------------------------------------
+-- (da 0_main/morale.ttslua)
+-- ------------------------------------------------------------
+-- ============================================================
+-- SITUAZIONI (regolamento "QUANDO È NECESSARIO EFFETTUARE UN
+-- TEST DI MORALE?"). Filtri assenti = nessun filtro.
+--   evento        : chi solleva la situazione (LOSS, CHARGED,
+--                   CHARGE_DECLARE, FRIEND_ROUT, GENERAL_KILLED)
+--   testa         : chi fa il test (VITTIMA, CARICATA, CARICANTE,
+--                   AMICHE_IN_RAGGIO)
+--   tipi / tipiAvversario / tipiAvversarioEsclusi : tipi unità
+--   terreno       : categoria terreno dell'unità che testa
+--   lato          : lato del contatto (FRONTE, FIANCO, RETRO)
+--   soloArmiDaTiro: l'unità che testa ha SOLO armi da tiro
+--                   (main_soloArmiDaTiro): almeno un'arma da tiro
+--                   non in armiEscluse e nessuna arma da mischia
+--                   elencata (le unità miste, es. Lancia+Arco, no)
+--   raggio        : pollici per AMICHE_IN_RAGGIO
+--   tipiOrigineEsclusi / escludiGiaInFuga : filtri sull'unità
+--                   che ha generato l'evento
+--   effetto       : colonna di morale.json (per_caricare,
+--                   per_riordinare, altre_situazioni)
+--   quando        : IMMEDIATO o FINE_FASE (dopo tutte le mischie
+--                   o tutti i tiri)
+-- ============================================================
+IEF_MORALE_SITUATIONS = {
+    BASE_PERSA = {
+        evento = "LOSS",
+        testa = "VITTIMA",
+        effetto = "altre_situazioni",
+        quando = "IMMEDIATO",
+        label = "ha perso basi",
+    },
+    CARICA_IN_TERRENO_APERTO = {
+        evento = "CHARGED",
+        testa = "CARICATA",
+        tipi = { "FM" },
+        tipiAvversario = { "KN", "CP" },
+        terreno = "APERTO",
+        effetto = "altre_situazioni",
+        quando = "IMMEDIATO",
+        label = "caricata in terreno aperto",
+    },
+    CARICA_SUL_FRONTE = {
+        evento = "CHARGE_DECLARE",
+        testa = "CARICANTE",
+        tipi = { "CL" },
+        tipiAvversarioEsclusi = { "CL", "FL", "ART" },
+        lato = "FRONTE",
+        effetto = "per_caricare",
+        quando = "IMMEDIATO",
+        label = "vuole caricare sul fronte",   
+    },
+    CARICA_CON_ARMI_DA_TIRO = {
+        evento = "CHARGE_DECLARE",
+        testa = "CARICANTE",
+        tipi = { "FP", "FM" },
+        soloArmiDaTiro = true,
+        armiEscluse = { "GIAVELLOTTO" },
+        tipiAvversarioEsclusi = { "FL", "ART" },
+        effetto = "per_caricare",
+        quando = "IMMEDIATO",
+        label = "con sole armi da tiro vuole caricare",
+    },
+    AMICA_IN_ROTTA = {
+        evento = "FRIEND_ROUT",
+        testa = "AMICHE_IN_RAGGIO",
+        raggio = 6,
+        tipiOrigineEsclusi = { "FL" },
+        escludiGiaInFuga = true,
+        effetto = "altre_situazioni",
+        quando = "FINE_FASE",
+        label = "un'unita' amica vicina e' in rotta",
+    },
+    GENERALE_UCCISO = {
+        evento = "GENERAL_KILLED",
+        testa = "AMICHE_IN_RAGGIO",
+        raggio = 6,
+        effetto = "altre_situazioni",
+        quando = "FINE_FASE",
+        label = "il Generale e' stato ucciso",
+
+    },
+}
+
+-- ============================================================
+-- Etichette leggibili dei motivi che non sono situazioni della
+-- tabella (le situazioni hanno il loro campo label).
+-- ============================================================
+IEF_MORALE_MOTIVO_LABEL = {
+    RECUPERO = "tenta di riordinarsi",
+}
+
+-- ============================================================
+-- MODIFICATORI del test di morale. chiave = morale_modifiers di
+-- morale.json (valore unitario), condizione = funzione in
+-- IEF_MORALE_CONDITIONS che ritorna quante volte si applica.
+-- ============================================================
+IEF_MORALE_MODIFIERS = {
+    { chiave = "generale_con_unita",      condizione = "GENERALE_AGGREGATO",   label = "Generale aggregato" },
+    { chiave = "ogni_base_persa",         condizione = "BASI_PERSE_DA_INIZIO", label = "Basi perse" },
+    { chiave = "fianco_retro_caricabile", condizione = "NEMICO_FIANCO_RETRO",  label = "Nemico su fianco o retro" },
+    { chiave = "unita_disordinata",       condizione = "COESIONE_DIS",         label = "Unita' disordinata" },
+    { chiave = "unita_in_rotta",          condizione = "COESIONE_ROT",         label = "Unita' in rotta" },
+}
+
+-- Tolleranza di contatto per il Generale aggregato (pollici)
+IEF_GENERAL_ATTACH_INCHES = 0.1
+
+-- Gravità delle categorie di terreno (la peggiore vince)
+IEF_TERRAIN_SEVERITY = { APERTO = 0, COVER = 0, ROTTO = 1, FIUME = 2, DIFFICILE = 3, INTRANSITABILE = 4 }
+
+-- ============================================================
+-- CONDIZIONI: function(unitKey, ctx) -> numero di applicazioni
+-- ctx.basiInSospeso = basi perse non ancora rimosse (mischia)
+-- ============================================================
+IEF_MORALE_CONDITIONS = {
+    GENERALE_AGGREGATO = function(unitKey, ctx)
+        return main_getAttachedGeneral(unitKey) and 1 or 0
+    end,
+    BASI_PERSE_DA_INIZIO = function(unitKey, ctx)
+        return (IEF_UNIT_BASES_LOST[unitKey] or 0) + ((ctx and ctx.basiInSospeso) or 0)
+    end,
+    NEMICO_FIANCO_RETRO = function(unitKey, ctx)
+        return main_enemyOnFlankOrRear(unitKey) and 1 or 0
+    end,
+    COESIONE_DIS = function(unitKey, ctx)
+        return main_getCohesion(unitKey) == COHESION.DIS and 1 or 0
+    end,
+    COESIONE_ROT = function(unitKey, ctx)
+        return main_getCohesion(unitKey) == COHESION.ROT and 1 or 0
+    end,
+}
+
+-- ------------------------------------------------------------
+-- (da 0_main/state.ttslua)
+-- ------------------------------------------------------------
+-- ============================================================
+-- ENUM: CAMERA_ZONE — nomi validi per IEF_CAMERA_ZONE
+-- ============================================================
+CAMERA_ZONE = {
+    ARMY_ROLL_DICES = "ArmyRollDices",
+    ARMY_CARDS      = "ArmyCards",
+    ARMY_BLOCK      = "ArmyBlock",
+    ARMY_HOME       = "ArmyHome",
+}
+
+ARMIES_UNIT_LABELS = {
+["ANG"] = "AngloSassone",					
+["VIK"] = "Vichinga",				
+["NOR"] = "Normanna",				
+["FRA"] = "Franca",			
+["IRL"] = "Irlandese",		
+["COM"] = "Italiana",			
+["LON"] = "Longobarda",				
+["BIZ"] = "Bizantina",			
+["CRO"] = "Crociata", 				
+["SAS"] = "Sassanida", 				
+["TED"] = "Tedesca",
+["SEL"] = "Turca", 			
+["TEU"] = "Teutonica", 				
+["RUS"] = "Russa",	
+}
+
+ARMIES_LABELS = {
+["ANG"] = "AngloSassone",					
+["VIK"] = "Vichingo",				
+["NOR"] = "Normanno",				
+["FRA"] = "Franco Carolingio",			
+["IRL"] = "Irlandese",		
+["COM"] = "Italiano",			
+["LON"] = "Longobardo",				
+["BIZ"] = "Bizantino",			
+["CRO"] = "Crociato", 				
+["SAS"] = "Sassanida", 				
+["TED"] = "Tedesco",
+["SEL"] = "Turco", 			
+["TEU"] = "Teutonico", 				
+["RUS"] = "Russo",	
+}
+
+-- ------------------------------------------------------------
+-- (da 0_main/ui.ttslua)
+-- ------------------------------------------------------------
+-- Bottoni dei pannelli di conferma (Tiro, Dichiara, Test Morale,
+-- Annulla misura): testo normale (non grassetto), colori qui.
+CONFIRMPANEL = {
+    actionBg   = "#B8902E",                  -- bottone d'azione: oro
+    closeBg    = "rgba(0.75,0.75,0.75,1)",   -- Chiudi / Annulla: grigio chiaro
+    actionText = "Black",
+    closeText  = "Black",
+}
+
+-- ------------------------------------------------------------
+-- (da 0_main/unitinfo.ttslua)
+-- ------------------------------------------------------------
+-- Stessa grafica di pannello dadi / liste (DICEPANEL, LISTPANEL)
+UNITINFO = {
+    rectAlignment = "MiddleLeft",
+    offsetXY      = "20 0",
+    width         = 400,
+    bg            = "rgba(0,0,0,0.70)",
+    rowBg         = "rgba(1,1,1,0.06)",
+    font          = "warforge_font",
+    padding       = 12,
+    spacing       = 2,
+    titleHeight   = 24,
+    subHeight     = 16,
+    rowHeight     = 18,
+    sectionHeight = 24,
+    maxRows       = 30,
+    titleColor    = "#FFD833",   -- titolo e intestazioni di sezione
+    sectionColor  = "#FFD833",
+    textColor     = "White",
+    subColor      = "#BBBBBB",   -- sottotitolo e voci secondarie
+    okColor       = "#5BD35B",
+    warnColor     = "#FFB347",
+    koColor       = "#FF6B6B",
+    valueWidth    = 190,
+}

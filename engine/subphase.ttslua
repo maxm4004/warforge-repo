@@ -36,18 +36,6 @@
 SUBPHASES    = SUBPHASES    or {}
 SUBRENDERERS = SUBRENDERERS or {}
 
--- Grafica dei pannelli sottofase (sotto il pannello centrale)
-SUBPANEL = {
-    offsetXY  = "0 -280",
-    width     = 450,
-    height    = 55,
-    bg        = "rgba(0,0,0,0.70)",
-    btnColor  = "#B8902E",
-    btnWidth  = 200,
-    btnHeight = 40,
-    btnMax     = 4,      -- bottoni disponibili per pannello
-    btnSpacing = 8,      -- spazio fra i bottoni    
-}
 
 -- ============================================================
 -- FUNZIONE: registerSubphases(tabella)

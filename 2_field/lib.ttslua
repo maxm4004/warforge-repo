@@ -514,6 +514,11 @@ end
 -- ============================================================
 -- FUNZIONE: field_tipoToCategoria(tipo)
 -- ============================================================
+-- ============================================================
+-- FUNZIONE: field_tipoToCategoria(tipo)
+-- Converte il nome tipo (usato da field_sommaToTipo, es. "Rotto")
+-- nella chiave categoria del JSON varianti (es. "ROTTO").
+-- ============================================================
 function field_tipoToCategoria(tipo)
     return IEF_FIELD_TIPO_TO_CATEGORIA[tipo]
 end

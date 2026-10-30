@@ -36,33 +36,6 @@
 -- Stato non salvato: un tiro non sopravvive a un caricamento.
 -- ============================================================
 
-DICEPANEL = DICEPANEL or {
-    rectAlignment = "MiddleCenter",
-    offsetXY      = "0 -345",
-    colWidth      = 330,      -- larghezza di una colonna
-    colGap        = 16,       -- spazio fra le due colonne
-    bg            = "rgba(0,0,0,0.70)",
-    padding       = 12,
-    spacing       = 2,
-    font          = "warforge_font",
-    titleColor    = "#FFD833",   -- titolo, intestazioni di sezione, "serve"
-    textColor     = "White",
-    subColor      = "#BBBBBB",   -- sottotitolo (nota sotto il titolo)
-    titleHeight   = 24,
-    subHeight     = 16,
-    rowHeight     = 17,
-    needHeight    = 22,
-    outcomeHeight = 26,
-    noteHeight    = 30,       -- nota sotto l'esito (2 righe)
-    valueWidth    = 90,       -- colonna dei valori delle righe
-    maxRows       = 14,
-    maxFaces      = 24,
-    faceSize      = 28,
-    faceSpacing   = 4,
-    faceKoColor   = "rgba(1,1,1,0.3)",   -- dado non riuscito (con soglia)
-    okColor       = "#5BD35B",            -- esito positivo, dado a segno, bonus
-    koColor       = "#FF6B6B",            -- esito negativo, malus
-}
 
 IEF_DICE_PANEL     = IEF_DICE_PANEL or {}
 IEF_DICE_PANEL_GEN = IEF_DICE_PANEL_GEN or 0

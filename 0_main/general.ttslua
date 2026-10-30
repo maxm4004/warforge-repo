@@ -304,9 +304,6 @@ IEF_GENERAL_MOVE_START  = IEF_GENERAL_MOVE_START  or {}
 IEF_GENERAL_MOVE_CIRCLE = IEF_GENERAL_MOVE_CIRCLE or {}
 IEF_GENERAL_DRAG        = IEF_GENERAL_DRAG        or {}
 
-IEF_GENERAL_DRAG_TICK   = 0.1    -- secondi fra un ridisegno del filo e l'altro
-IEF_GENERAL_MOVE_TOL    = 0.05   -- pollici di tolleranza nel controllo finale
-IEF_GENERAL_LINE_Y      = 1.22
 
 -- ============================================================
 -- FUNZIONE: main_generalMoveInches()

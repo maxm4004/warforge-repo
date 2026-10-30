@@ -6,28 +6,8 @@
 -- dichiarate (unit_types) e gli assi nativi TTS, mai getBounds().
 -- ============================================================
 
--- ============================================================
--- TABELLA: IEF_INTERPENETRATION
--- Regolamento, "Muovere attraverso unità": tipi che possono
--- attraversare unità amiche, o esserne attraversati, senza
--- disordinarle e senza esserne disordinati. "TUTTI" = ogni tipo.
--- ============================================================
-IEF_INTERPENETRATION = {
-    FL = { attraversa = "TUTTI",               attraversataDa = "TUTTI" },
-    CL = { attraversa = { "KN", "CP", "CL" }, attraversataDa = { "KN", "CP", "CL" } },
-}
 
--- ============================================================
--- TABELLA: IEF_ROUT_BLOCKING_TERRAIN
--- Categorie di terreno che fermano la rotta ("terreno
--- intransitabile"), solo se per il tipo dell'unità il movimento
--- in terrain.json è "NO". Le penalità di rotto/difficile si
--- ignorano in rotta.
--- ============================================================
-IEF_ROUT_BLOCKING_TERRAIN = { INTRANSITABILE = true }
 
-IEF_ROUT_TOLERANCE_INCHES    = 0.05   -- basi solo a contatto: non è sovrapposizione
-IEF_ROUT_TERRAIN_STEP_INCHES = 0.25   -- passo di campionamento del terreno
 
 -- ============================================================
 -- FUNZIONE: main_routTipoIn(lista, tipo)
@@ -802,20 +782,6 @@ function main_terrainMoveCap(unitKey, tipo, pieno, cats)
     return cap, chi
 end
 
--- ============================================================
--- F32: COSTO DEL TERRENO LUNGO IL PERCORSO
--- Decisione Max 28/10: ogni pollice percorso con almeno una base
--- dentro un terreno lento costa di più. Fattore = movimento pieno
--- / movimento ridotto: "dimezza" = 2, "riduce a 1 pollice" =
--- pieno/1, "riduce a 2 pollici" = pieno/2 (FP 4": 3" in aperto +
--- 1" residuo = 1/2" nel rotto). "NO" = vietato: ci si ferma prima.
--- Il percorso si campiona ogni IEF_TERRAIN_STEP_INCHES; i bordi
--- del terreno si trovano per bisezione.
--- ============================================================
-IEF_TERRAIN_STEP_INCHES = 0.25
-IEF_TERRAIN_BISECT      = 5        -- 0.25" / 2^5 = 0.008"
-IEF_TERRAIN_BLOCK       = 1e9      -- fattore "vietato"
-IEF_TERRAIN_STOP_INCHES = 0.02     -- ci si ferma così prima del vietato
 
 function main_terrainFactor(cat, tipo, pieno)
     local eff = main_terrainEffectFor(cat, tipo)
@@ -1007,17 +973,6 @@ function main_unitInCover(unitKey)
     return true
 end
 
--- ============================================================
--- PERCORSO LIBERO (manovra ed evasione)
--- Regolamento: FL attraversa chiunque, CL attraversa KN/CP/CL
--- (IEF_INTERPENETRATION); le altre unità amiche non si
--- attraversano. Il nemico si tocca solo caricando.
--- Decisioni Max 24/10: in manovra ci si ferma a contatto
--- dell'amica che non si può attraversare e a ½" dal nemico;
--- l'evasione si ferma davanti a terreno intransitabile o a truppe
--- che non può attraversare.
--- ============================================================
-IEF_MOVE_ENEMY_GAP_INCHES = 0.5
 
 -- Quanto l'unità può avanzare lungo il suo fronte, fino a distInches.
 -- opts.margineNemico: pollici da lasciare davanti al nemico.

@@ -25,11 +25,3 @@ IEF_SHOOT_STATE = {
 }
 
 IEF_SHOOT_MIRINO = nil
-IEF_SHOOT_USA_MIRINO = true     -- false = gestione precedente
-IEF_SHOOT_MIRINO_SCALA = 0.20   -- grandezza del gettone con l'icona Tiro
-IEF_SHOOT_MIRINO_ALTEZZA = 0.4  -- (modo "sopra le teste") quanto sta sopra la figura più alta
-IEF_SHOOT_MIRINO_SOPRA = false  -- false = a terra davanti al fronte; true = sospeso sopra le teste
-IEF_SHOOT_MIRINO_DAVANTI = 0.8  -- (modo a terra) pollici fra il fronte e il centro del mirino
--- rotazione del gettone in gradi: x/z inclinazione, y si somma
--- alla direzione dell'unità (0 = orientato come il suo fronte)
-IEF_SHOOT_MIRINO_ROT = { x = 0, y = 45, z = 0 }

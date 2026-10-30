@@ -18,19 +18,7 @@ IEF_DATA = IEF_DATA or {
     fieldTerrainVariants = {},    
 }
 
-IEF_JSON_BASE_URL = "https://raw.githubusercontent.com/maxm4004/WARFORGE-IEF/refs/heads/main/json/"
 
--- URL costanti per ogni JSON base dati
-IEF_URL_UNIT_TYPES    = IEF_JSON_BASE_URL .. "unit_types.json"
-IEF_URL_WEAPONS       = IEF_JSON_BASE_URL .. "weapons.json"
-IEF_URL_MORALE        = IEF_JSON_BASE_URL .. "morale.json"
-IEF_URL_MELEE         = IEF_JSON_BASE_URL .. "melee_modifiers.json"
-IEF_URL_MOVEMENT      = IEF_JSON_BASE_URL .. "movement.json"
-IEF_URL_CAPABILITIES  = IEF_JSON_BASE_URL .. "capabilities.json"
-IEF_URL_TERRAIN       = IEF_JSON_BASE_URL .. "terrain.json"
-IEF_URL_ARMY_CODES    = IEF_JSON_BASE_URL .. "army_codes.json"
-IEF_URL_ENEMY_ALIASES = IEF_JSON_BASE_URL .. "enemy_aliases.json"
-IEF_URL_FIELD_TERRAIN_VARIANTS = IEF_JSON_BASE_URL .. "field_terrain_variants.json"
 
 -- ============================================================
 -- FUNZIONE: main_data_load()

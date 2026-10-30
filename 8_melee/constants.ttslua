@@ -1,0 +1,11 @@
+-- ============================================================
+-- WARFORGE IEF — 8_melee/constants.ttslua
+-- Costanti di configurazione della cartella (valori fissi:
+-- misure, tolleranze, colori, interruttori, GUID, tabelle di
+-- regole). Lo stato della partita resta in state.ttslua.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- (da 8_melee/lib.ttslua)
+-- ------------------------------------------------------------
+MELEE_TOUCH_INCHES = 0.05

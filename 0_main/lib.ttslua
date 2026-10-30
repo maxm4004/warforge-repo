@@ -1994,18 +1994,6 @@ end
 -- sfondo 70%, oro per titolo e sezioni). ID pulsanti unici per
 -- unitKey; lo stato (attivo/spento) lo imposta move_redraw.
 -- ============================================================
-MOVEPANEL = {
-    width   = 760,
-    bg      = "rgba(0,0,0,0.70)",
-    font    = "warforge_font",
-    gold    = "#FFD833",
-    grey    = "#BBBBBB",
-    btnOn   = "#B8902E",
-    btnOff  = "rgba(0.25,0.25,0.25,0.6)",
-    undo1   = "#8A5A1E",
-    undo2   = "#8A2E2E",
-    close   = "rgba(0.35,0.35,0.35,1)",
-}
 function main_buildMovementPanel3DXml(unitKey, x, y, z, colore, titolo, info)
     local P = MOVEPANEL
     local function btn(suffisso, testo, onClick, larghezza, colore2)
@@ -3064,22 +3052,6 @@ end
 function main_setWinnerIcon(slot, visibile)
     UI.setAttribute("iconWinnerArmy" .. slot, "iconColor", visibile and "White" or "rgba(1,1,1,0)")
 end
--- ============================================================
--- APPOGGIO DELLE BASI SUL TERRENO (movimenti da script)
--- setPosition con la Y vecchia lascia la base dentro una collina.
--- Si misura il terreno su tutta l'impronta della base (griglia
--- 5x5 di raggi verso il basso, dimensioni dichiarate, assi nativi
--- TTS) nella posizione e rotazione di arrivo, si prende il punto
--- più alto e ci si appoggia il fondo della base.
--- ============================================================
-IEF_GROUND_GRID    = { -1, -0.5, 0, 0.5, 1 }   -- campioni per lato (frazione della semidimensione)
-IEF_GROUND_INSET   = 0.02                     -- unità TTS: campioni appena dentro il bordo
-IEF_GROUND_EPSILON = 0.01                     -- unità TTS: margine sopra il terreno
--- F27: gioco fra le basi di un'unità (unità TTS), usato sia allo
--- spawn sia da RIORDINA. 0.10 = 1.3 mm: con le mesh alla misura
--- esatta, ranghi a contatto => la fisica solleva qualche base.
-IEF_FILE_GAP = 0.03                           -- fra le colonne
-IEF_RANK_GAP = 0.03                           -- fra i ranghi (F28: 0.10 lasciava spazio visibile)
 
 -- ============================================================
 -- FUNZIONE: main_groundY(x, z, refY)
@@ -3161,16 +3133,6 @@ function main_baseBottomOffset(obj)
     return obj.getPosition().y - (b.center.y - b.size.y / 2)
 end
 
--- ============================================================
--- F31: MODO DI APPOGGIO SUI PENDII (prova, scelta di Max)
---   "A" = la base si inclina e segue il pendio (calcolato dallo
---         script, niente fisica)
---   "B" = la base resta piana, poi la fisica la fa assestare
---   "C" = la base resta piana, appoggiata sul punto più alto
---         (come prima: a valle resta sospesa)
--- Si cambia al volo con  /execute debug_terreno("A")
--- ============================================================
-IEF_GROUND_MODE  = IEF_GROUND_MODE or "A"
 IEF_BASE_FONDO   = IEF_BASE_FONDO or {}      -- guid -> fondo misurato a base piana
 IEF_GROUND_TILT_PENDING = IEF_GROUND_TILT_PENDING or {}
 
@@ -3614,6 +3576,7 @@ function main_isMista(unitKey)
     return main_isMistaMeta(b and main_getUnitMeta(b))
 end
 
+
 -- ============================================================
 -- FUNZIONE: main_chargeCorridorHits(rects, tipo, bersaglioRects, tol)
 -- Vero se l'unità (rects, tipo) può raggiungere una delle basi
@@ -3622,8 +3585,6 @@ end
 -- (regolamento, "Movimento di carica"). Il corridoio è largo
 -- quanto il fronte; il perno si campiona fra -2" e +2" d'arco.
 -- ============================================================
-IEF_CHARGE_PIVOT_INCHES = 2
-
 function main_chargeCorridorHits(rects, tipo, bersaglioRects, tol)
     if #rects == 0 or #bersaglioRects == 0 then return false end
     local ut = main_getUnitType(tipo)
