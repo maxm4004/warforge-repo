@@ -831,7 +831,7 @@ end
 -- FUNZIONE: main_getTerrainEffect(tipoTerreno, tipoUnita)
 -- ============================================================    
 function main_getTerrainEffect(tipoTerreno, tipoUnita)
-    local terrain = IEF_DATA.terrain and IEF_DATA.terrain.terrain_types
+    local terrain = main_terrainTypes()   -- F44
     if not terrain then
         print("[IEF_DATA] terrain non caricato"); return nil
     end

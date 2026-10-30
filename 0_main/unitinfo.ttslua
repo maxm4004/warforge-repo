@@ -528,7 +528,7 @@ function main_unitInfoTerrainRows(unitKey, tipo)
         -- F43b: la collina dolce è terreno APERTO (nessun effetto sul
         -- movimento) ma si riconosce dal tag Aperto dell'elemento
         if main_unitOnGentleHill(unitKey) then
-            table.insert(righe, { "Terreno", "Collina dolce (come aperto)" })
+            table.insert(righe, { "Terreno", "Collina dolce" })
             table.insert(righe, { "  Collina dolce", '+1 in mischia (1° turno) se piu\' in alto', UNITINFO.okColor })
         else
             table.insert(righe, { "Terreno", "Aperto (nessun effetto)" })

@@ -131,10 +131,23 @@ function move_redraw(unitKey)
     local endLeft    = Vector(startLeft.x  + fwdXZ.x*rangeUnits, y1, startLeft.z  + fwdXZ.z*rangeUnits)
     local endRight   = Vector(startRight.x + fwdXZ.x*rangeUnits, y1, startRight.z + fwdXZ.z*rangeUnits)
 
+    -- F45: linee che seguono il terreno (sopra colline ed elementi
+    -- alti), campionate ogni 1/2"
+    local function drappeggio(a, b)
+        local dx, dz = b.x - a.x, b.z - a.z
+        local n = math.max(1, math.ceil(math.sqrt(dx * dx + dz * dz) / (0.5 * INCH_TO_TTS)))
+        local pts = {}
+        for i = 0, n do
+            local x, z = a.x + dx * i / n, a.z + dz * i / n
+            local g = main_groundY(x, z, 2)
+            table.insert(pts, mover.positionToLocal(Vector(x, (g and g + 0.06) or y1, z)))
+        end
+        return pts
+    end
     mover.setVectorLines((state.schieramento or IEF_MOVE_MANUAL[unitKey] or IEF_MOVE_PIVOT[unitKey]) and {} or {
-        {points = {mover.positionToLocal(startLeft),  mover.positionToLocal(endLeft)},  color={1,0.8,0.1}, thickness=0.03},
-        {points = {mover.positionToLocal(startRight), mover.positionToLocal(endRight)}, color={1,0.8,0.1}, thickness=0.03},
-        {points = {mover.positionToLocal(endLeft),    mover.positionToLocal(endRight)}, color={1,0.8,0.1}, thickness=0.03},
+        {points = drappeggio(startLeft,  endLeft),  color={1,0.8,0.1}, thickness=0.03},
+        {points = drappeggio(startRight, endRight), color={1,0.8,0.1}, thickness=0.03},
+        {points = drappeggio(endLeft,    endRight), color={1,0.8,0.1}, thickness=0.03},
     })
     state.lineHost = mover
 
@@ -916,7 +929,7 @@ function move_manualStaticLines(unitKey, m)
     end
     -- lati del corridoio, a pezzi di 1/2" per seguire le colline
     for _, tr in ipairs(m.piano.tratti) do
-        local col = (tr.f > 1.001) and { 1, 0.35, 0.1 } or { 1, 0.8, 0.1 }
+        local col = { 1, 0.8, 0.1 }   -- F45: tutte gialle
         for _, base in ipairs({ L, R }) do
             local pts, t = {}, tr.t0
             while t < tr.t1 - 1e-6 do
@@ -931,7 +944,7 @@ function move_manualStaticLines(unitKey, m)
     local maxT = m.piano.maxT
     local t = 1
     while t < maxT - 0.05 do
-        table.insert(out, { points = { punto(L, t), punto(R, t) }, color = { 1, 1, 1 }, thickness = 0.015 })
+        table.insert(out, { points = { punto(L, t), punto(R, t) }, color = { 1, 0.8, 0.1 }, thickness = 0.015 })
         t = t + 1
     end
     table.insert(out, { points = { punto(L, maxT), punto(R, maxT) }, color = { 1, 0.8, 0.1 }, thickness = 0.05 })
@@ -946,9 +959,15 @@ function move_manualLines()
             local d = m.t * INCH_TO_TTS
             local cx = (m.frontL.x + m.frontR.x) / 2
             local cz = (m.frontL.z + m.frontR.z) / 2
-            local y = (m.linee[1] and m.linee[1].points[1][2]) or 1.22
-            table.insert(out, { points = { { cx, y, cz }, { cx + m.dir.x * d, y, cz + m.dir.z * d } },
-                color = { 0.2, 0.9, 0.2 }, thickness = 0.08 })
+            -- F45: filo giallo che segue il terreno
+            local pts = {}
+            local n = math.max(1, math.ceil(m.t / 0.5))
+            for i = 0, n do
+                local x, z = cx + m.dir.x * d * i / n, cz + m.dir.z * d * i / n
+                local g = main_groundY(x, z, 2)
+                table.insert(pts, { x, (g and g + 0.08) or 1.22, z })
+            end
+            table.insert(out, { points = pts, color = { 1, 0.8, 0.1 }, thickness = 0.08 })
         end
     end
     return out

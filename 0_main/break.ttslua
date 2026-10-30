@@ -761,10 +761,26 @@ function main_unitTerrainCats(unitKey)
     return cats
 end
 
+-- ============================================================
+-- F44: tabella dei terreni da terrain.json. Il caricamento dei dati
+-- (main_data_load) salva GIÀ il campo terrain_types in
+-- IEF_DATA.terrain, quindi IEF_DATA.terrain.terrain_types non
+-- esiste: tutti gli effetti dei terreni risultavano nulli
+-- (movimento, disordine, copertura, rotta). Si accettano entrambe
+-- le forme.
+-- ============================================================
+function main_terrainTypes()
+    local t = IEF_DATA and IEF_DATA.terrain
+    if type(t) ~= "table" then return nil end
+    if type(t.terrain_types) == "table" then return t.terrain_types end
+    return t
+end
+
 -- Effetto del terreno per il tipo (FIUME: invalicabile per tutti)
 function main_terrainEffectFor(cat, tipo)
     if cat == "FIUME" then return { movement = "NO", cohesion = "nessuno" } end
-    local t = IEF_DATA.terrain and IEF_DATA.terrain.terrain_types and IEF_DATA.terrain.terrain_types[cat]
+    local tipi = main_terrainTypes()
+    local t = tipi and tipi[cat]
     return t and t.effects and t.effects[tipo]
 end
 
@@ -973,7 +989,7 @@ end
 -- che dà copertura.
 -- ============================================================
 function main_unitInCover(unitKey)
-    local tipi = IEF_DATA.terrain and IEF_DATA.terrain.terrain_types or {}
+    local tipi = main_terrainTypes() or {}
     local basi = main_getUnitBases(unitKey)
     if #basi == 0 then return false end
     local meta = main_getUnitMeta(basi[1])

@@ -1929,14 +1929,27 @@ end
 IEF_TAG_BLOCCA_VISTA = "BLOCCA_VISTA"
 IEF_LOS_TERRENO_PASSO = 0.25     -- pollici fra un campione e l'altro lungo il corridoio
 
+-- F46: blocca la vista un elemento con tag BLOCCA_VISTA, Collina o
+-- Bosco (decisione Max: collina = Aperto + Collina, bosco =
+-- Difficile + Bosco)
 function shoot_bloccaVista(o)
     if not o or not o.getTags then return false end
     for _, t in ipairs(o.getTags() or {}) do
         local u = string.upper(t)
-        if u == IEF_TAG_BLOCCA_VISTA or u == "BLOCCAVISTA" then return true end
+        if u == IEF_TAG_BLOCCA_VISTA or u == "BLOCCAVISTA" or u == "COLLINA" or u == "BOSCO" then return true end
     end
     return false
 end
+
+-- F46: collina = ci si sta sopra (chi è sopra vede e viene visto)
+function shoot_eCollina(o)
+    for _, t in ipairs(o.getTags() or {}) do
+        if string.upper(t) == "COLLINA" then return true end
+    end
+    return false
+end
+
+IEF_LOS_LIMITARE_POLLICI = 1    -- F46: "al limitare" del bosco, per base
 
 -- Elementi che bloccano la vista (con il loro riquadro) nell'area
 function shoot_terreniVista(area)
@@ -1981,24 +1994,42 @@ function shoot_terrenoNelCorridoio(corr, mioRect, q, terreni)
     end
     if #candidati == 0 then return nil end
 
-    local esclusi = sottoIlPunto(mioRect.x, mioRect.z)
-    for g in pairs(sottoIlPunto(q.x, q.z)) do esclusi[g] = true end
+    -- F46: elementi sotto la base che tira e sotto il punto del bersaglio
+    local sottoTiratore = sottoIlPunto(mioRect.x, mioRect.z)
+    local sottoBersaglio = sottoIlPunto(q.x, q.z)
 
     local fl, fr, flv = corr[1], corr[2], corr[4]
     local vx, vz = flv.x - fl.x, flv.z - fl.z
     local lung = math.sqrt(vx * vx + vz * vz)
     local n = math.max(1, math.ceil(lung / (IEF_LOS_TERRENO_PASSO * INCH_TO_TTS)))
+    local passo = lung / n
     for _, e in ipairs(candidati) do
-        if not esclusi[e.obj.getGUID()] then
+        local g = e.obj.getGUID()
+        local inT, inB = sottoTiratore[g], sottoBersaglio[g]
+        -- collina sotto chi tira o sotto il bersaglio: chi è sopra vede
+        local saltare = (inT or inB) and shoot_eCollina(e.obj)
+        if not saltare then
+            -- bosco (o altro elemento in cui si entra) sotto chi tira o
+            -- sotto il bersaglio: si vede solo "al limitare", cioè il
+            -- corridoio può attraversarne al massimo 1" per ogni
+            -- estremità che ci sta dentro
+            local tolleranza = 0
+            if inT then tolleranza = tolleranza + IEF_LOS_LIMITARE_POLLICI * INCH_TO_TTS end
+            if inB then tolleranza = tolleranza + IEF_LOS_LIMITARE_POLLICI * INCH_TO_TTS end
             for _, u in ipairs({ 0.1, 0.5, 0.9 }) do
                 local ax, az = fl.x + (fr.x - fl.x) * u, fl.z + (fr.z - fl.z) * u
+                local dentro = 0
                 for i = 0, n do
                     local t = i / n
                     local px, pz = ax + vx * t, az + vz * t
                     if px >= e.x1 and px <= e.x2 and pz >= e.z1 and pz <= e.z2 then
                         local hits = Physics.cast({ origin = Vector(px, 30, pz), direction = Vector(0, -1, 0), type = 1, max_distance = 40 })
                         for _, h in ipairs(hits or {}) do
-                            if h.hit_object == e.obj then return { obj = e.obj, terreno = true } end
+                            if h.hit_object == e.obj then
+                                dentro = dentro + passo
+                                if dentro > tolleranza + 1e-6 then return { obj = e.obj, terreno = true } end
+                                break
+                            end
                         end
                     end
                 end
