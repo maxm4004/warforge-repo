@@ -32,9 +32,3 @@ FIELD_STATE = FIELD_STATE or field_defaultState()
 
 orientamentoArmy1 = "Fanteria"    -- hardcoded, arriverà da armyData.orientamento
 orientamentoArmy2 = "Bilanciato"  -- hardcoded, arriverà da armyData.orientamento
-
-FIELD_ELEMENTS_BY_ORIENTAMENTO = {
-    ["Fanteria"]  = 4,
-    ["Bilanciato"] = 3,
-    ["Cavalleria"] = 2
-}

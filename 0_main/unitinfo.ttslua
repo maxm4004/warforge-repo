@@ -12,30 +12,6 @@
 -- Stato non salvato.
 -- ============================================================
 
--- Stessa grafica di pannello dadi / liste (DICEPANEL, LISTPANEL)
-UNITINFO = {
-    rectAlignment = "MiddleLeft",
-    offsetXY      = "20 0",
-    width         = 400,
-    bg            = "rgba(0,0,0,0.70)",
-    rowBg         = "rgba(1,1,1,0.06)",
-    font          = "warforge_font",
-    padding       = 12,
-    spacing       = 2,
-    titleHeight   = 24,
-    subHeight     = 16,
-    rowHeight     = 18,
-    sectionHeight = 24,
-    maxRows       = 30,
-    titleColor    = "#FFD833",   -- titolo e intestazioni di sezione
-    sectionColor  = "#FFD833",
-    textColor     = "White",
-    subColor      = "#BBBBBB",   -- sottotitolo e voci secondarie
-    okColor       = "#5BD35B",
-    warnColor     = "#FFB347",
-    koColor       = "#FF6B6B",
-    valueWidth    = 190,
-}
 
 -- unitKey mostrata per slot del giocatore che guarda
 IEF_UNIT_INFO = IEF_UNIT_INFO or {}

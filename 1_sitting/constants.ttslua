@@ -1,0 +1,15 @@
+-- ============================================================
+-- WARFORGE IEF — 1_sitting/constants.ttslua
+-- Costanti di configurazione della cartella (valori fissi:
+-- misure, tolleranze, colori, interruttori, GUID, tabelle di
+-- regole). Lo stato della partita resta in state.ttslua.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- (da 1_sitting/state.ttslua)
+-- ------------------------------------------------------------
+FIELD_ELEMENTS_BY_ORIENTAMENTO = {
+    ["Fanteria"]  = 4,
+    ["Bilanciato"] = 3,
+    ["Cavalleria"] = 2
+}

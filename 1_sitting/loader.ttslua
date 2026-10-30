@@ -4,6 +4,7 @@
 -- ============================================================
 
 
+require("rulesets.imperifeudi.1_sitting.constants")
 require("rulesets.imperifeudi.1_sitting.callbacks")
 require("rulesets.imperifeudi.1_sitting.hooks")
 require("rulesets.imperifeudi.1_sitting.lib")
